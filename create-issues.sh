@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env zsh
 # create-issues.sh — Creates all GitHub issues, labels, and milestones
 # for the Basketball Playbook App from playbook-issues.md
 #
@@ -10,7 +10,7 @@
 # The script is idempotent for labels/milestones (skips if they exist).
 # Issues are always created — only run once!
 
-set -euo pipefail
+set -eo pipefail
 
 REPO="DanielShterenberg/playbook"
 
@@ -35,22 +35,23 @@ echo ""
 # --------------------------------------------------
 echo "--- Creating Labels ---"
 
-declare -A LABELS=(
-  ["epic"]="8B5CF6:Large feature group"
-  ["feature"]="1D76DB:New feature"
-  ["infra"]="0E8A16:Infrastructure / setup"
-  ["ui"]="FBCA04:UI/UX work"
-  ["backend"]="D93F0B:Firebase / data layer"
-  ["export"]="C2E0C6:Export functionality"
-  ["auth"]="B60205:Authentication & permissions"
-  ["bug"]="D73A4A:Bug fix"
-  ["enhancement"]="A2EEEF:Improvement to existing feature"
-  ["P0"]="FF0000:Must have for MVP"
-  ["P1"]="FF8C00:Nice to have for MVP"
-  ["P2"]="FFD700:Post-MVP"
+typeset -A LABELS
+LABELS=(
+  epic "8B5CF6:Large feature group"
+  feature "1D76DB:New feature"
+  infra "0E8A16:Infrastructure / setup"
+  ui "FBCA04:UI/UX work"
+  backend "D93F0B:Firebase / data layer"
+  export "C2E0C6:Export functionality"
+  auth "B60205:Authentication & permissions"
+  bug "D73A4A:Bug fix"
+  enhancement "A2EEEF:Improvement to existing feature"
+  P0 "FF0000:Must have for MVP"
+  P1 "FF8C00:Nice to have for MVP"
+  P2 "FFD700:Post-MVP"
 )
 
-for label in "${!LABELS[@]}"; do
+for label in ${(k)LABELS}; do
   IFS=':' read -r color description <<< "${LABELS[$label]}"
   if gh label create "$label" --repo "$REPO" --color "$color" --description "$description" 2>/dev/null; then
     echo "  Created label: $label"
@@ -88,9 +89,9 @@ MILESTONE_DESCRIPTIONS=(
   "Bug fixes, performance, edge cases"
 )
 
-declare -A MILESTONE_IDS
+typeset -A MILESTONE_IDS
 
-for i in "${!MILESTONES[@]}"; do
+for i in {1..${#MILESTONES[@]}}; do
   title="${MILESTONES[$i]}"
   desc="${MILESTONE_DESCRIPTIONS[$i]}"
   # Check if milestone already exists
@@ -118,6 +119,21 @@ ms() {
 echo "--- Creating Issues (42 total) ---"
 echo ""
 
+# Check if issues already exist
+echo "Checking for existing issues..."
+existing_count=$(gh issue list --repo "$REPO" --state all --limit 1000 --json title --jq 'length')
+if [ "$existing_count" -ge 42 ]; then
+  echo ""
+  echo "⚠️  WARNING: Found $existing_count existing issues in the repository."
+  echo "This script will create 42 new issues. Do you want to continue? (y/N)"
+  read -r response
+  if [[ ! "$response" =~ ^[Yy]$ ]]; then
+    echo "Aborted. No issues created."
+    exit 0
+  fi
+fi
+echo ""
+
 create_issue() {
   local num="$1"
   local title="$2"
@@ -127,10 +143,10 @@ create_issue() {
 
   local ms_num="${MILESTONE_IDS[$milestone_title]}"
 
-  local label_args=""
-  IFS=',' read -ra label_arr <<< "$labels"
+  local label_arr=(${(s:,:)labels})
+  local label_args=()
   for l in "${label_arr[@]}"; do
-    label_args="$label_args --label $l"
+    label_args+=(--label "$l")
   done
 
   local url
@@ -138,7 +154,7 @@ create_issue() {
     --repo "$REPO" \
     --title "$title" \
     --milestone "$milestone_title" \
-    $label_args \
+    "${label_args[@]}" \
     --body "$body" 2>&1)
 
   echo "  #$num: $title"
