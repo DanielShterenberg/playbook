@@ -1,0 +1,31 @@
+{
+  "name": "playbook",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "next": "14.2.35",
+    "react": "^18",
+    "react-dom": "^18"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.35",
+    "prettier": "^3",
+    "prettier-plugin-tailwindcss": "^0.6",
+    "tailwindcss": "^3",
+    "autoprefixer": "^10",
+    "postcss": "^8",
+    "typescript": "^5"
+  }
+}
