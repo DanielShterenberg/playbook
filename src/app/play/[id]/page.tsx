@@ -1,4 +1,4 @@
-import Court from "@/components/court/Court";
+import EditorCourtArea from "./EditorCourtArea";
 
 interface PlayEditorPageProps {
   params: { id: string };
@@ -26,9 +26,9 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
         <aside className="flex w-16 flex-col items-center gap-3 border-r border-gray-200 bg-gray-50 py-4">
           <div className="text-xs text-gray-400">Tools</div>
         </aside>
-        {/* Court Canvas */}
+        {/* Court Canvas with draggable players */}
         <div className="flex flex-1 items-center justify-center overflow-auto bg-gray-100 p-4">
-          <Court className="w-full max-w-3xl" />
+          <EditorCourtArea />
         </div>
         {/* Play Info Panel */}
         <aside className="w-64 border-l border-gray-200 bg-white p-4">
