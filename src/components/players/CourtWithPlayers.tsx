@@ -1,18 +1,26 @@
 "use client";
 
 /**
- * CourtWithPlayers — wraps the Court canvas and overlays draggable player tokens.
+ * CourtWithPlayers — wraps the Court canvas and overlays draggable player tokens
+ * and a draggable basketball.
  *
- * Implements issues #51 and #52:
+ * Implements issues #51, #52, and #55:
  *   #51 — Draggable offensive players (O1–O5)
  *   #52 — Draggable defensive players (X1–X5)
+ *   #55 — Ball placement and player attachment
  *
  * Architecture:
  *   - The Court canvas is rendered inside a relatively-positioned container.
  *   - An absolutely-positioned SVG layer of the same dimensions is overlaid on top.
- *   - Player tokens are SVG <g> elements positioned in CSS pixel coords.
+ *   - Player tokens and the ball are SVG <g> elements positioned in CSS pixel coords.
  *   - Normalised [0-1] court coords are used in the Zustand store; conversion
  *     to/from CSS pixels is done via the courtToCanvas callback from Court.
+ *
+ * Ball behaviour:
+ *   - Freely draggable across the court.
+ *   - When released within SNAP_RADIUS of a player, it attaches to that player.
+ *   - While attached, it renders offset above the player token and moves with it.
+ *   - Dragging the ball past DETACH_RADIUS from the player detaches it.
  *
  * Default positions:
  *   Offense — standard 5-out (perimeter) set:
@@ -24,8 +32,9 @@
 import { useState, useCallback, useRef } from "react";
 import Court, { type CourtReadyPayload } from "@/components/court/Court";
 import PlayerToken from "./PlayerToken";
+import BallToken, { type NearbyPlayer, DETACH_RADIUS } from "./BallToken";
 import { useStore } from "@/lib/store";
-import type { Scene, PlayerState } from "@/lib/types";
+import type { Scene, PlayerState, BallState } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
 // Default normalised court positions (y: 0 = half-court, 1 = baseline)
@@ -53,6 +62,15 @@ const DEFENSE_DEFAULTS: [number, number][] = [
   [0.14, 0.78], // X4
   [0.86, 0.78], // X5
 ];
+
+/** Default ball position — near the PG (O1). */
+const BALL_DEFAULT: { x: number; y: number } = { x: 0.5, y: 0.35 };
+
+/**
+ * CSS pixel offset from the player centre at which the attached ball is drawn
+ * (above the token so both are visible).
+ */
+const BALL_ATTACH_OFFSET_Y = -22;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -113,6 +131,7 @@ export interface CourtWithPlayersProps {
 
 export default function CourtWithPlayers({ sceneId, scene, className }: CourtWithPlayersProps) {
   const updatePlayerState = useStore((s) => s.updatePlayerState);
+  const updateBallState = useStore((s) => s.updateBallState);
 
   // Court layout reported by the Court canvas
   const [courtSize, setCourtSize] = useState<{ width: number; height: number } | null>(null);
@@ -121,8 +140,35 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
   const [offensePx, setOffensePx] = useState<PixelPlayer[] | null>(null);
   const [defensePx, setDefensePx] = useState<PixelPlayer[] | null>(null);
 
+  // Ball pixel position — free coords when not attached, follows player when attached
+  const [ballPx, setBallPx] = useState<{ x: number; y: number } | null>(null);
+  // Attachment: which player the ball is attached to (null = free)
+  const [ballAttachment, setBallAttachment] = useState<{
+    side: "offense" | "defense";
+    position: number;
+  } | null>(null);
+
   // Track the last known court size for re-projection on resize
   const courtSizeRef = useRef<{ width: number; height: number } | null>(null);
+
+  // -------------------------------------------------------------------------
+  // Derived: effective ball pixel centre (follows player if attached)
+  // -------------------------------------------------------------------------
+  function getEffectiveBallPx(
+    attachment: { side: "offense" | "defense"; position: number } | null,
+    offense: PixelPlayer[] | null,
+    defense: PixelPlayer[] | null,
+    freeBall: { x: number; y: number } | null,
+  ): { x: number; y: number } | null {
+    if (attachment) {
+      const pool = attachment.side === "offense" ? offense : defense;
+      const player = pool?.find((p) => p.position === attachment.position);
+      if (player) {
+        return { x: player.px, y: player.py + BALL_ATTACH_OFFSET_Y };
+      }
+    }
+    return freeBall;
+  }
 
   // -------------------------------------------------------------------------
   // When the court canvas reports its size, initialise pixel positions
@@ -154,6 +200,12 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
               })
             : null,
         );
+        setBallPx((prev) => {
+          if (!prev) return null;
+          const norm = pixelToNorm(prev.x, prev.y, prevSize.width, prevSize.height);
+          const { x, y } = normToPixel(norm.x, norm.y, width, height);
+          return { x, y };
+        });
         return;
       }
 
@@ -174,13 +226,19 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
             return { position: p.position, px: x, py: y, visible: p.visible };
           }),
         );
+
+        // Ball initialisation
+        const storeBall = scene?.ball ?? { ...BALL_DEFAULT, attachedTo: null };
+        const { x: ballX, y: ballY } = normToPixel(storeBall.x, storeBall.y, width, height);
+        setBallPx({ x: ballX, y: ballY });
+        setBallAttachment(storeBall.attachedTo ?? null);
       }
     },
     [scene],
   );
 
   // -------------------------------------------------------------------------
-  // Drag handlers
+  // Drag handlers — players
   // -------------------------------------------------------------------------
 
   const handleOffenseDrag = useCallback((position: number, newCx: number, newCy: number) => {
@@ -230,15 +288,106 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
   );
 
   // -------------------------------------------------------------------------
+  // Drag handlers — ball
+  // -------------------------------------------------------------------------
+
+  /**
+   * Build the list of all visible player positions for snap/detach detection.
+   * Used by BallToken to find the nearest player.
+   */
+  function buildPlayerList(
+    offense: PixelPlayer[] | null,
+    defense: PixelPlayer[] | null,
+  ): NearbyPlayer[] {
+    const result: NearbyPlayer[] = [];
+    for (const p of offense ?? []) {
+      if (p.visible) result.push({ px: p.px, py: p.py, side: "offense", position: p.position });
+    }
+    for (const p of defense ?? []) {
+      if (p.visible) result.push({ px: p.px, py: p.py, side: "defense", position: p.position });
+    }
+    return result;
+  }
+
+  const handleBallDrag = useCallback(
+    (newCx: number, newCy: number) => {
+      // While dragging, check if we should detach
+      setBallAttachment((prevAttachment) => {
+        if (prevAttachment) {
+          // Get current player position
+          const pool = prevAttachment.side === "offense" ? offensePx : defensePx;
+          const player = pool?.find((p) => p.position === prevAttachment.position);
+          if (player) {
+            const dx = newCx - player.px;
+            const dy = newCy - player.py;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > DETACH_RADIUS) {
+              // Detach
+              setBallPx({ x: newCx, y: newCy });
+              return null;
+            }
+            // Still attached — don't update free position
+            return prevAttachment;
+          }
+        }
+        // Free ball: update position
+        setBallPx({ x: newCx, y: newCy });
+        return prevAttachment;
+      });
+    },
+    [offensePx, defensePx],
+  );
+
+  const handleBallDragEnd = useCallback(
+    (newCx: number, newCy: number, nearest: NearbyPlayer | null) => {
+      let newBallState: BallState;
+
+      if (nearest) {
+        // Snap to player
+        setBallAttachment({ side: nearest.side, position: nearest.position });
+        // Free position becomes player position (for re-projection on resize)
+        setBallPx({ x: nearest.px, y: nearest.py });
+        if (sceneId && courtSizeRef.current) {
+          const { x, y } = pixelToNorm(
+            nearest.px,
+            nearest.py,
+            courtSizeRef.current.width,
+            courtSizeRef.current.height,
+          );
+          newBallState = { x, y, attachedTo: { side: nearest.side, position: nearest.position } };
+        } else {
+          return;
+        }
+      } else {
+        // Free placement
+        setBallAttachment(null);
+        setBallPx({ x: newCx, y: newCy });
+        if (sceneId && courtSizeRef.current) {
+          const { x, y } = pixelToNorm(newCx, newCy, courtSizeRef.current.width, courtSizeRef.current.height);
+          newBallState = { x, y, attachedTo: null };
+        } else {
+          return;
+        }
+      }
+
+      updateBallState(sceneId!, newBallState);
+    },
+    [sceneId, updateBallState],
+  );
+
+  // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
+
+  const allPlayers = buildPlayerList(offensePx, defensePx);
+  const effectiveBall = getEffectiveBallPx(ballAttachment, offensePx, defensePx, ballPx);
 
   return (
     <div className={`relative ${className ?? "w-full"}`}>
       {/* Court canvas */}
       <Court onReady={handleCourtReady} className="w-full" />
 
-      {/* SVG player overlay — same dimensions as the canvas */}
+      {/* SVG player + ball overlay — same dimensions as the canvas */}
       {courtSize && (
         <svg
           style={{
@@ -271,7 +420,7 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
                 />
               ))}
 
-            {/* Offensive players (rendered on top) */}
+            {/* Offensive players (rendered on top of defensive) */}
             {offensePx
               ?.filter((p) => p.visible)
               .map((p) => (
@@ -286,6 +435,19 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
                   onDragEnd={(x, y) => handleOffenseDragEnd(p.position, x, y)}
                 />
               ))}
+
+            {/* Basketball — rendered on top of all players */}
+            {effectiveBall && (
+              <BallToken
+                cx={effectiveBall.x}
+                cy={effectiveBall.y}
+                attached={ballAttachment !== null}
+                onDrag={handleBallDrag}
+                onDragEnd={handleBallDragEnd}
+                players={allPlayers}
+                courtBounds={courtSize}
+              />
+            )}
           </g>
         </svg>
       )}
