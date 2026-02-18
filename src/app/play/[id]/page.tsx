@@ -1,3 +1,5 @@
+import Court from "@/components/court/Court";
+
 interface PlayEditorPageProps {
   params: { id: string };
 }
@@ -21,22 +23,22 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
       </header>
       <div className="flex flex-1 overflow-hidden">
         {/* Tools Panel */}
-        <aside className="w-16 border-r border-gray-200 bg-gray-50 flex flex-col items-center py-4 gap-3">
+        <aside className="flex w-16 flex-col items-center gap-3 border-r border-gray-200 bg-gray-50 py-4">
           <div className="text-xs text-gray-400">Tools</div>
         </aside>
         {/* Court Canvas */}
-        <div className="flex-1 bg-gray-100 flex items-center justify-center">
-          <p className="text-gray-400">Court canvas coming soon</p>
+        <div className="flex flex-1 items-center justify-center overflow-auto bg-gray-100 p-4">
+          <Court className="w-full max-w-3xl" />
         </div>
         {/* Play Info Panel */}
         <aside className="w-64 border-l border-gray-200 bg-white p-4">
-          <h2 className="font-semibold text-gray-700 mb-2">Play Info</h2>
+          <h2 className="mb-2 font-semibold text-gray-700">Play Info</h2>
           <p className="text-sm text-gray-400">Play details and notes will appear here.</p>
         </aside>
       </div>
       {/* Scene Strip */}
       <footer className="border-t border-gray-200 bg-white p-2">
-        <p className="text-sm text-gray-400 text-center">Scene strip coming soon</p>
+        <p className="text-center text-sm text-gray-400">Scene strip coming soon</p>
       </footer>
     </main>
   );
