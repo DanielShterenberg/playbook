@@ -48,6 +48,7 @@ export interface AppStore {
   plays: Play[];
   addPlay: (play: Play) => void;
   removePlay: (playId: string) => void;
+  duplicatePlay: (playId: string) => void;
   updatePlayInList: (play: Play) => void;
   getPlayById: (playId: string) => Play | undefined;
 
@@ -220,6 +221,30 @@ export const useStore = create<AppStore>()(
 
     removePlay: (playId) =>
       set((state) => ({ plays: state.plays.filter((p) => p.id !== playId) })),
+
+    duplicatePlay: (playId) =>
+      set((state) => {
+        const original = state.plays.find((p) => p.id === playId);
+        if (!original) return state;
+        const now = new Date();
+        const cloned = JSON.parse(JSON.stringify(original)) as Play;
+        const copy: Play = {
+          ...cloned,
+          id: crypto.randomUUID(),
+          title: `${original.title} (Copy)`,
+          createdAt: now,
+          updatedAt: now,
+          scenes: cloned.scenes.map((sc) => ({
+            ...sc,
+            id: crypto.randomUUID(),
+            timingGroups: sc.timingGroups.map((g) => ({
+              ...g,
+              annotations: g.annotations.map((a) => ({ ...a, id: crypto.randomUUID() })),
+            })),
+          })),
+        };
+        return { plays: [...state.plays, copy] };
+      }),
 
     updatePlayInList: (play) =>
       set((state) => ({
