@@ -32,7 +32,7 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
   }, [currentPlay, updatePlayInList]);
 
   return (
-    <header className="flex min-w-0 items-center justify-between border-b border-gray-200 px-3 py-2 md:px-4">
+    <header className="flex min-w-0 items-center justify-between border-b border-gray-200 bg-white px-3 py-2 md:px-4">
       <div className="flex min-w-0 items-center gap-2">
         {/* Back to playbook */}
         <Link

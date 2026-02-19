@@ -29,7 +29,7 @@
  *     X1–X5 shadow their offensive counterparts with a ~4ft sag
  */
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import Court, { type CourtReadyPayload } from "@/components/court/Court";
 import PlayerToken from "./PlayerToken";
 import BallToken, { type NearbyPlayer, DETACH_RADIUS } from "./BallToken";
@@ -134,6 +134,7 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
   const updatePlayerState  = useStore((s) => s.updatePlayerState);
   const updateBallState    = useStore((s) => s.updateBallState);
   const displayMode        = useStore((s) => s.playerDisplayMode);
+  const playerNames        = useStore((s) => s.playerNames);
 
   // Court layout reported by the Court canvas
   const [courtSize, setCourtSize] = useState<{ width: number; height: number } | null>(null);
@@ -152,6 +153,9 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
 
   // Track the last known court size for re-projection on resize
   const courtSizeRef = useRef<{ width: number; height: number } | null>(null);
+
+  // Track the last scene ID so we can reinitialise pixel positions on scene switch
+  const prevSceneIdRef = useRef<string | null>(null);
 
   // -------------------------------------------------------------------------
   // Derive visibility directly from the scene prop (source of truth in the
@@ -182,7 +186,12 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
   }
 
   // -------------------------------------------------------------------------
-  // When the court canvas reports its size, initialise pixel positions
+  // When the court canvas reports its size, initialise pixel positions.
+  //
+  // IMPORTANT: This callback has NO dependencies so it is never recreated.
+  // A stable callback means Court's draw function never changes, so Court's
+  // useEffect never re-fires due to visibility/scene changes — only on mount
+  // and actual resizes. Scene changes are handled by the useEffect below.
   // -------------------------------------------------------------------------
   const handleCourtReady = useCallback(
     (payload: CourtReadyPayload) => {
@@ -220,10 +229,20 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
         return;
       }
 
-      // First render — project from store or defaults
+      // First render — read from the Zustand store directly so this callback
+      // does not need `scene` in its dep array (which would recreate it on every
+      // visibility toggle, causing Court to redraw unnecessarily).
       if (!prevSize) {
-        const offenseStoreState = scene?.players.offense ?? defaultPlayers(OFFENSE_DEFAULTS);
-        const defenseStoreState = scene?.players.defense ?? defaultPlayers(DEFENSE_DEFAULTS);
+        const storeState = useStore.getState();
+        const currentScene =
+          storeState.currentPlay?.scenes.find(
+            (sc) => sc.id === storeState.selectedSceneId,
+          ) ??
+          storeState.currentPlay?.scenes[0] ??
+          null;
+
+        const offenseStoreState = currentScene?.players.offense ?? defaultPlayers(OFFENSE_DEFAULTS);
+        const defenseStoreState = currentScene?.players.defense ?? defaultPlayers(DEFENSE_DEFAULTS);
 
         setOffensePx(
           offenseStoreState.map((p) => {
@@ -239,14 +258,55 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
         );
 
         // Ball initialisation
-        const storeBall = scene?.ball ?? { ...BALL_DEFAULT, attachedTo: null };
+        const storeBall = currentScene?.ball ?? { ...BALL_DEFAULT, attachedTo: null };
         const { x: ballX, y: ballY } = normToPixel(storeBall.x, storeBall.y, width, height);
         setBallPx({ x: ballX, y: ballY });
         setBallAttachment(storeBall.attachedTo ?? null);
       }
     },
-    [scene],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [], // Stable — never recreated. Scene changes handled by the useEffect below.
   );
+
+  // -------------------------------------------------------------------------
+  // Reinitialise pixel positions when the active scene changes (user clicks a
+  // different scene in the SceneStrip). We track the previous scene ID via a
+  // ref so we only reinitialise on actual scene switches, not on every render.
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    const newSceneId = scene?.id ?? null;
+    // First render: positions are handled by handleCourtReady. Just record the ID.
+    if (prevSceneIdRef.current === null) {
+      prevSceneIdRef.current = newSceneId;
+      return;
+    }
+    // No scene change — visibility/position update within the same scene.
+    if (newSceneId === prevSceneIdRef.current) return;
+
+    prevSceneIdRef.current = newSceneId;
+
+    // Reinitialise pixel positions from the new scene's normalised data.
+    if (!scene || !courtSizeRef.current) return;
+    const { width, height } = courtSizeRef.current;
+
+    setOffensePx(
+      scene.players.offense.map((p) => {
+        const { x, y } = normToPixel(p.x, p.y, width, height);
+        return { position: p.position, px: x, py: y, visible: p.visible };
+      }),
+    );
+    setDefensePx(
+      scene.players.defense.map((p) => {
+        const { x, y } = normToPixel(p.x, p.y, width, height);
+        return { position: p.position, px: x, py: y, visible: p.visible };
+      }),
+    );
+
+    const storeBall = scene.ball ?? { ...BALL_DEFAULT, attachedTo: null };
+    const { x: ballX, y: ballY } = normToPixel(storeBall.x, storeBall.y, width, height);
+    setBallPx({ x: ballX, y: ballY });
+    setBallAttachment(storeBall.attachedTo ?? null);
+  }, [scene]);
 
   // -------------------------------------------------------------------------
   // Drag handlers — players
@@ -451,6 +511,7 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
                   onDrag={(x, y) => handleDefenseDrag(p.position, x, y)}
                   onDragEnd={(x, y) => handleDefenseDragEnd(p.position, x, y)}
                   displayMode={displayMode}
+                  playerName={playerNames[`defense-${p.position}`]}
                 />
               ))}
 
@@ -474,6 +535,7 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
                   onDrag={(x, y) => handleOffenseDrag(p.position, x, y)}
                   onDragEnd={(x, y) => handleOffenseDragEnd(p.position, x, y)}
                   displayMode={displayMode}
+                  playerName={playerNames[`offense-${p.position}`]}
                 />
               ))}
 
