@@ -6,8 +6,8 @@
  * Updated for issue #67/#69: accepts a playId prop. If the store already has
  * the matching play set as currentPlay we use it directly. Otherwise we look
  * it up in the plays list (e.g. the user navigated directly via URL) and load
- * it. If the play is not found (e.g. after a page refresh), we redirect to
- * /playbook rather than creating an infinite loop of new default plays.
+ * it. If the play is not found (e.g. after a page refresh), renders a friendly
+ * "not found" message rather than silently redirecting (#84).
  *
  * Bug fix: The original implementation had `currentPlay` in the useEffect deps
  * while also calling `setCurrentPlay` inside the effect. This created an infinite
@@ -17,10 +17,11 @@
  * state directly via useStore.getState() to avoid the dependency cycle.
  */
 
-import { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useStore, createDefaultPlay, selectEditorScene } from "@/lib/store";
 import CourtWithPlayers from "@/components/players/CourtWithPlayers";
+import type { CourtVariant } from "@/components/court/Court";
 
 interface EditorCourtAreaProps {
   playId?: string;
@@ -29,7 +30,10 @@ interface EditorCourtAreaProps {
 export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
   const scene = useStore(selectEditorScene);
   const selectedSceneId = useStore((s) => s.selectedSceneId);
-  const router = useRouter();
+  const courtType = useStore((s) => s.currentPlay?.courtType ?? "half");
+
+  const [notFound, setNotFound] = useState(false);
+
   // Guard: only initialise once to prevent the re-render cycle where setting
   // currentPlay triggers the effect to run again with a non-matching playId.
   const initialized = useRef(false);
@@ -62,10 +66,9 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
         setSelectedSceneId(found.scenes[0].id);
         return;
       }
-      // Play not found (e.g. page refresh — store is in-memory only).
-      // Redirect to the playbook list rather than creating a new play whose ID
-      // would never match the URL, causing infinite re-renders.
-      router.replace("/playbook");
+      // Play not found — store is in-memory only, so this happens after a page
+      // refresh. Show a friendly message instead of silently redirecting (#84).
+      setNotFound(true);
       return;
     }
 
@@ -74,7 +77,30 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
     addPlay(play);
     setCurrentPlay(play);
     setSelectedSceneId(play.scenes[0].id);
-  }, [playId, router]);
+  }, [playId]);
+
+  if (notFound) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 p-10 text-center">
+        <svg width={48} height={48} viewBox="0 0 48 48" fill="none" aria-hidden="true">
+          <circle cx={24} cy={24} r={22} stroke="#E5E7EB" strokeWidth={2} />
+          <path d="M24 14v12" stroke="#9CA3AF" strokeWidth={2.5} strokeLinecap="round" />
+          <circle cx={24} cy={33} r={1.5} fill="#9CA3AF" />
+        </svg>
+        <p className="text-base font-semibold text-gray-700">Play not found</p>
+        <p className="max-w-xs text-sm text-gray-400">
+          This play could not be loaded. Plays are stored in memory — refreshing the page clears
+          them. Return to the playbook to open a play or create a new one.
+        </p>
+        <Link
+          href="/playbook"
+          className="mt-1 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+        >
+          Back to Playbook
+        </Link>
+      </div>
+    );
+  }
 
   return (
     /*
@@ -86,6 +112,7 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
     <CourtWithPlayers
       sceneId={selectedSceneId ?? scene?.id}
       scene={scene}
+      variant={courtType as CourtVariant}
       className="w-full max-w-full md:max-w-xl lg:max-w-3xl"
     />
   );

@@ -65,7 +65,7 @@ export interface PlayerTokenProps {
   /** Called when drag ends, signals store should be updated */
   onDragEnd: (newCx: number, newCy: number) => void;
   /** Bounding box (in CSS px) to clamp drag inside the court */
-  courtBounds: { width: number; height: number };
+  courtBounds: { width: number; height: number; minY?: number };
   /**
    * What to display inside the token.
    *   "numbers"       — default positional number (O1, X1 …)
@@ -106,7 +106,7 @@ export default function PlayerToken({
   const clamp = useCallback(
     (x: number, y: number): { x: number; y: number } => ({
       x: Math.max(PLAYER_RADIUS, Math.min(courtBounds.width - PLAYER_RADIUS, x)),
-      y: Math.max(PLAYER_RADIUS, Math.min(courtBounds.height - PLAYER_RADIUS, y)),
+      y: Math.max((courtBounds.minY ?? 0) + PLAYER_RADIUS, Math.min(courtBounds.height - PLAYER_RADIUS, y)),
     }),
     [courtBounds],
   );

@@ -261,7 +261,7 @@ export default function DrawingToolsPanel() {
                 ].join(" ")}
               >
                 <Icon active={active} />
-                <span className="mt-0.5 text-[9px] leading-none">{shortcut}</span>
+                <span className="mt-0.5 text-[9px] leading-none">{label}</span>
               </button>
             );
           })}
