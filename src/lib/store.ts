@@ -96,6 +96,10 @@ export interface AppStore {
   // Player visibility toggle (per scene)
   togglePlayerVisibility: (sceneId: string, side: "offense" | "defense", position: number) => void;
 
+  // Player names (global editor state, keyed by e.g. "offense-1" / "defense-2")
+  playerNames: Record<string, string>;
+  setPlayerName: (key: string, name: string) => void;
+
   // ------- Playback state -------
   isPlaying: boolean;
   currentSceneIndex: number;
@@ -620,6 +624,10 @@ export const useStore = create<AppStore>()(
     setSelectedTimingStep: (step) => set({ selectedTimingStep: step }),
     setSelectedAnnotationId: (id) => set({ selectedAnnotationId: id }),
     setPlayerDisplayMode: (mode) => set({ playerDisplayMode: mode }),
+
+    playerNames: {},
+    setPlayerName: (key, name) =>
+      set((state) => ({ playerNames: { ...state.playerNames, [key]: name } })),
 
     togglePlayerVisibility: (sceneId, side, position) => {
       const state = get();

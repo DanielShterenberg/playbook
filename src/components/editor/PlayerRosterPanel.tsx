@@ -34,11 +34,13 @@ const DISPLAY_MODES: { id: PlayerDisplayMode; label: string }[] = [
 // ---------------------------------------------------------------------------
 
 export default function PlayerRosterPanel() {
-  const scene          = useStore(selectEditorScene);
-  const sceneId        = useStore((s) => s.selectedSceneId);
-  const displayMode    = useStore((s) => s.playerDisplayMode);
-  const setDisplayMode = useStore((s) => s.setPlayerDisplayMode);
+  const scene            = useStore(selectEditorScene);
+  const sceneId          = useStore((s) => s.selectedSceneId);
+  const displayMode      = useStore((s) => s.playerDisplayMode);
+  const setDisplayMode   = useStore((s) => s.setPlayerDisplayMode);
   const toggleVisibility = useStore((s) => s.togglePlayerVisibility);
+  const playerNames      = useStore((s) => s.playerNames);
+  const setPlayerName    = useStore((s) => s.setPlayerName);
 
   /**
    * Collapse state — allows the panel to be hidden at tablet widths to
@@ -124,21 +126,32 @@ export default function PlayerRosterPanel() {
             </h2>
             <ul className="flex flex-col gap-1">
               {offensePlayers.map((p) => (
-                <li key={p.position} className="flex items-center justify-between">
-                  <span className="font-medium text-gray-700">O{p.position}</span>
-                  <button
-                    onClick={() => handleToggle("offense", p.position)}
-                    aria-label={`${p.visible ? "Hide" : "Show"} offensive player ${p.position}`}
-                    title={p.visible ? "Click to hide" : "Click to show"}
-                    className={[
-                      "rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
-                      p.visible
-                        ? "bg-orange-100 text-orange-700 hover:bg-orange-200"
-                        : "bg-gray-100 text-gray-400 hover:bg-gray-200",
-                    ].join(" ")}
-                  >
-                    {p.visible ? "Visible" : "Hidden"}
-                  </button>
+                <li key={p.position} className="flex items-center justify-between gap-1">
+                  <span className="flex-shrink-0 font-medium text-gray-700">O{p.position}</span>
+                  {displayMode === "names" ? (
+                    <input
+                      type="text"
+                      value={playerNames[`offense-${p.position}`] ?? ""}
+                      onChange={(e) => setPlayerName(`offense-${p.position}`, e.target.value)}
+                      placeholder={`O${p.position}`}
+                      aria-label={`Name for offensive player ${p.position}`}
+                      className="min-w-0 flex-1 rounded border border-gray-200 px-1.5 py-0.5 text-[11px] text-gray-700 focus:border-blue-400 focus:outline-none"
+                    />
+                  ) : (
+                    <button
+                      onClick={() => handleToggle("offense", p.position)}
+                      aria-label={`${p.visible ? "Hide" : "Show"} offensive player ${p.position}`}
+                      title={p.visible ? "Click to hide" : "Click to show"}
+                      className={[
+                        "rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
+                        p.visible
+                          ? "bg-orange-100 text-orange-700 hover:bg-orange-200"
+                          : "bg-gray-100 text-gray-400 hover:bg-gray-200",
+                      ].join(" ")}
+                    >
+                      {p.visible ? "Visible" : "Hidden"}
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -151,21 +164,32 @@ export default function PlayerRosterPanel() {
             </h2>
             <ul className="flex flex-col gap-1">
               {defensePlayers.map((p) => (
-                <li key={p.position} className="flex items-center justify-between">
-                  <span className="font-medium text-gray-700">X{p.position}</span>
-                  <button
-                    onClick={() => handleToggle("defense", p.position)}
-                    aria-label={`${p.visible ? "Hide" : "Show"} defensive player ${p.position}`}
-                    title={p.visible ? "Click to hide" : "Click to show"}
-                    className={[
-                      "rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
-                      p.visible
-                        ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                        : "bg-gray-100 text-gray-400 hover:bg-gray-200",
-                    ].join(" ")}
-                  >
-                    {p.visible ? "Visible" : "Hidden"}
-                  </button>
+                <li key={p.position} className="flex items-center justify-between gap-1">
+                  <span className="flex-shrink-0 font-medium text-gray-700">X{p.position}</span>
+                  {displayMode === "names" ? (
+                    <input
+                      type="text"
+                      value={playerNames[`defense-${p.position}`] ?? ""}
+                      onChange={(e) => setPlayerName(`defense-${p.position}`, e.target.value)}
+                      placeholder={`X${p.position}`}
+                      aria-label={`Name for defensive player ${p.position}`}
+                      className="min-w-0 flex-1 rounded border border-gray-200 px-1.5 py-0.5 text-[11px] text-gray-700 focus:border-blue-400 focus:outline-none"
+                    />
+                  ) : (
+                    <button
+                      onClick={() => handleToggle("defense", p.position)}
+                      aria-label={`${p.visible ? "Hide" : "Show"} defensive player ${p.position}`}
+                      title={p.visible ? "Click to hide" : "Click to show"}
+                      className={[
+                        "rounded px-2 py-0.5 text-[11px] font-medium transition-colors",
+                        p.visible
+                          ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                          : "bg-gray-100 text-gray-400 hover:bg-gray-200",
+                      ].join(" ")}
+                    >
+                      {p.visible ? "Visible" : "Hidden"}
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

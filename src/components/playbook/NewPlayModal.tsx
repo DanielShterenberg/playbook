@@ -39,6 +39,7 @@ export default function NewPlayModal({ onClose }: NewPlayModalProps) {
   const router = useRouter();
   const addPlay = useStore((s) => s.addPlay);
   const setCurrentPlay = useStore((s) => s.setCurrentPlay);
+  const setSelectedSceneId = useStore((s) => s.setSelectedSceneId);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -84,6 +85,7 @@ export default function NewPlayModal({ onClose }: NewPlayModalProps) {
 
     addPlay(play);
     setCurrentPlay(play);
+    setSelectedSceneId(play.scenes[0].id);
     router.push(`/play/${play.id}`);
     onClose();
   }
