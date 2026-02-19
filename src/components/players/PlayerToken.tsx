@@ -8,9 +8,12 @@
  *
  * Props are expressed in *CSS pixels* relative to the court canvas so that the
  * parent CourtWithPlayers can place them correctly.
+ *
+ * Implements issue #53: player display mode (numbers | names | abbreviations).
  */
 
 import { useRef, useCallback } from "react";
+import type { PlayerDisplayMode } from "@/lib/store";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -18,6 +21,24 @@ import { useRef, useCallback } from "react";
 
 /** Radius of the player token in CSS pixels (independent of DPR). */
 const PLAYER_RADIUS = 18;
+
+/** Standard position abbreviations for offense (by 1-based position). */
+const OFFENSE_ABBRS: Record<number, string> = {
+  1: "PG",
+  2: "SG",
+  3: "SF",
+  4: "PF",
+  5: "C",
+};
+
+/** Standard position abbreviations for defense (mirror of offense). */
+const DEFENSE_ABBRS: Record<number, string> = {
+  1: "PG",
+  2: "SG",
+  3: "SF",
+  4: "PF",
+  5: "C",
+};
 
 const COLOR_OFFENSE_FILL = "#E07B39"; // warm orange (matches court paint)
 const COLOR_OFFENSE_STROKE = "#FFFFFF";
@@ -45,6 +66,18 @@ export interface PlayerTokenProps {
   onDragEnd: (newCx: number, newCy: number) => void;
   /** Bounding box (in CSS px) to clamp drag inside the court */
   courtBounds: { width: number; height: number };
+  /**
+   * What to display inside the token.
+   *   "numbers"       — default positional number (O1, X1 …)
+   *   "names"         — player name from roster (passed via `playerName`)
+   *   "abbreviations" — PG / SG / SF / PF / C
+   */
+  displayMode?: PlayerDisplayMode;
+  /**
+   * Player name shown when displayMode === "names".
+   * Falls back to the position number if absent.
+   */
+  playerName?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -59,6 +92,8 @@ export default function PlayerToken({
   onDrag,
   onDragEnd,
   courtBounds,
+  displayMode = "numbers",
+  playerName,
 }: PlayerTokenProps) {
   const isDragging = useRef(false);
   const dragStart = useRef<{ mouseX: number; mouseY: number; playerCx: number; playerCy: number }>({
@@ -166,8 +201,22 @@ export default function PlayerToken({
   const strokeColor = isOffense ? COLOR_OFFENSE_STROKE : COLOR_DEFENSE_STROKE;
   const textColor = isOffense ? COLOR_TEXT_OFFENSE : COLOR_TEXT_DEFENSE;
   const strokeWidth = isOffense ? 2 : 2.5;
-  const label = isOffense ? String(position) : `X${position}`;
-  const fontSize = isOffense ? 11 : 9;
+
+  // Build label based on display mode
+  let label: string;
+  if (displayMode === "names") {
+    label = playerName ?? (isOffense ? String(position) : `X${position}`);
+  } else if (displayMode === "abbreviations") {
+    const abbrs = isOffense ? OFFENSE_ABBRS : DEFENSE_ABBRS;
+    label = abbrs[position] ?? String(position);
+  } else {
+    // "numbers" — default
+    label = isOffense ? String(position) : `X${position}`;
+  }
+
+  // Shrink font for long names so they fit inside the token
+  const baseFontSize = isOffense ? 11 : 9;
+  const fontSize = label.length > 2 ? Math.max(6, baseFontSize - (label.length - 2) * 1.5) : baseFontSize;
 
   return (
     <g
