@@ -7,6 +7,7 @@ import TimingStripPanel from "@/components/editor/TimingStripPanel";
 import EditorKeyboardManager from "@/components/editor/EditorKeyboardManager";
 import ShortcutsButton from "@/components/editor/ShortcutsButton";
 import UndoRedoButtons from "@/components/editor/UndoRedoButtons";
+import ExportMenu from "@/components/editor/ExportMenu";
 
 interface PlayEditorPageProps {
   params: { id: string };
@@ -34,9 +35,7 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
           >
             Save
           </button>
-          <button className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
-            Export
-          </button>
+          <ExportMenu />
           <button className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
             Share
           </button>
