@@ -29,7 +29,7 @@
  *     X1–X5 shadow their offensive counterparts with a ~4ft sag
  */
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef } from "react";
 import Court, { type CourtReadyPayload } from "@/components/court/Court";
 import PlayerToken from "./PlayerToken";
 import BallToken, { type NearbyPlayer, DETACH_RADIUS } from "./BallToken";
@@ -154,31 +154,13 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
   const courtSizeRef = useRef<{ width: number; height: number } | null>(null);
 
   // -------------------------------------------------------------------------
-  // Sync player visibility from the scene prop into local pixel state.
-  // This is necessary because togglePlayerVisibility updates the store/scene
-  // but the pixel state is only initialised once from the scene on first render.
-  // Without this effect, toggling visibility in PlayerRosterPanel has no visual
-  // effect on the court (Bug #102).
+  // Derive visibility directly from the scene prop (source of truth in the
+  // Zustand store) rather than caching it in local pixel state. This ensures
+  // that togglePlayerVisibility updates are always reflected immediately
+  // without relying on a useEffect to sync the flag into offensePx/defensePx.
   // -------------------------------------------------------------------------
-  useEffect(() => {
-    if (!scene) return;
-    setOffensePx((prev) => {
-      if (!prev) return prev;
-      return prev.map((p) => {
-        const storePlayer = scene.players.offense.find((sp) => sp.position === p.position);
-        if (!storePlayer || storePlayer.visible === p.visible) return p;
-        return { ...p, visible: storePlayer.visible };
-      });
-    });
-    setDefensePx((prev) => {
-      if (!prev) return prev;
-      return prev.map((p) => {
-        const storePlayer = scene.players.defense.find((sp) => sp.position === p.position);
-        if (!storePlayer || storePlayer.visible === p.visible) return p;
-        return { ...p, visible: storePlayer.visible };
-      });
-    });
-  }, [scene]);
+  const offenseVisible = scene?.players.offense ?? null;
+  const defenseVisible = scene?.players.defense ?? null;
 
   // -------------------------------------------------------------------------
   // Derived: effective ball pixel centre (follows player if attached)
@@ -285,13 +267,16 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
         const updated = prev.map((p) => (p.position === position ? { ...p, px: newCx, py: newCy } : p));
         if (sceneId && courtSizeRef.current) {
           const { x, y } = pixelToNorm(newCx, newCy, courtSizeRef.current.width, courtSizeRef.current.height);
-          const visible = updated.find((p) => p.position === position)?.visible ?? true;
+          // Read visible from the scene prop (source of truth) to avoid overwriting
+          // a visibility toggle with a stale value from local pixel state.
+          const scenePlayer = offenseVisible?.find((sp) => sp.position === position);
+          const visible = scenePlayer ? scenePlayer.visible : (updated.find((p) => p.position === position)?.visible ?? true);
           updatePlayerState(sceneId, "offense", { position, x, y, visible });
         }
         return updated;
       });
     },
-    [sceneId, updatePlayerState],
+    [sceneId, updatePlayerState, offenseVisible],
   );
 
   const handleDefenseDrag = useCallback((position: number, newCx: number, newCy: number) => {
@@ -309,13 +294,16 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
         const updated = prev.map((p) => (p.position === position ? { ...p, px: newCx, py: newCy } : p));
         if (sceneId && courtSizeRef.current) {
           const { x, y } = pixelToNorm(newCx, newCy, courtSizeRef.current.width, courtSizeRef.current.height);
-          const visible = updated.find((p) => p.position === position)?.visible ?? true;
+          // Read visible from the scene prop (source of truth) to avoid overwriting
+          // a visibility toggle with a stale value from local pixel state.
+          const scenePlayer = defenseVisible?.find((sp) => sp.position === position);
+          const visible = scenePlayer ? scenePlayer.visible : (updated.find((p) => p.position === position)?.visible ?? true);
           updatePlayerState(sceneId, "defense", { position, x, y, visible });
         }
         return updated;
       });
     },
-    [sceneId, updatePlayerState],
+    [sceneId, updatePlayerState, defenseVisible],
   );
 
   // -------------------------------------------------------------------------
@@ -325,6 +313,10 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
   /**
    * Build the list of all visible player positions for snap/detach detection.
    * Used by BallToken to find the nearest player.
+   *
+   * Visibility is read from the scene prop (Zustand source of truth) rather
+   * than from local pixel state so that togglePlayerVisibility changes are
+   * immediately reflected in ball-snap behaviour too.
    */
   function buildPlayerList(
     offense: PixelPlayer[] | null,
@@ -332,10 +324,14 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
   ): NearbyPlayer[] {
     const result: NearbyPlayer[] = [];
     for (const p of offense ?? []) {
-      if (p.visible) result.push({ px: p.px, py: p.py, side: "offense", position: p.position });
+      const scenePlayer = offenseVisible?.find((sp) => sp.position === p.position);
+      const visible = scenePlayer ? scenePlayer.visible : p.visible;
+      if (visible) result.push({ px: p.px, py: p.py, side: "offense", position: p.position });
     }
     for (const p of defense ?? []) {
-      if (p.visible) result.push({ px: p.px, py: p.py, side: "defense", position: p.position });
+      const scenePlayer = defenseVisible?.find((sp) => sp.position === p.position);
+      const visible = scenePlayer ? scenePlayer.visible : p.visible;
+      if (visible) result.push({ px: p.px, py: p.py, side: "defense", position: p.position });
     }
     return result;
   }
@@ -437,7 +433,13 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
           <g style={{ pointerEvents: "all" }}>
             {/* Defensive players (rendered first = underneath offensive) */}
             {defensePx
-              ?.filter((p) => p.visible)
+              ?.filter((p) => {
+                // Read visibility from scene (Zustand source of truth) so that
+                // togglePlayerVisibility changes are reflected immediately
+                // without relying on local pixel state staying in sync.
+                const scenePlayer = defenseVisible?.find((sp) => sp.position === p.position);
+                return scenePlayer ? scenePlayer.visible : p.visible;
+              })
               .map((p) => (
                 <PlayerToken
                   key={`defense-${p.position}`}
@@ -454,7 +456,13 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
 
             {/* Offensive players (rendered on top of defensive) */}
             {offensePx
-              ?.filter((p) => p.visible)
+              ?.filter((p) => {
+                // Read visibility from scene (Zustand source of truth) so that
+                // togglePlayerVisibility changes are reflected immediately
+                // without relying on local pixel state staying in sync.
+                const scenePlayer = offenseVisible?.find((sp) => sp.position === p.position);
+                return scenePlayer ? scenePlayer.visible : p.visible;
+              })
               .map((p) => (
                 <PlayerToken
                   key={`offense-${p.position}`}
