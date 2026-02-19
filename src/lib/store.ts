@@ -1,5 +1,6 @@
 // Zustand store for global application state.
 // Implements issue #48: editor, playback, and play slice management.
+// Issue #83: undo/redo system integrated via useHistoryStore.
 
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
@@ -13,6 +14,7 @@ import type {
   PlayerState,
   BallState,
 } from "./types";
+import { useHistoryStore } from "./history";
 
 // ---------------------------------------------------------------------------
 // Tool types
@@ -50,6 +52,10 @@ export interface AppStore {
   updatePlayMeta: (
     patch: Partial<Pick<Play, "title" | "description" | "category" | "tags" | "courtType">>,
   ) => void;
+
+  // Undo / Redo (issue #83)
+  undo: () => void;
+  redo: () => void;
 
   // Scene mutations
   addScene: () => void;
@@ -103,6 +109,24 @@ export interface AppStore {
 }
 
 // ---------------------------------------------------------------------------
+// History helpers — snapshot the undoable portion of the store state
+// ---------------------------------------------------------------------------
+
+/**
+ * Capture a snapshot of the undoable editor state so it can be pushed to the
+ * history stack before a mutation is applied. Must be called outside of a
+ * `set()` call (i.e. using `get()`).
+ */
+function captureSnapshot(state: { currentPlay: Play | null; selectedSceneId: string | null }) {
+  if (!state.currentPlay) return null;
+  return {
+    // Deep-clone so mutations to the live state don't corrupt history.
+    play: JSON.parse(JSON.stringify(state.currentPlay)) as Play,
+    selectedSceneId: state.selectedSceneId,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
@@ -150,16 +174,20 @@ function withUpdatedScene(play: Play, sceneId: string, updater: (s: Scene) => Sc
 // ---------------------------------------------------------------------------
 
 export const useStore = create<AppStore>()(
-  subscribeWithSelector((set) => ({
+  subscribeWithSelector((set, get) => ({
     // =======================================================================
     // Play data
     // =======================================================================
 
     currentPlay: null,
 
-    setCurrentPlay: (play) => set({ currentPlay: play }),
+    setCurrentPlay: (play) => {
+      useHistoryStore.getState().resetHistory();
+      set({ currentPlay: play });
+    },
 
-    clearCurrentPlay: () =>
+    clearCurrentPlay: () => {
+      useHistoryStore.getState().resetHistory();
       set({
         currentPlay: null,
         selectedSceneId: null,
@@ -167,6 +195,37 @@ export const useStore = create<AppStore>()(
         isPlaying: false,
         currentSceneIndex: 0,
         currentStep: 1,
+      });
+    },
+
+    // -----------------------------------------------------------------------
+    // Undo / Redo (issue #83)
+    // -----------------------------------------------------------------------
+
+    undo: () =>
+      set((state) => {
+        const snapshot = captureSnapshot(state);
+        if (!snapshot) return state;
+        const previous = useHistoryStore.getState().undo(snapshot);
+        if (!previous) return state;
+        return {
+          currentPlay: previous.play,
+          selectedSceneId: previous.selectedSceneId,
+          selectedAnnotationId: null,
+        };
+      }),
+
+    redo: () =>
+      set((state) => {
+        const snapshot = captureSnapshot(state);
+        if (!snapshot) return state;
+        const next = useHistoryStore.getState().redo(snapshot);
+        if (!next) return state;
+        return {
+          currentPlay: next.play,
+          selectedSceneId: next.selectedSceneId,
+          selectedAnnotationId: null,
+        };
       }),
 
     updatePlayMeta: (patch) =>
@@ -179,46 +238,57 @@ export const useStore = create<AppStore>()(
     // Scene management
     // -----------------------------------------------------------------------
 
-    addScene: () =>
-      set((state) => {
-        if (!state.currentPlay) return state;
-        const order = state.currentPlay.scenes.length;
+    addScene: () => {
+      const state = get();
+      const snapshot = captureSnapshot(state);
+      if (snapshot) useHistoryStore.getState().pushSnapshot(snapshot);
+      set((s) => {
+        if (!s.currentPlay) return s;
+        const order = s.currentPlay.scenes.length;
         const newScene = createEmptyScene(order);
         return {
           currentPlay: {
-            ...state.currentPlay,
+            ...s.currentPlay,
             updatedAt: new Date(),
-            scenes: [...state.currentPlay.scenes, newScene],
+            scenes: [...s.currentPlay.scenes, newScene],
           },
           selectedSceneId: newScene.id,
         };
-      }),
+      });
+    },
 
-    removeScene: (sceneId) =>
-      set((state) => {
-        const play = state.currentPlay;
-        if (!play || play.scenes.length <= 1) return state;
+    removeScene: (sceneId) => {
+      const state = get();
+      const snapshot = captureSnapshot(state);
+      if (snapshot) useHistoryStore.getState().pushSnapshot(snapshot);
+      set((s) => {
+        const play = s.currentPlay;
+        if (!play || play.scenes.length <= 1) return s;
         const filtered = play.scenes
-          .filter((s) => s.id !== sceneId)
-          .map((s, i) => ({ ...s, order: i }));
+          .filter((sc) => sc.id !== sceneId)
+          .map((sc, i) => ({ ...sc, order: i }));
         const newSelectedId =
-          state.selectedSceneId === sceneId
+          s.selectedSceneId === sceneId
             ? (filtered[0]?.id ?? null)
-            : state.selectedSceneId;
-        const newSceneIndex = Math.min(state.currentSceneIndex, filtered.length - 1);
+            : s.selectedSceneId;
+        const newSceneIndex = Math.min(s.currentSceneIndex, filtered.length - 1);
         return {
           currentPlay: { ...play, updatedAt: new Date(), scenes: filtered },
           selectedSceneId: newSelectedId,
           currentSceneIndex: newSceneIndex,
         };
-      }),
+      });
+    },
 
-    duplicateScene: (sceneId) =>
-      set((state) => {
-        const play = state.currentPlay;
-        if (!play) return state;
-        const idx = play.scenes.findIndex((s) => s.id === sceneId);
-        if (idx === -1) return state;
+    duplicateScene: (sceneId) => {
+      const state = get();
+      const snapshot = captureSnapshot(state);
+      if (snapshot) useHistoryStore.getState().pushSnapshot(snapshot);
+      set((s) => {
+        const play = s.currentPlay;
+        if (!play) return s;
+        const idx = play.scenes.findIndex((sc) => sc.id === sceneId);
+        if (idx === -1) return s;
         const original = play.scenes[idx];
         const copy: Scene = {
           ...JSON.parse(JSON.stringify(original)) as Scene,
@@ -228,89 +298,113 @@ export const useStore = create<AppStore>()(
           ...play.scenes.slice(0, idx + 1),
           copy,
           ...play.scenes.slice(idx + 1),
-        ].map((s, i) => ({ ...s, order: i }));
+        ].map((sc, i) => ({ ...sc, order: i }));
         return {
           currentPlay: { ...play, updatedAt: new Date(), scenes },
           selectedSceneId: copy.id,
         };
-      }),
+      });
+    },
 
-    reorderScene: (sceneId, newOrder) =>
-      set((state) => {
-        const play = state.currentPlay;
-        if (!play) return state;
+    reorderScene: (sceneId, newOrder) => {
+      const state = get();
+      const snapshot = captureSnapshot(state);
+      if (snapshot) useHistoryStore.getState().pushSnapshot(snapshot);
+      set((s) => {
+        const play = s.currentPlay;
+        if (!play) return s;
         const scenes = [...play.scenes];
-        const idx = scenes.findIndex((s) => s.id === sceneId);
-        if (idx === -1) return state;
+        const idx = scenes.findIndex((sc) => sc.id === sceneId);
+        if (idx === -1) return s;
         const [moved] = scenes.splice(idx, 1);
         scenes.splice(newOrder, 0, moved);
-        const reordered = scenes.map((s, i) => ({ ...s, order: i }));
+        const reordered = scenes.map((sc, i) => ({ ...sc, order: i }));
         return { currentPlay: { ...play, updatedAt: new Date(), scenes: reordered } };
-      }),
+      });
+    },
 
-    updateSceneNote: (sceneId, note) =>
-      set((state) => {
-        if (!state.currentPlay) return state;
-        return { currentPlay: withUpdatedScene(state.currentPlay, sceneId, (s) => ({ ...s, note })) };
-      }),
+    updateSceneNote: (sceneId, note) => {
+      const state = get();
+      const snapshot = captureSnapshot(state);
+      if (snapshot) useHistoryStore.getState().pushSnapshot(snapshot);
+      set((s) => {
+        if (!s.currentPlay) return s;
+        return { currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => ({ ...sc, note })) };
+      });
+    },
 
-    updatePlayerState: (sceneId, side, player) =>
-      set((state) => {
-        if (!state.currentPlay) return state;
+    updatePlayerState: (sceneId, side, player) => {
+      const state = get();
+      const snapshot = captureSnapshot(state);
+      if (snapshot) useHistoryStore.getState().pushSnapshot(snapshot);
+      set((s) => {
+        if (!s.currentPlay) return s;
         return {
-          currentPlay: withUpdatedScene(state.currentPlay, sceneId, (s) => ({
-            ...s,
+          currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => ({
+            ...sc,
             players: {
-              ...s.players,
-              [side]: s.players[side].map((p) =>
+              ...sc.players,
+              [side]: sc.players[side].map((p) =>
                 p.position === player.position ? player : p,
               ),
             },
           })),
         };
-      }),
+      });
+    },
 
-    updateBallState: (sceneId, ball) =>
-      set((state) => {
-        if (!state.currentPlay) return state;
+    updateBallState: (sceneId, ball) => {
+      const state = get();
+      const snapshot = captureSnapshot(state);
+      if (snapshot) useHistoryStore.getState().pushSnapshot(snapshot);
+      set((s) => {
+        if (!s.currentPlay) return s;
         return {
-          currentPlay: withUpdatedScene(state.currentPlay, sceneId, (s) => ({ ...s, ball })),
+          currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => ({ ...sc, ball })),
         };
-      }),
+      });
+    },
 
     // -----------------------------------------------------------------------
     // Timing groups and annotations
     // -----------------------------------------------------------------------
 
-    addAnnotation: (sceneId, timingStep, annotation) =>
-      set((state) => {
-        if (!state.currentPlay) return state;
+    addAnnotation: (sceneId, timingStep, annotation) => {
+      const state = get();
+      const snapshot = captureSnapshot(state);
+      if (snapshot) useHistoryStore.getState().pushSnapshot(snapshot);
+      set((s) => {
+        if (!s.currentPlay) return s;
         return {
-          currentPlay: withUpdatedScene(state.currentPlay, sceneId, (s) => {
-            const existingGroup = s.timingGroups.find((g) => g.step === timingStep);
+          currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => {
+            const existingGroup = sc.timingGroups.find((g) => g.step === timingStep);
             const timingGroups: TimingGroup[] = existingGroup
-              ? s.timingGroups.map((g) =>
+              ? sc.timingGroups.map((g) =>
                   g.step === timingStep
                     ? { ...g, annotations: [...g.annotations, annotation] }
                     : g,
                 )
               : [
-                  ...s.timingGroups,
+                  ...sc.timingGroups,
                   { step: timingStep, duration: 1000, annotations: [annotation] },
                 ];
-            return { ...s, timingGroups: normalizeSteps(timingGroups) };
+            return { ...sc, timingGroups: normalizeSteps(timingGroups) };
           }),
         };
-      }),
+      });
+    },
 
-    removeAnnotation: (sceneId, annotationId) =>
-      set((state) => {
-        if (!state.currentPlay) return state;
-        const currentSelectedAnnotation = state.selectedAnnotationId;
+    removeAnnotation: (sceneId, annotationId) => {
+      const state = get();
+      const snapshot = captureSnapshot(state);
+      if (snapshot) useHistoryStore.getState().pushSnapshot(snapshot);
+      set((s) => {
+        if (!s.currentPlay) return s;
+        const currentSelectedAnnotation = s.selectedAnnotationId;
         return {
-          currentPlay: withUpdatedScene(state.currentPlay, sceneId, (s) => ({
-            ...s,
-            timingGroups: s.timingGroups
+          currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => ({
+            ...sc,
+            timingGroups: sc.timingGroups
               .map((g) => ({
                 ...g,
                 annotations: g.annotations.filter((a) => a.id !== annotationId),
@@ -321,15 +415,19 @@ export const useStore = create<AppStore>()(
           selectedAnnotationId:
             currentSelectedAnnotation === annotationId ? null : currentSelectedAnnotation,
         };
-      }),
+      });
+    },
 
-    moveAnnotationToStep: (sceneId, annotationId, newStep) =>
-      set((state) => {
-        if (!state.currentPlay) return state;
+    moveAnnotationToStep: (sceneId, annotationId, newStep) => {
+      const state = get();
+      const snapshot = captureSnapshot(state);
+      if (snapshot) useHistoryStore.getState().pushSnapshot(snapshot);
+      set((s) => {
+        if (!s.currentPlay) return s;
         return {
-          currentPlay: withUpdatedScene(state.currentPlay, sceneId, (s) => {
+          currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => {
             let moved: Annotation | null = null;
-            const stripped: TimingGroup[] = s.timingGroups.map((g) => ({
+            const stripped: TimingGroup[] = sc.timingGroups.map((g) => ({
               ...g,
               annotations: g.annotations.filter((a) => {
                 if (a.id === annotationId) {
@@ -339,7 +437,7 @@ export const useStore = create<AppStore>()(
                 return true;
               }),
             }));
-            if (!moved) return s;
+            if (!moved) return sc;
             const target = stripped.find((g) => g.step === newStep);
             const timingGroups: TimingGroup[] = target
               ? stripped.map((g) =>
@@ -349,45 +447,54 @@ export const useStore = create<AppStore>()(
                 )
               : [...stripped, { step: newStep, duration: 1000, annotations: [moved as Annotation] }];
             return {
-              ...s,
+              ...sc,
               timingGroups: normalizeSteps(
                 timingGroups.filter((g) => g.annotations.length > 0 || g.step === 1),
               ),
             };
           }),
         };
-      }),
+      });
+    },
 
-    addTimingStep: (sceneId) =>
-      set((state) => {
-        if (!state.currentPlay) return state;
+    addTimingStep: (sceneId) => {
+      const state = get();
+      const snapshot = captureSnapshot(state);
+      if (snapshot) useHistoryStore.getState().pushSnapshot(snapshot);
+      set((s) => {
+        if (!s.currentPlay) return s;
         return {
-          currentPlay: withUpdatedScene(state.currentPlay, sceneId, (s) => {
-            const maxStep = s.timingGroups.reduce((m, g) => Math.max(m, g.step), 0);
+          currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => {
+            const maxStep = sc.timingGroups.reduce((m, g) => Math.max(m, g.step), 0);
             return {
-              ...s,
+              ...sc,
               timingGroups: [
-                ...s.timingGroups,
+                ...sc.timingGroups,
                 { step: maxStep + 1, duration: 1000, annotations: [] },
               ],
             };
           }),
         };
-      }),
+      });
+    },
 
-    removeTimingStep: (sceneId, step) =>
-      set((state) => {
-        if (!state.currentPlay) return state;
-        const currentSelectedStep = state.selectedTimingStep;
+    removeTimingStep: (sceneId, step) => {
+      const state = get();
+      const snapshot = captureSnapshot(state);
+      if (snapshot) useHistoryStore.getState().pushSnapshot(snapshot);
+      set((s) => {
+        if (!s.currentPlay) return s;
+        const currentSelectedStep = s.selectedTimingStep;
         return {
-          currentPlay: withUpdatedScene(state.currentPlay, sceneId, (s) => {
-            if (s.timingGroups.length <= 1) return s;
-            const filtered = s.timingGroups.filter((g) => g.step !== step);
-            return { ...s, timingGroups: normalizeSteps(filtered) };
+          currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => {
+            if (sc.timingGroups.length <= 1) return sc;
+            const filtered = sc.timingGroups.filter((g) => g.step !== step);
+            return { ...sc, timingGroups: normalizeSteps(filtered) };
           }),
           selectedTimingStep: currentSelectedStep === step ? 1 : currentSelectedStep,
         };
-      }),
+      });
+    },
 
     // =======================================================================
     // Editor state
@@ -405,21 +512,25 @@ export const useStore = create<AppStore>()(
     setSelectedAnnotationId: (id) => set({ selectedAnnotationId: id }),
     setPlayerDisplayMode: (mode) => set({ playerDisplayMode: mode }),
 
-    togglePlayerVisibility: (sceneId, side, position) =>
-      set((state) => {
-        if (!state.currentPlay) return state;
+    togglePlayerVisibility: (sceneId, side, position) => {
+      const state = get();
+      const snapshot = captureSnapshot(state);
+      if (snapshot) useHistoryStore.getState().pushSnapshot(snapshot);
+      set((s) => {
+        if (!s.currentPlay) return s;
         return {
-          currentPlay: withUpdatedScene(state.currentPlay, sceneId, (s) => ({
-            ...s,
+          currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => ({
+            ...sc,
             players: {
-              ...s.players,
-              [side]: s.players[side].map((p) =>
+              ...sc.players,
+              [side]: sc.players[side].map((p) =>
                 p.position === position ? { ...p, visible: !p.visible } : p,
               ),
             },
           })),
         };
-      }),
+      });
+    },
 
     // =======================================================================
     // Playback state

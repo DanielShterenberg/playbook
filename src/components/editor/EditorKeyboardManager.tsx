@@ -5,6 +5,8 @@
  * manages the ShortcutsOverlay visibility for the play editor.
  *
  * Implements issue #82: Keyboard shortcuts.
+ * Implements issue #83: Undo/Redo — wires Ctrl+Z / Ctrl+Shift+Z to the
+ * history store.
  *
  * This is a zero-render client component that:
  *   1. Calls useKeyboardShortcuts with editor-specific callbacks.
@@ -16,10 +18,14 @@
 
 import { useState, useCallback } from "react";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { useStore } from "@/lib/store";
 import ShortcutsOverlay from "./ShortcutsOverlay";
 
 export default function EditorKeyboardManager() {
   const [showHelp, setShowHelp] = useState(false);
+
+  const undo = useStore((s) => s.undo);
+  const redo = useStore((s) => s.redo);
 
   const handleToggleHelp = useCallback(() => {
     setShowHelp((prev) => !prev);
@@ -34,14 +40,14 @@ export default function EditorKeyboardManager() {
     // No-op for now; will be wired to the Firestore persistence layer in #68
   }, []);
 
-  // Undo / Redo — stubbed until undo/redo system (#83) is implemented
+  // Undo / Redo — wired to history store (issue #83)
   const handleUndo = useCallback(() => {
-    // No-op for now; will be wired to the history stack in #83
-  }, []);
+    undo();
+  }, [undo]);
 
   const handleRedo = useCallback(() => {
-    // No-op for now; will be wired to the history stack in #83
-  }, []);
+    redo();
+  }, [redo]);
 
   useKeyboardShortcuts({
     onToggleHelp: handleToggleHelp,
