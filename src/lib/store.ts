@@ -137,12 +137,35 @@ function captureSnapshot(state: { currentPlay: Play | null; selectedSceneId: str
 // Internal helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Default normalised court positions for new scenes.
+ * These match the visual defaults in CourtWithPlayers so the court is never
+ * initialised with all players stacked at centre (0.5, 0.5).
+ *
+ * y: 0 = half-court line, 1 = baseline
+ */
+const DEFAULT_OFFENSE_POSITIONS: [number, number][] = [
+  [0.5,  0.35], // O1 — PG, top of key
+  [0.18, 0.48], // O2 — left wing
+  [0.82, 0.48], // O3 — right wing
+  [0.08, 0.75], // O4 — left corner
+  [0.92, 0.75], // O5 — right corner
+];
+
+const DEFAULT_DEFENSE_POSITIONS: [number, number][] = [
+  [0.5,  0.42], // X1 — on ball
+  [0.22, 0.54], // X2
+  [0.78, 0.54], // X3
+  [0.14, 0.78], // X4
+  [0.86, 0.78], // X5
+];
+
 function createEmptyScene(order: number): Scene {
-  const defaultPlayers = (count: number): PlayerState[] =>
-    Array.from({ length: count }, (_, i) => ({
+  const makePlayers = (positions: [number, number][]): PlayerState[] =>
+    positions.map(([x, y], i) => ({
       position: i + 1,
-      x: 0.5,
-      y: 0.5,
+      x,
+      y,
       visible: true,
     }));
 
@@ -152,10 +175,10 @@ function createEmptyScene(order: number): Scene {
     duration: 2000,
     note: "",
     players: {
-      offense: defaultPlayers(5),
-      defense: defaultPlayers(5),
+      offense: makePlayers(DEFAULT_OFFENSE_POSITIONS),
+      defense: makePlayers(DEFAULT_DEFENSE_POSITIONS),
     },
-    ball: { x: 0.5, y: 0.5, attachedTo: null },
+    ball: { x: 0.5, y: 0.35, attachedTo: null },
     timingGroups: [{ step: 1, duration: 1000, annotations: [] }],
   };
 }

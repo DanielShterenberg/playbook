@@ -29,7 +29,7 @@
  *     X1–X5 shadow their offensive counterparts with a ~4ft sag
  */
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import Court, { type CourtReadyPayload } from "@/components/court/Court";
 import PlayerToken from "./PlayerToken";
 import BallToken, { type NearbyPlayer, DETACH_RADIUS } from "./BallToken";
@@ -152,6 +152,33 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
 
   // Track the last known court size for re-projection on resize
   const courtSizeRef = useRef<{ width: number; height: number } | null>(null);
+
+  // -------------------------------------------------------------------------
+  // Sync player visibility from the scene prop into local pixel state.
+  // This is necessary because togglePlayerVisibility updates the store/scene
+  // but the pixel state is only initialised once from the scene on first render.
+  // Without this effect, toggling visibility in PlayerRosterPanel has no visual
+  // effect on the court (Bug #102).
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    if (!scene) return;
+    setOffensePx((prev) => {
+      if (!prev) return prev;
+      return prev.map((p) => {
+        const storePlayer = scene.players.offense.find((sp) => sp.position === p.position);
+        if (!storePlayer || storePlayer.visible === p.visible) return p;
+        return { ...p, visible: storePlayer.visible };
+      });
+    });
+    setDefensePx((prev) => {
+      if (!prev) return prev;
+      return prev.map((p) => {
+        const storePlayer = scene.players.defense.find((sp) => sp.position === p.position);
+        if (!storePlayer || storePlayer.visible === p.visible) return p;
+        return { ...p, visible: storePlayer.visible };
+      });
+    });
+  }, [scene]);
 
   // -------------------------------------------------------------------------
   // Derived: effective ball pixel centre (follows player if attached)

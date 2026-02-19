@@ -74,12 +74,12 @@ const COLOR_LINE_WIDTH_PX = 2; // base line width — scaled by canvas resolutio
 // Drawing helpers
 // ---------------------------------------------------------------------------
 
-function drawCourt(canvas: HTMLCanvasElement): void {
+function drawCourt(canvas: HTMLCanvasElement, cssWidth: number, cssHeight: number): void {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-  const W = canvas.width;
-  const H = canvas.height;
+  const W = cssWidth;
+  const H = cssHeight;
 
   // Helpers to convert normalised [0-1] court coords → canvas pixels
   const cx = (nx: number) => nx * W;
@@ -328,7 +328,7 @@ export default function Court({ onReady, className }: CourtProps) {
       ctx.scale(dpr, dpr);
     }
 
-    drawCourt(canvas);
+    drawCourt(canvas, cssWidth, cssHeight);
 
     // Notify parent with coordinate conversion helper
     if (onReady) {
