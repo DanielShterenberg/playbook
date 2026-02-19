@@ -194,30 +194,9 @@ export default function PlaybackControls() {
     };
   }, [isPlaying, advancePlayback]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-
-      if (e.code === "Space") {
-        e.preventDefault();
-        togglePlayback();
-      } else if (e.code === "ArrowRight") {
-        e.preventDefault();
-        pausePlayback();
-        stepForward();
-      } else if (e.code === "ArrowLeft") {
-        e.preventDefault();
-        pausePlayback();
-        stepBack();
-      } else if (e.key === "l" || e.key === "L") {
-        setLoop(!useStore.getState().loop);
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [togglePlayback, pausePlayback, stepForward, stepBack, setLoop]);
+  // Keyboard shortcut registration (Space, Left/Right, L, Ctrl+Left/Right) is
+  // handled centrally by EditorKeyboardManager (useKeyboardShortcuts, issue #82).
+  // No duplicate listener is registered here.
 
   if (!currentPlay) return null;
 

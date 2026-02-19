@@ -13,9 +13,12 @@
  *   Screen         (keyboard: S) — perpendicular line
  *   Cut            (keyboard: C) — dashed arrow line
  *   Eraser         (keyboard: E) — remove annotations
+ *
+ * Note: keyboard shortcut registration has been centralised in
+ * useKeyboardShortcuts (issue #82). This component no longer attaches its
+ * own keydown listener — it is kept here for documentation purposes only.
  */
 
-import { useEffect, useCallback } from "react";
 import { useStore } from "@/lib/store";
 import type { DrawingTool } from "@/lib/store";
 
@@ -159,18 +162,6 @@ const TOOLS: ToolDef[] = [
   { id: "eraser",   label: "Eraser",   shortcut: "E", Icon: EraserIcon   },
 ];
 
-/** Map keyboard key → DrawingTool (lower-cased) */
-const KEY_MAP: Record<string, DrawingTool> = {
-  v: "select",
-  escape: "select",
-  m: "movement",
-  d: "dribble",
-  p: "pass",
-  s: "screen",
-  c: "cut",
-  e: "eraser",
-};
-
 /** CSS cursor per tool */
 export const TOOL_CURSOR: Record<DrawingTool, string> = {
   select:   "default",
@@ -190,26 +181,8 @@ export default function DrawingToolsPanel() {
   const selectedTool = useStore((s) => s.selectedTool);
   const setSelectedTool = useStore((s) => s.setSelectedTool);
 
-  // Keyboard shortcuts
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      // Ignore when typing in an input / textarea
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-
-      const tool = KEY_MAP[e.key.toLowerCase()];
-      if (tool) {
-        e.preventDefault();
-        setSelectedTool(tool);
-      }
-    },
-    [setSelectedTool],
-  );
-
-  useEffect(() => {
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
+  // Keyboard shortcut registration is handled centrally by EditorKeyboardManager
+  // (useKeyboardShortcuts hook, issue #82). No listener is registered here.
 
   return (
     <aside

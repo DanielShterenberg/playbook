@@ -24,7 +24,7 @@
  *     reference is stored.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useStore, selectEditorScene, selectAllAnnotations } from "@/lib/store";
 import type { DrawingTool } from "@/lib/store";
 import type { Annotation, Point } from "@/lib/types";
@@ -449,25 +449,8 @@ export default function AnnotationLayer({
     [selectedTool, setSelectedAnnotationId],
   );
 
-  // Keyboard: Delete/Backspace removes selected annotation
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Delete" || e.key === "Backspace") {
-        const tag = (e.target as HTMLElement).tagName;
-        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-        if (selectedAnnotationId && sceneId) {
-          removeAnnotation(sceneId, selectedAnnotationId);
-        }
-      }
-    },
-    [selectedAnnotationId, sceneId, removeAnnotation],
-  );
-
-  // Register keyboard listener for Delete/Backspace
-  useEffect(() => {
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
+  // Keyboard Delete/Backspace for annotation removal is handled centrally by
+  // EditorKeyboardManager (useKeyboardShortcuts, issue #82). No listener here.
 
   // Mouse down — start drawing
   const handleMouseDown = useCallback(
