@@ -340,6 +340,7 @@ export default function SceneStrip() {
   const currentPlay = useStore((s) => s.currentPlay);
   const selectedSceneId = useStore((s) => s.selectedSceneId);
   const setSelectedSceneId = useStore((s) => s.setSelectedSceneId);
+  const setCurrentSceneIndex = useStore((s) => s.setCurrentSceneIndex);
   const addScene = useStore((s) => s.addScene);
   const scene = useStore(selectEditorScene);
 
@@ -384,7 +385,7 @@ export default function SceneStrip() {
           totalScenes={scenes.length}
           isActive={s.id === activeId}
           compact={isTablet}
-          onClick={() => setSelectedSceneId(s.id)}
+          onClick={() => { setSelectedSceneId(s.id); setCurrentSceneIndex(i); }}
         />
       ))}
 

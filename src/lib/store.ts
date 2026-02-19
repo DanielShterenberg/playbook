@@ -366,6 +366,7 @@ export const useStore = create<AppStore>()(
             scenes: [...s.currentPlay.scenes, newScene],
           },
           selectedSceneId: newScene.id,
+          currentSceneIndex: order,
         };
       });
     },
@@ -412,9 +413,11 @@ export const useStore = create<AppStore>()(
           copy,
           ...play.scenes.slice(idx + 1),
         ].map((sc, i) => ({ ...sc, order: i }));
+        const copyIndex = scenes.findIndex((sc) => sc.id === copy.id);
         return {
           currentPlay: { ...play, updatedAt: new Date(), scenes },
           selectedSceneId: copy.id,
+          currentSceneIndex: copyIndex !== -1 ? copyIndex : s.currentSceneIndex,
         };
       });
     },
@@ -668,28 +671,45 @@ export const useStore = create<AppStore>()(
         const scenes = state.currentPlay?.scenes ?? [];
         const nextIndex = state.currentSceneIndex + 1;
         if (nextIndex < scenes.length) {
-          return { currentSceneIndex: nextIndex, currentStep: 1, isPlaying: false };
+          return {
+            currentSceneIndex: nextIndex,
+            currentStep: 1,
+            isPlaying: false,
+            selectedSceneId: scenes[nextIndex]?.id ?? state.selectedSceneId,
+          };
         }
         if (state.loop) {
-          return { currentSceneIndex: 0, currentStep: 1 };
+          return {
+            currentSceneIndex: 0,
+            currentStep: 1,
+            selectedSceneId: scenes[0]?.id ?? state.selectedSceneId,
+          };
         }
         return { isPlaying: false };
       }),
 
     stepBack: () =>
       set((state) => {
+        const scenes = state.currentPlay?.scenes ?? [];
         if (state.currentSceneIndex > 0) {
+          const prevIndex = state.currentSceneIndex - 1;
           return {
-            currentSceneIndex: state.currentSceneIndex - 1,
+            currentSceneIndex: prevIndex,
             currentStep: 1,
             isPlaying: false,
+            selectedSceneId: scenes[prevIndex]?.id ?? state.selectedSceneId,
           };
         }
         return { isPlaying: false };
       }),
 
     setCurrentSceneIndex: (index) =>
-      set({ currentSceneIndex: index, currentStep: 1, isPlaying: false }),
+      set((state) => ({
+        currentSceneIndex: index,
+        currentStep: 1,
+        isPlaying: false,
+        selectedSceneId: state.currentPlay?.scenes[index]?.id ?? state.selectedSceneId,
+      })),
 
     setCurrentStep: (step) => set({ currentStep: step }),
     setSpeed: (speed) => set({ speed }),
