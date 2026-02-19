@@ -47,8 +47,8 @@ const SECTIONS: ShortcutSection[] = [
   {
     title: "Editing",
     entries: [
-      { keys: ["Ctrl", "Z"], description: "Undo (coming soon)" },
-      { keys: ["Ctrl", "Shift", "Z"], description: "Redo (coming soon)" },
+      { keys: ["Ctrl", "Z"], description: "Undo" },
+      { keys: ["Ctrl", "Shift", "Z"], description: "Redo" },
       { keys: ["Del", "⌫"], description: "Delete selected annotation or scene" },
       { keys: ["Ctrl", "S"], description: "Force save" },
     ],
