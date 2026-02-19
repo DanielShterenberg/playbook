@@ -31,7 +31,6 @@ import {
   CORNER_THREE_RIGHT_X,
   FT_CIRCLE_CENTER_X,
   FT_CIRCLE_CENTER_Y,
-  FT_CIRCLE_RADIUS,
   CENTRE_CIRCLE_RADIUS,
 } from "./courtDimensions";
 
@@ -196,37 +195,29 @@ function drawCourt(canvas: HTMLCanvasElement, cssWidth: number, cssHeight: numbe
   const leftCornerX_ft = CORNER_THREE_LEFT_X * 50; // 3
   const rightCornerX_ft = CORNER_THREE_RIGHT_X * 50; // 47
 
-  // dy from basket to corner three line
-  const dy3 = basketY_ft - cornerY_ft; // positive, basket is below corner line
-  // dx from basket centre to where arc meets the corner line
-  const dx3 = Math.sqrt(23.75 * 23.75 - dy3 * dy3);
-
-  // Angle of the arc endpoints (measured from +x axis, clockwise in canvas)
-  // In canvas y increases downward, so atan2 convention: angle from +x going clockwise.
-  // Left endpoint: basket + (-dx3, -dy3) → angle = atan2(-dy3, -dx3)
-  // Right endpoint: basket + (dx3, -dy3)  → angle = atan2(-dy3,  dx3)
-  const arcAngleLeft = Math.atan2(-dy3, -dx3); // ~between -π and -π/2
-  const arcAngleRight = Math.atan2(-dy3, dx3); // ~between -π/2 and 0
-
   ctx.strokeStyle = COLOR_LINE;
   ctx.lineWidth = COLOR_LINE_WIDTH_PX * FT_PER_PX_X; // scale line width to ft coords
 
-  // Left corner three straight (from left sideline to arc start)
+  // Left corner three straight: vertical line from baseline (y=47) up to 14ft depth
   ctx.beginPath();
-  ctx.moveTo(leftCornerX_ft, cornerY_ft);
-  ctx.lineTo(basketX_ft - dx3, cornerY_ft);
+  ctx.moveTo(leftCornerX_ft, 47);
+  ctx.lineTo(leftCornerX_ft, cornerY_ft);
   ctx.stroke();
 
-  // Right corner three straight (from arc end to right sideline)
+  // Right corner three straight: vertical line from baseline (y=47) up to 14ft depth
   ctx.beginPath();
-  ctx.moveTo(basketX_ft + dx3, cornerY_ft);
+  ctx.moveTo(rightCornerX_ft, 47);
   ctx.lineTo(rightCornerX_ft, cornerY_ft);
   ctx.stroke();
 
-  // Three-point arc (counterclockwise from right endpoint to left endpoint,
+  // Arc angles measured from basket center to each corner x at cornerY_ft
+  const arcAngleLeftCorner = Math.atan2(cornerY_ft - basketY_ft, leftCornerX_ft - basketX_ft);
+  const arcAngleRightCorner = Math.atan2(cornerY_ft - basketY_ft, rightCornerX_ft - basketX_ft);
+
+  // Three-point arc (counterclockwise from right corner to left corner,
   // going through the top of the arc toward the half-court line)
   ctx.beginPath();
-  ctx.arc(basketX_ft, basketY_ft, 23.75, arcAngleRight, arcAngleLeft, true);
+  ctx.arc(basketX_ft, basketY_ft, 23.75, arcAngleRightCorner, arcAngleLeftCorner, true);
   ctx.stroke();
 
   // ------------------------------------------------------------------
@@ -260,19 +251,27 @@ function drawCourt(canvas: HTMLCanvasElement, cssWidth: number, cssHeight: numbe
   // ------------------------------------------------------------------
   // 10. Free-throw circle
   //     Full circle: solid upper half (toward half court), dashed lower half
+  //     Drawn in feet-coordinate system for a true circle.
   // ------------------------------------------------------------------
   ctx.save();
-  ctx.scale(1, scaleY);
+  ctx.scale(1 / FT_PER_PX_X, 1 / FT_PER_PX_Y);
 
-  // Upper semicircle (solid) — into the half court (toward y=0)
+  const ftCenterX_ft = FT_CIRCLE_CENTER_X * 50; // 25ft
+  const ftCenterY_ft = FT_CIRCLE_CENTER_Y * 47;
+  const ftRadius_ft = 6; // 6ft radius
+
+  ctx.strokeStyle = COLOR_LINE;
+  ctx.lineWidth = COLOR_LINE_WIDTH_PX * FT_PER_PX_X;
+
+  // Upper semicircle (solid) — toward half court (counterclockwise π → 0)
   ctx.beginPath();
-  ctx.arc(cx(FT_CIRCLE_CENTER_X), cy(FT_CIRCLE_CENTER_Y) / scaleY, rx(FT_CIRCLE_RADIUS), Math.PI, 0, true);
+  ctx.arc(ftCenterX_ft, ftCenterY_ft, ftRadius_ft, Math.PI, 0, true);
   ctx.stroke();
 
-  // Lower semicircle (dashed) — into the paint (toward y=1)
-  ctx.setLineDash([rx(0.015), rx(0.015)]);
+  // Lower semicircle (dashed) — into the paint (clockwise 0 → π)
+  ctx.setLineDash([0.75, 0.75]);
   ctx.beginPath();
-  ctx.arc(cx(FT_CIRCLE_CENTER_X), cy(FT_CIRCLE_CENTER_Y) / scaleY, rx(FT_CIRCLE_RADIUS), 0, Math.PI, false);
+  ctx.arc(ftCenterX_ft, ftCenterY_ft, ftRadius_ft, 0, Math.PI, false);
   ctx.stroke();
   ctx.setLineDash([]);
 
