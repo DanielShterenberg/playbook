@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
 import type { Category, CourtType } from "@/lib/types";
+import { exportPlayToPdf } from "@/lib/exportPdf";
 
 const CATEGORY_OPTIONS: { value: Category; label: string }[] = [
   { value: "offense", label: "Offense" },
@@ -47,6 +48,18 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
   // ---------------------------------------------------------------------------
   // Edit metadata modal
   // ---------------------------------------------------------------------------
+
+  const [isExporting, setIsExporting] = useState(false);
+
+  async function handleExportPdf() {
+    if (!currentPlay || isExporting) return;
+    setIsExporting(true);
+    try {
+      await exportPlayToPdf(currentPlay);
+    } finally {
+      setIsExporting(false);
+    }
+  }
 
   const [showEdit, setShowEdit] = useState(false);
   const [editTitle, setEditTitle] = useState("");
@@ -171,7 +184,42 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
           )}
         </div>
 
-        {children}
+        <div className="flex items-center gap-1.5">
+          {/* PDF export */}
+          <button
+            onClick={handleExportPdf}
+            disabled={!currentPlay || isExporting}
+            aria-label="Export play as PDF"
+            title="Export as PDF"
+            className="flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {isExporting ? (
+              <svg
+                width={13}
+                height={13}
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+                className="animate-spin"
+              >
+                <circle cx={12} cy={12} r={10} stroke="currentColor" strokeWidth={3} strokeDasharray="31.4 31.4" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg width={13} height={13} viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path
+                  d="M3 16.5A1.5 1.5 0 0 0 4.5 18h11A1.5 1.5 0 0 0 17 16.5V7l-4-4H4.5A1.5 1.5 0 0 0 3 4.5v12z"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                  strokeLinejoin="round"
+                />
+                <path d="M13 3v3.5A1.5 1.5 0 0 0 14.5 8H17" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round" />
+                <path d="M7 13l3 3 3-3M10 16V9" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+            {isExporting ? "Exporting…" : "PDF"}
+          </button>
+          {children}
+        </div>
       </header>
 
       {/* Edit play modal */}
