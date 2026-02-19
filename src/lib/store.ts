@@ -325,7 +325,7 @@ export const useStore = create<AppStore>()(
             if (!ann.fromPlayer) continue;
             const { side, position } = ann.fromPlayer;
             const validSide = side as "offense" | "defense";
-            if (ann.type === "movement" || ann.type === "cut" || ann.type === "dribble") {
+            if (ann.type === "movement" || ann.type === "cut" || ann.type === "dribble" || ann.type === "screen") {
               // ann.to is stored in normalised [0-1] coords — same space as PlayerState.x/y.
               newScene.players[validSide] = newScene.players[validSide].map((p) =>
                 p.position === position ? { ...p, x: ann.to.x, y: ann.to.y } : p,
