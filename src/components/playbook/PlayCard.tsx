@@ -43,11 +43,11 @@ function PlayThumbnail({ scene }: { scene: Scene }) {
       {/* Court background */}
       <rect width={W} height={H} fill="#F0C878" rx={6} />
 
-      {/* Paint */}
+      {/* Paint (16ft wide × 19ft deep; LANE_LEFT=0.34, LANE_RIGHT=0.66) */}
       <rect
-        x={px(0.32)}
+        x={px(0.34)}
         y={py(0.596)}
-        width={px(0.36)}
+        width={px(0.32)}
         height={py(0.404)}
         fill="#E07B39"
       />
@@ -55,19 +55,67 @@ function PlayThumbnail({ scene }: { scene: Scene }) {
       {/* Court outline */}
       <rect width={W} height={H} fill="none" stroke="#fff" strokeWidth={1.5} rx={6} />
 
+      {/* Half-court line */}
+      <line x1={0} y1={0} x2={W} y2={0} stroke="#fff" strokeWidth={1} />
+
+      {/* Half-court centre-circle arc — bows into the court (sweep=0=CCW) */}
+      <path
+        d={`M ${px(0.38)},0 A ${px(0.12)},${px(0.12)} 0 0 0 ${px(0.62)},0`}
+        fill="none"
+        stroke="#fff"
+        strokeWidth={1}
+      />
+
+      {/* Three-point line: corner straights + major arc (large-arc=1, sweep=0) */}
+      <path
+        d={`M ${px(0.06)},${py(1)} L ${px(0.06)},${py(0.702)} A ${px(0.475)},${px(0.475)} 0 1 0 ${px(0.94)},${py(0.702)} L ${px(0.94)},${py(1)}`}
+        fill="none"
+        stroke="#fff"
+        strokeWidth={1}
+      />
+
+      {/* Lane outline */}
+      <rect
+        x={px(0.34)}
+        y={py(0.596)}
+        width={px(0.32)}
+        height={py(0.404)}
+        fill="none"
+        stroke="#fff"
+        strokeWidth={1}
+      />
+
       {/* Free-throw line */}
       <line
-        x1={px(0.32)}
+        x1={px(0.34)}
         y1={py(0.596)}
-        x2={px(0.68)}
+        x2={px(0.66)}
         y2={py(0.596)}
         stroke="#fff"
         strokeWidth={1}
       />
 
-      {/* Three-point arc */}
+      {/* Free-throw circle upper arc — toward half-court (sweep=1=CW=upward) */}
       <path
-        d={`M ${px(0.06)},${py(0.702)} L ${px(0.06)},${py(0.596)} A ${px(0.476)},${py(0.476)} 0 0 1 ${px(0.94)},${py(0.596)} L ${px(0.94)},${py(0.702)}`}
+        d={`M ${px(0.38)},${py(0.596)} A ${px(0.12)},${px(0.12)} 0 0 1 ${px(0.62)},${py(0.596)}`}
+        fill="none"
+        stroke="#fff"
+        strokeWidth={1}
+      />
+
+      {/* Backboard (4ft from baseline, 6ft wide) */}
+      <line
+        x1={px(0.44)}
+        y1={py(0.915)}
+        x2={px(0.56)}
+        y2={py(0.915)}
+        stroke="#fff"
+        strokeWidth={1.5}
+      />
+
+      {/* Restricted area arc (sweep=1=CW=upward) */}
+      <path
+        d={`M ${px(0.42)},${py(0.888)} A ${px(0.08)},${px(0.08)} 0 0 1 ${px(0.58)},${py(0.888)}`}
         fill="none"
         stroke="#fff"
         strokeWidth={1}
@@ -135,6 +183,7 @@ export default function PlayCard({ play }: PlayCardProps) {
   const router = useRouter();
   const setCurrentPlay = useStore((s) => s.setCurrentPlay);
   const removePlay = useStore((s) => s.removePlay);
+  const duplicatePlay = useStore((s) => s.duplicatePlay);
   const [hovered, setHovered] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -221,30 +270,50 @@ export default function PlayCard({ play }: PlayCardProps) {
             {play.title}
           </h3>
 
-          {/* Delete button */}
-          <button
-            onClick={handleDelete}
-            onBlur={handleDeleteBlur}
-            aria-label={confirmDelete ? "Confirm delete play" : "Delete play"}
-            title={confirmDelete ? "Click again to confirm delete" : "Delete play"}
-            style={{
-              flexShrink: 0,
-              padding: "3px 8px",
-              borderRadius: 6,
-              border: `1px solid ${confirmDelete ? "#FCA5A5" : "#E5E7EB"}`,
-              background: confirmDelete ? "#FEE2E2" : "transparent",
-              color: confirmDelete ? "#B91C1C" : "#9CA3AF",
-              fontSize: 12,
-              fontWeight: 500,
-              cursor: "pointer",
-              transition: "all 0.15s",
-              opacity: hovered ? 1 : 0,
-              pointerEvents: hovered ? "auto" : "none",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {confirmDelete ? "Sure?" : "Delete"}
-          </button>
+          {/* Action buttons: duplicate + delete */}
+          <div style={{ display: "flex", gap: 4, flexShrink: 0, opacity: hovered ? 1 : 0, pointerEvents: hovered ? "auto" : "none", transition: "opacity 0.15s" }}>
+            <button
+              onClick={(e) => { e.stopPropagation(); duplicatePlay(play.id); }}
+              aria-label="Duplicate play"
+              title="Duplicate play"
+              style={{
+                padding: "3px 8px",
+                borderRadius: 6,
+                border: "1px solid #E5E7EB",
+                background: "transparent",
+                color: "#9CA3AF",
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: "pointer",
+                transition: "all 0.15s",
+                whiteSpace: "nowrap",
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#4F46E5"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#A5B4FC"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#9CA3AF"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#E5E7EB"; }}
+            >
+              Copy
+            </button>
+            <button
+              onClick={handleDelete}
+              onBlur={handleDeleteBlur}
+              aria-label={confirmDelete ? "Confirm delete play" : "Delete play"}
+              title={confirmDelete ? "Click again to confirm delete" : "Delete play"}
+              style={{
+                padding: "3px 8px",
+                borderRadius: 6,
+                border: `1px solid ${confirmDelete ? "#FCA5A5" : "#E5E7EB"}`,
+                background: confirmDelete ? "#FEE2E2" : "transparent",
+                color: confirmDelete ? "#B91C1C" : "#9CA3AF",
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: "pointer",
+                transition: "all 0.15s",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {confirmDelete ? "Sure?" : "Delete"}
+            </button>
+          </div>
         </div>
 
         {play.description && (

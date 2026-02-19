@@ -13,12 +13,26 @@
 
 import { useState } from "react";
 import { useStore } from "@/lib/store";
+import type { Category } from "@/lib/types";
 import NewPlayModal from "@/components/playbook/NewPlayModal";
 import PlayCard from "@/components/playbook/PlayCard";
+
+const CATEGORY_FILTERS: { value: Category | "all"; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "offense", label: "Offense" },
+  { value: "defense", label: "Defense" },
+  { value: "inbound", label: "Inbound" },
+  { value: "press-break", label: "Press Break" },
+  { value: "fast-break", label: "Fast Break" },
+  { value: "oob", label: "OOB" },
+  { value: "special", label: "Special" },
+];
 
 export default function PlaybookPage() {
   const plays = useStore((s) => s.plays);
   const [showModal, setShowModal] = useState(false);
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
 
   return (
     <main
@@ -152,11 +166,11 @@ export default function PlaybookPage() {
               style={{ opacity: 0.25 }}
             >
               <rect width={100} height={94} fill="#F0C878" rx={8} />
-              <rect x={32} y={56} width={36} height={38} fill="#E07B39" />
+              <rect x={34} y={56} width={32} height={38} fill="#E07B39" />
               <rect width={100} height={94} fill="none" stroke="#9CA3AF" strokeWidth={2} rx={8} />
-              <line x1={32} y1={56} x2={68} y2={56} stroke="#9CA3AF" strokeWidth={1.5} />
+              <line x1={34} y1={56} x2={66} y2={56} stroke="#9CA3AF" strokeWidth={1.5} />
               <path
-                d="M 6,66 L 6,56 A 47.6,44.7 0 0 1 94,56 L 94,66"
+                d="M 6,70 L 6,56 A 47.5,47.5 0 1 1 94,56 L 94,70"
                 fill="none"
                 stroke="#9CA3AF"
                 strokeWidth={1.5}
@@ -207,34 +221,173 @@ export default function PlaybookPage() {
           </div>
         ) : (
           <>
-            {/* Stats bar */}
+            {/* Search + filter bar */}
             <div
               style={{
                 display: "flex",
+                flexWrap: "wrap",
                 alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 24,
+                gap: 10,
+                marginBottom: 20,
               }}
             >
-              <p style={{ margin: 0, fontSize: 14, color: "#6B7280" }}>
-                {plays.length} {plays.length === 1 ? "play" : "plays"}
-              </p>
+              {/* Search input */}
+              <div style={{ position: "relative", flex: "1 1 200px", maxWidth: 320 }}>
+                <svg
+                  width={14}
+                  height={14}
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  aria-hidden="true"
+                  style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#9CA3AF", pointerEvents: "none" }}
+                >
+                  <circle cx={8} cy={8} r={6} stroke="currentColor" strokeWidth={1.8} />
+                  <path d="M13 13l4 4" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" />
+                </svg>
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search plays…"
+                  aria-label="Search plays"
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: "7px 12px 7px 32px",
+                    border: "1.5px solid #E5E7EB",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    color: "#111827",
+                    background: "#fff",
+                    outline: "none",
+                  }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = "#6366F1"; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = "#E5E7EB"; }}
+                />
+              </div>
+
+              {/* Category filter chips */}
+              <div
+                role="group"
+                aria-label="Filter by category"
+                style={{ display: "flex", flexWrap: "wrap", gap: 6 }}
+              >
+                {CATEGORY_FILTERS.map(({ value, label }) => (
+                  <button
+                    key={value}
+                    onClick={() => setCategoryFilter(value)}
+                    aria-pressed={categoryFilter === value}
+                    style={{
+                      padding: "5px 12px",
+                      borderRadius: 99,
+                      border: "1.5px solid",
+                      borderColor: categoryFilter === value ? "#6366F1" : "#E5E7EB",
+                      background: categoryFilter === value ? "#EEF2FF" : "#fff",
+                      color: categoryFilter === value ? "#4338CA" : "#6B7280",
+                      fontSize: 12,
+                      fontWeight: categoryFilter === value ? 600 : 400,
+                      cursor: "pointer",
+                      transition: "all 0.12s",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Grid */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-                gap: 20,
-              }}
-            >
-              {[...plays]
+            {/* Stats bar */}
+            {(() => {
+              const filteredPlays = [...plays]
                 .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-                .map((play) => (
-                  <PlayCard key={play.id} play={play} />
-                ))}
-            </div>
+                .filter((p) => {
+                  const matchesSearch = !search || p.title.toLowerCase().includes(search.toLowerCase());
+                  const matchesCategory = categoryFilter === "all" || p.category === categoryFilter;
+                  return matchesSearch && matchesCategory;
+                });
+
+              return (
+                <>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: 20,
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: 13, color: "#6B7280" }}>
+                      {filteredPlays.length === plays.length
+                        ? `${plays.length} ${plays.length === 1 ? "play" : "plays"}`
+                        : `${filteredPlays.length} of ${plays.length} plays`}
+                    </p>
+                    {(search || categoryFilter !== "all") && (
+                      <button
+                        onClick={() => { setSearch(""); setCategoryFilter("all"); }}
+                        style={{
+                          fontSize: 12,
+                          color: "#6366F1",
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          padding: 0,
+                          fontWeight: 500,
+                        }}
+                      >
+                        Clear filters
+                      </button>
+                    )}
+                  </div>
+
+                  {filteredPlays.length === 0 ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        minHeight: 200,
+                        gap: 8,
+                        textAlign: "center",
+                        color: "#9CA3AF",
+                      }}
+                    >
+                      <p style={{ margin: 0, fontSize: 15, fontWeight: 500, color: "#6B7280" }}>
+                        No plays match your filters
+                      </p>
+                      <button
+                        onClick={() => { setSearch(""); setCategoryFilter("all"); }}
+                        style={{
+                          fontSize: 13,
+                          color: "#6366F1",
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          padding: 0,
+                          fontWeight: 500,
+                        }}
+                      >
+                        Clear filters
+                      </button>
+                    </div>
+                  ) : (
+                    /* Grid */
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+                        gap: 20,
+                      }}
+                    >
+                      {filteredPlays.map((play) => (
+                        <PlayCard key={play.id} play={play} />
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </>
         )}
       </div>
