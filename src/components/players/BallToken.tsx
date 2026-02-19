@@ -80,7 +80,7 @@ export interface BallTokenProps {
   /** All player positions for snap detection */
   players: NearbyPlayer[];
   /** Court bounding box for clamping */
-  courtBounds: { width: number; height: number };
+  courtBounds: { width: number; height: number; minY?: number };
 }
 
 // ---------------------------------------------------------------------------
@@ -131,7 +131,7 @@ export default function BallToken({
   const clamp = useCallback(
     (x: number, y: number): { x: number; y: number } => ({
       x: Math.max(BALL_RADIUS, Math.min(courtBounds.width - BALL_RADIUS, x)),
-      y: Math.max(BALL_RADIUS, Math.min(courtBounds.height - BALL_RADIUS, y)),
+      y: Math.max((courtBounds.minY ?? 0) + BALL_RADIUS, Math.min(courtBounds.height - BALL_RADIUS, y)),
     }),
     [courtBounds],
   );

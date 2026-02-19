@@ -30,7 +30,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import Court, { type CourtReadyPayload } from "@/components/court/Court";
+import Court, { type CourtReadyPayload, type CourtVariant } from "@/components/court/Court";
 import PlayerToken from "./PlayerToken";
 import BallToken, { type NearbyPlayer, DETACH_RADIUS } from "./BallToken";
 import AnnotationLayer from "@/components/annotations/AnnotationLayer";
@@ -77,22 +77,24 @@ const BALL_ATTACH_OFFSET_Y = -22;
 // Helpers
 // ---------------------------------------------------------------------------
 
-function normToPixel(
+function normToPx(
   normX: number,
   normY: number,
   width: number,
-  height: number,
+  paHeight: number,
+  paOffsetY: number,
 ): { x: number; y: number } {
-  return { x: normX * width, y: normY * height };
+  return { x: normX * width, y: normY * paHeight + paOffsetY };
 }
 
-function pixelToNorm(
+function pxToNorm(
   px: number,
   py: number,
   width: number,
-  height: number,
+  paHeight: number,
+  paOffsetY: number,
 ): { x: number; y: number } {
-  return { x: px / width, y: py / height };
+  return { x: px / width, y: (py - paOffsetY) / paHeight };
 }
 
 /** Create a default PlayerState array from normalised position defaults. */
@@ -127,10 +129,15 @@ export interface CourtWithPlayersProps {
   sceneId?: string;
   /** Optional scene to read player positions from. Falls back to defaults. */
   scene?: Scene | null;
+  /**
+   * "half" (default) — half-court view; players fill the whole canvas.
+   * "full" — full-court view; players are placed in the near (bottom) end.
+   */
+  variant?: CourtVariant;
   className?: string;
 }
 
-export default function CourtWithPlayers({ sceneId, scene, className }: CourtWithPlayersProps) {
+export default function CourtWithPlayers({ sceneId, scene, variant = "half", className }: CourtWithPlayersProps) {
   const updatePlayerState  = useStore((s) => s.updatePlayerState);
   const updateBallState    = useStore((s) => s.updateBallState);
   const displayMode        = useStore((s) => s.playerDisplayMode);
@@ -153,6 +160,13 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
 
   // Track the last known court size for re-projection on resize
   const courtSizeRef = useRef<{ width: number; height: number } | null>(null);
+
+  /**
+   * Play-area dimensions — the region where players live.
+   *   half court: { height: canvasH, offsetY: 0 }
+   *   full court: { height: canvasH/2, offsetY: canvasH/2 }  (near/bottom end)
+   */
+  const playAreaRef = useRef<{ height: number; offsetY: number }>({ height: 0, offsetY: 0 });
 
   // Track the last scene ID so we can reinitialise pixel positions on scene switch
   const prevSceneIdRef = useRef<string | null>(null);
@@ -195,9 +209,11 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
   // -------------------------------------------------------------------------
   const handleCourtReady = useCallback(
     (payload: CourtReadyPayload) => {
-      const { width, height } = payload;
+      const { width, height, playAreaHeight, playAreaOffsetY } = payload;
       const prevSize = courtSizeRef.current;
+      const prevPlayArea = { ...playAreaRef.current };
       courtSizeRef.current = { width, height };
+      playAreaRef.current = { height: playAreaHeight, offsetY: playAreaOffsetY };
       setCourtSize({ width, height });
 
       // If size changed (resize) but we already have pixel positions, re-project
@@ -205,8 +221,8 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
         setOffensePx((prev) =>
           prev
             ? prev.map((p) => {
-                const norm = pixelToNorm(p.px, p.py, prevSize.width, prevSize.height);
-                const { x, y } = normToPixel(norm.x, norm.y, width, height);
+                const norm = pxToNorm(p.px, p.py, prevSize.width, prevPlayArea.height, prevPlayArea.offsetY);
+                const { x, y } = normToPx(norm.x, norm.y, width, playAreaHeight, playAreaOffsetY);
                 return { ...p, px: x, py: y };
               })
             : null,
@@ -214,16 +230,16 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
         setDefensePx((prev) =>
           prev
             ? prev.map((p) => {
-                const norm = pixelToNorm(p.px, p.py, prevSize.width, prevSize.height);
-                const { x, y } = normToPixel(norm.x, norm.y, width, height);
+                const norm = pxToNorm(p.px, p.py, prevSize.width, prevPlayArea.height, prevPlayArea.offsetY);
+                const { x, y } = normToPx(norm.x, norm.y, width, playAreaHeight, playAreaOffsetY);
                 return { ...p, px: x, py: y };
               })
             : null,
         );
         setBallPx((prev) => {
           if (!prev) return null;
-          const norm = pixelToNorm(prev.x, prev.y, prevSize.width, prevSize.height);
-          const { x, y } = normToPixel(norm.x, norm.y, width, height);
+          const norm = pxToNorm(prev.x, prev.y, prevSize.width, prevPlayArea.height, prevPlayArea.offsetY);
+          const { x, y } = normToPx(norm.x, norm.y, width, playAreaHeight, playAreaOffsetY);
           return { x, y };
         });
         return;
@@ -246,20 +262,20 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
 
         setOffensePx(
           offenseStoreState.map((p) => {
-            const { x, y } = normToPixel(p.x, p.y, width, height);
+            const { x, y } = normToPx(p.x, p.y, width, playAreaHeight, playAreaOffsetY);
             return { position: p.position, px: x, py: y, visible: p.visible };
           }),
         );
         setDefensePx(
           defenseStoreState.map((p) => {
-            const { x, y } = normToPixel(p.x, p.y, width, height);
+            const { x, y } = normToPx(p.x, p.y, width, playAreaHeight, playAreaOffsetY);
             return { position: p.position, px: x, py: y, visible: p.visible };
           }),
         );
 
         // Ball initialisation
         const storeBall = currentScene?.ball ?? { ...BALL_DEFAULT, attachedTo: null };
-        const { x: ballX, y: ballY } = normToPixel(storeBall.x, storeBall.y, width, height);
+        const { x: ballX, y: ballY } = normToPx(storeBall.x, storeBall.y, width, playAreaHeight, playAreaOffsetY);
         setBallPx({ x: ballX, y: ballY });
         setBallAttachment(storeBall.attachedTo ?? null);
       }
@@ -287,23 +303,24 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
 
     // Reinitialise pixel positions from the new scene's normalised data.
     if (!scene || !courtSizeRef.current) return;
-    const { width, height } = courtSizeRef.current;
+    const { width } = courtSizeRef.current;
+    const { height: paH, offsetY: paOffY } = playAreaRef.current;
 
     setOffensePx(
       scene.players.offense.map((p) => {
-        const { x, y } = normToPixel(p.x, p.y, width, height);
+        const { x, y } = normToPx(p.x, p.y, width, paH, paOffY);
         return { position: p.position, px: x, py: y, visible: p.visible };
       }),
     );
     setDefensePx(
       scene.players.defense.map((p) => {
-        const { x, y } = normToPixel(p.x, p.y, width, height);
+        const { x, y } = normToPx(p.x, p.y, width, paH, paOffY);
         return { position: p.position, px: x, py: y, visible: p.visible };
       }),
     );
 
     const storeBall = scene.ball ?? { ...BALL_DEFAULT, attachedTo: null };
-    const { x: ballX, y: ballY } = normToPixel(storeBall.x, storeBall.y, width, height);
+    const { x: ballX, y: ballY } = normToPx(storeBall.x, storeBall.y, width, paH, paOffY);
     setBallPx({ x: ballX, y: ballY });
     setBallAttachment(storeBall.attachedTo ?? null);
   }, [scene]);
@@ -326,7 +343,7 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
         if (!prev) return prev;
         const updated = prev.map((p) => (p.position === position ? { ...p, px: newCx, py: newCy } : p));
         if (sceneId && courtSizeRef.current) {
-          const { x, y } = pixelToNorm(newCx, newCy, courtSizeRef.current.width, courtSizeRef.current.height);
+          const { x, y } = pxToNorm(newCx, newCy, courtSizeRef.current.width, playAreaRef.current.height, playAreaRef.current.offsetY);
           // Read visible from the scene prop (source of truth) to avoid overwriting
           // a visibility toggle with a stale value from local pixel state.
           const scenePlayer = offenseVisible?.find((sp) => sp.position === position);
@@ -353,7 +370,7 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
         if (!prev) return prev;
         const updated = prev.map((p) => (p.position === position ? { ...p, px: newCx, py: newCy } : p));
         if (sceneId && courtSizeRef.current) {
-          const { x, y } = pixelToNorm(newCx, newCy, courtSizeRef.current.width, courtSizeRef.current.height);
+          const { x, y } = pxToNorm(newCx, newCy, courtSizeRef.current.width, playAreaRef.current.height, playAreaRef.current.offsetY);
           // Read visible from the scene prop (source of truth) to avoid overwriting
           // a visibility toggle with a stale value from local pixel state.
           const scenePlayer = defenseVisible?.find((sp) => sp.position === position);
@@ -435,11 +452,12 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
         // Free position becomes player position (for re-projection on resize)
         setBallPx({ x: nearest.px, y: nearest.py });
         if (sceneId && courtSizeRef.current) {
-          const { x, y } = pixelToNorm(
+          const { x, y } = pxToNorm(
             nearest.px,
             nearest.py,
             courtSizeRef.current.width,
-            courtSizeRef.current.height,
+            playAreaRef.current.height,
+            playAreaRef.current.offsetY,
           );
           newBallState = { x, y, attachedTo: { side: nearest.side, position: nearest.position } };
         } else {
@@ -450,7 +468,7 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
         setBallAttachment(null);
         setBallPx({ x: newCx, y: newCy });
         if (sceneId && courtSizeRef.current) {
-          const { x, y } = pixelToNorm(newCx, newCy, courtSizeRef.current.width, courtSizeRef.current.height);
+          const { x, y } = pxToNorm(newCx, newCy, courtSizeRef.current.width, playAreaRef.current.height, playAreaRef.current.offsetY);
           newBallState = { x, y, attachedTo: null };
         } else {
           return;
@@ -472,7 +490,7 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
   return (
     <div className={`relative ${className ?? "w-full"}`}>
       {/* Court canvas */}
-      <Court onReady={handleCourtReady} className="w-full" />
+      <Court variant={variant} onReady={handleCourtReady} className="w-full" />
 
       {/* SVG player + ball overlay — same dimensions as the canvas */}
       {courtSize && (
@@ -507,7 +525,7 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
                   position={p.position}
                   cx={p.px}
                   cy={p.py}
-                  courtBounds={courtSize}
+                  courtBounds={{ width: courtSize.width, height: courtSize.height, minY: playAreaRef.current.offsetY > 0 ? playAreaRef.current.offsetY : undefined }}
                   onDrag={(x, y) => handleDefenseDrag(p.position, x, y)}
                   onDragEnd={(x, y) => handleDefenseDragEnd(p.position, x, y)}
                   displayMode={displayMode}
@@ -531,7 +549,7 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
                   position={p.position}
                   cx={p.px}
                   cy={p.py}
-                  courtBounds={courtSize}
+                  courtBounds={{ width: courtSize.width, height: courtSize.height, minY: playAreaRef.current.offsetY > 0 ? playAreaRef.current.offsetY : undefined }}
                   onDrag={(x, y) => handleOffenseDrag(p.position, x, y)}
                   onDragEnd={(x, y) => handleOffenseDragEnd(p.position, x, y)}
                   displayMode={displayMode}
@@ -548,7 +566,7 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
                 onDrag={handleBallDrag}
                 onDragEnd={handleBallDragEnd}
                 players={allPlayers}
-                courtBounds={courtSize}
+                courtBounds={{ width: courtSize.width, height: courtSize.height, minY: playAreaRef.current.offsetY > 0 ? playAreaRef.current.offsetY : undefined }}
               />
             )}
           </g>
