@@ -229,7 +229,7 @@ function drawCourt(canvas: HTMLCanvasElement, cssWidth: number, cssHeight: numbe
   // We want the arc on the side toward half-court (y < basketY).
   // That's angles from π (left) to 0 (right), going counterclockwise (through top).
   ctx.beginPath();
-  ctx.arc(basketX_ft, basketY_ft, 4, Math.PI, 0, true);
+  ctx.arc(basketX_ft, basketY_ft, 4, Math.PI, 0, false);
   ctx.stroke();
 
   ctx.restore(); // end ft coordinate system
@@ -263,9 +263,9 @@ function drawCourt(canvas: HTMLCanvasElement, cssWidth: number, cssHeight: numbe
   ctx.strokeStyle = COLOR_LINE;
   ctx.lineWidth = COLOR_LINE_WIDTH_PX * FT_PER_PX_X;
 
-  // Upper semicircle (solid) — toward half court (counterclockwise π → 0)
+  // Upper semicircle (solid) — toward half court (clockwise π → 0, through 12 o'clock)
   ctx.beginPath();
-  ctx.arc(ftCenterX_ft, ftCenterY_ft, ftRadius_ft, Math.PI, 0, true);
+  ctx.arc(ftCenterX_ft, ftCenterY_ft, ftRadius_ft, Math.PI, 0, false);
   ctx.stroke();
 
   // Lower semicircle (dashed) — into the paint (clockwise 0 → π)

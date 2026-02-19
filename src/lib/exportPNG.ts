@@ -130,7 +130,7 @@ function drawCourtOnCanvas(canvas: HTMLCanvasElement): void {
 
   // 7. Restricted area arc
   ctx.beginPath();
-  ctx.arc(basketX_ft, basketY_ft, 4, Math.PI, 0, true);
+  ctx.arc(basketX_ft, basketY_ft, 4, Math.PI, 0, false);
   ctx.stroke();
 
   ctx.restore();
@@ -156,9 +156,9 @@ function drawCourtOnCanvas(canvas: HTMLCanvasElement): void {
   ctx.strokeStyle = COLOR_LINE;
   ctx.lineWidth = COLOR_LINE_WIDTH_PX * FT_PER_PX_X;
 
-  // Upper semicircle (solid) — toward half court (counterclockwise π → 0)
+  // Upper semicircle (solid) — toward half court (clockwise π → 0, through 12 o'clock)
   ctx.beginPath();
-  ctx.arc(ftCenterX_ft, ftCenterY_ft, ftRadius_ft, Math.PI, 0, true);
+  ctx.arc(ftCenterX_ft, ftCenterY_ft, ftRadius_ft, Math.PI, 0, false);
   ctx.stroke();
 
   // Lower semicircle (dashed) — into the paint (clockwise 0 → π)
