@@ -29,6 +29,14 @@ export type DrawingTool =
 
 export type PlaybackSpeed = 0.5 | 1 | 1.5 | 2;
 
+/**
+ * Controls what label is rendered inside each player token.
+ *   "numbers"      — 1-based position number (O1, X1 …)  [default]
+ *   "names"        — full player name from the team roster
+ *   "abbreviations"— position abbreviation (PG, SG, SF, PF, C)
+ */
+export type PlayerDisplayMode = "numbers" | "names" | "abbreviations";
+
 // ---------------------------------------------------------------------------
 // Store state interface — flat, no slice intersection conflicts
 // ---------------------------------------------------------------------------
@@ -64,11 +72,16 @@ export interface AppStore {
   selectedTool: DrawingTool;
   selectedTimingStep: number;
   selectedAnnotationId: string | null;
+  playerDisplayMode: PlayerDisplayMode;
 
   setSelectedSceneId: (id: string | null) => void;
   setSelectedTool: (tool: DrawingTool) => void;
   setSelectedTimingStep: (step: number) => void;
   setSelectedAnnotationId: (id: string | null) => void;
+  setPlayerDisplayMode: (mode: PlayerDisplayMode) => void;
+
+  // Player visibility toggle (per scene)
+  togglePlayerVisibility: (sceneId: string, side: "offense" | "defense", position: number) => void;
 
   // ------- Playback state -------
   isPlaying: boolean;
@@ -384,11 +397,29 @@ export const useStore = create<AppStore>()(
     selectedTool: "select",
     selectedTimingStep: 1,
     selectedAnnotationId: null,
+    playerDisplayMode: "numbers",
 
     setSelectedSceneId: (id) => set({ selectedSceneId: id, selectedAnnotationId: null }),
     setSelectedTool: (tool) => set({ selectedTool: tool }),
     setSelectedTimingStep: (step) => set({ selectedTimingStep: step }),
     setSelectedAnnotationId: (id) => set({ selectedAnnotationId: id }),
+    setPlayerDisplayMode: (mode) => set({ playerDisplayMode: mode }),
+
+    togglePlayerVisibility: (sceneId, side, position) =>
+      set((state) => {
+        if (!state.currentPlay) return state;
+        return {
+          currentPlay: withUpdatedScene(state.currentPlay, sceneId, (s) => ({
+            ...s,
+            players: {
+              ...s.players,
+              [side]: s.players[side].map((p) =>
+                p.position === position ? { ...p, visible: !p.visible } : p,
+              ),
+            },
+          })),
+        };
+      }),
 
     // =======================================================================
     // Playback state

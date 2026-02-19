@@ -1,5 +1,6 @@
 import EditorCourtArea from "./EditorCourtArea";
 import DrawingToolsPanel from "@/components/editor/DrawingToolsPanel";
+import PlayerRosterPanel from "@/components/editor/PlayerRosterPanel";
 import SceneStrip from "@/components/editor/SceneStrip";
 import PlaybackControls from "@/components/editor/PlaybackControls";
 import TimingStripPanel from "@/components/editor/TimingStripPanel";
@@ -32,11 +33,8 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
         <div className="flex flex-1 items-center justify-center overflow-auto bg-gray-100 p-4">
           <EditorCourtArea />
         </div>
-        {/* Play Info Panel */}
-        <aside className="w-64 border-l border-gray-200 bg-white p-4">
-          <h2 className="mb-2 font-semibold text-gray-700">Play Info</h2>
-          <p className="text-sm text-gray-400">Play details and notes will appear here.</p>
-        </aside>
+        {/* Player roster: display mode + per-scene visibility */}
+        <PlayerRosterPanel />
       </div>
       {/* Timing steps strip */}
       <TimingStripPanel />

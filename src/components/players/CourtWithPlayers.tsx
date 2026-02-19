@@ -131,8 +131,9 @@ export interface CourtWithPlayersProps {
 }
 
 export default function CourtWithPlayers({ sceneId, scene, className }: CourtWithPlayersProps) {
-  const updatePlayerState = useStore((s) => s.updatePlayerState);
-  const updateBallState = useStore((s) => s.updateBallState);
+  const updatePlayerState  = useStore((s) => s.updatePlayerState);
+  const updateBallState    = useStore((s) => s.updateBallState);
+  const displayMode        = useStore((s) => s.playerDisplayMode);
 
   // Court layout reported by the Court canvas
   const [courtSize, setCourtSize] = useState<{ width: number; height: number } | null>(null);
@@ -252,15 +253,16 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
 
   const handleOffenseDragEnd = useCallback(
     (position: number, newCx: number, newCy: number) => {
-      setOffensePx((prev) =>
-        prev
-          ? prev.map((p) => (p.position === position ? { ...p, px: newCx, py: newCy } : p))
-          : prev,
-      );
-      if (sceneId && courtSizeRef.current) {
-        const { x, y } = pixelToNorm(newCx, newCy, courtSizeRef.current.width, courtSizeRef.current.height);
-        updatePlayerState(sceneId, "offense", { position, x, y, visible: true });
-      }
+      setOffensePx((prev) => {
+        if (!prev) return prev;
+        const updated = prev.map((p) => (p.position === position ? { ...p, px: newCx, py: newCy } : p));
+        if (sceneId && courtSizeRef.current) {
+          const { x, y } = pixelToNorm(newCx, newCy, courtSizeRef.current.width, courtSizeRef.current.height);
+          const visible = updated.find((p) => p.position === position)?.visible ?? true;
+          updatePlayerState(sceneId, "offense", { position, x, y, visible });
+        }
+        return updated;
+      });
     },
     [sceneId, updatePlayerState],
   );
@@ -275,15 +277,16 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
 
   const handleDefenseDragEnd = useCallback(
     (position: number, newCx: number, newCy: number) => {
-      setDefensePx((prev) =>
-        prev
-          ? prev.map((p) => (p.position === position ? { ...p, px: newCx, py: newCy } : p))
-          : prev,
-      );
-      if (sceneId && courtSizeRef.current) {
-        const { x, y } = pixelToNorm(newCx, newCy, courtSizeRef.current.width, courtSizeRef.current.height);
-        updatePlayerState(sceneId, "defense", { position, x, y, visible: true });
-      }
+      setDefensePx((prev) => {
+        if (!prev) return prev;
+        const updated = prev.map((p) => (p.position === position ? { ...p, px: newCx, py: newCy } : p));
+        if (sceneId && courtSizeRef.current) {
+          const { x, y } = pixelToNorm(newCx, newCy, courtSizeRef.current.width, courtSizeRef.current.height);
+          const visible = updated.find((p) => p.position === position)?.visible ?? true;
+          updatePlayerState(sceneId, "defense", { position, x, y, visible });
+        }
+        return updated;
+      });
     },
     [sceneId, updatePlayerState],
   );
@@ -418,6 +421,7 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
                   courtBounds={courtSize}
                   onDrag={(x, y) => handleDefenseDrag(p.position, x, y)}
                   onDragEnd={(x, y) => handleDefenseDragEnd(p.position, x, y)}
+                  displayMode={displayMode}
                 />
               ))}
 
@@ -434,6 +438,7 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
                   courtBounds={courtSize}
                   onDrag={(x, y) => handleOffenseDrag(p.position, x, y)}
                   onDragEnd={(x, y) => handleOffenseDragEnd(p.position, x, y)}
+                  displayMode={displayMode}
                 />
               ))}
 
