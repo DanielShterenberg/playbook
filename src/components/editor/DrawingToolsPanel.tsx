@@ -4,6 +4,7 @@
  * DrawingToolsPanel — left-side toolbar for selecting drawing tools.
  *
  * Implements issue #56: Drawing tools panel UI.
+ * Implements issue #81: Responsive layout — collapsible on tablet (md-lg).
  *
  * Tools:
  *   Select / Move  (keyboard: V or Escape)
@@ -19,6 +20,7 @@
  * own keydown listener — it is kept here for documentation purposes only.
  */
 
+import { useState } from "react";
 import { useStore } from "@/lib/store";
 import type { DrawingTool } from "@/lib/store";
 
@@ -174,6 +176,31 @@ export const TOOL_CURSOR: Record<DrawingTool, string> = {
 };
 
 // ---------------------------------------------------------------------------
+// Collapse toggle icon
+// ---------------------------------------------------------------------------
+
+function CollapseIcon({ collapsed }: { collapsed: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      width={14}
+      height={14}
+      fill="currentColor"
+      aria-hidden="true"
+      className="transition-transform"
+      style={{ transform: collapsed ? "rotate(180deg)" : "none" }}
+    >
+      {/* Left-pointing chevron; rotated 180° when collapsed to point right */}
+      <path
+        fillRule="evenodd"
+        d="M12.79 5.23a.75.75 0 0 1-.02 1.06L8.832 10l3.938 3.71a.75.75 0 1 1-1.04 1.08l-4.5-4.25a.75.75 0 0 1 0-1.08l4.5-4.25a.75.75 0 0 1 1.06.02z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -181,39 +208,80 @@ export default function DrawingToolsPanel() {
   const selectedTool = useStore((s) => s.selectedTool);
   const setSelectedTool = useStore((s) => s.setSelectedTool);
 
+  /**
+   * Collapse state — only meaningful at tablet breakpoint (md–lg).
+   * On desktop the panel is always expanded; on mobile it's not rendered at all
+   * (see the editor page layout). Default: expanded.
+   */
+  const [collapsed, setCollapsed] = useState(false);
+
   // Keyboard shortcut registration is handled centrally by EditorKeyboardManager
   // (useKeyboardShortcuts hook, issue #82). No listener is registered here.
 
   return (
     <aside
-      className="flex w-14 flex-col items-center gap-1 border-r border-gray-200 bg-gray-50 py-3"
+      className={[
+        "flex flex-col items-center border-r border-gray-200 bg-gray-50 transition-all duration-200",
+        collapsed ? "w-8" : "w-14",
+      ].join(" ")}
       aria-label="Drawing tools"
     >
-      <span className="mb-1 text-[10px] font-medium uppercase tracking-widest text-gray-400">
-        Tools
-      </span>
+      {/* Collapse toggle button — visible on all md+ sizes */}
+      <button
+        onClick={() => setCollapsed((c) => !c)}
+        title={collapsed ? "Expand tools panel" : "Collapse tools panel"}
+        aria-label={collapsed ? "Expand tools panel" : "Collapse tools panel"}
+        aria-expanded={!collapsed}
+        className="mt-2 flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+      >
+        <CollapseIcon collapsed={collapsed} />
+      </button>
 
-      {TOOLS.map(({ id, label, shortcut, Icon }) => {
-        const active = selectedTool === id;
-        return (
-          <button
-            key={id}
-            onClick={() => setSelectedTool(id)}
-            title={`${label} (${shortcut})`}
-            aria-label={label}
-            aria-pressed={active}
-            className={[
-              "flex w-10 flex-col items-center justify-center rounded-lg py-2 transition-colors",
-              active
-                ? "bg-blue-100 text-blue-600 shadow-inner"
-                : "text-gray-500 hover:bg-gray-200 hover:text-gray-700",
-            ].join(" ")}
-          >
-            <Icon active={active} />
-            <span className="mt-0.5 text-[9px] leading-none">{shortcut}</span>
-          </button>
-        );
-      })}
+      {/* Tool buttons — hidden when collapsed */}
+      {!collapsed && (
+        <>
+          <span className="mb-1 mt-1 text-[10px] font-medium uppercase tracking-widest text-gray-400">
+            Tools
+          </span>
+
+          {TOOLS.map(({ id, label, shortcut, Icon }) => {
+            const active = selectedTool === id;
+            return (
+              <button
+                key={id}
+                onClick={() => setSelectedTool(id)}
+                title={`${label} (${shortcut})`}
+                aria-label={label}
+                aria-pressed={active}
+                className={[
+                  "flex w-10 flex-col items-center justify-center rounded-lg py-2 transition-colors",
+                  active
+                    ? "bg-blue-100 text-blue-600 shadow-inner"
+                    : "text-gray-500 hover:bg-gray-200 hover:text-gray-700",
+                ].join(" ")}
+              >
+                <Icon active={active} />
+                <span className="mt-0.5 text-[9px] leading-none">{shortcut}</span>
+              </button>
+            );
+          })}
+        </>
+      )}
+
+      {/* When collapsed: show only the active tool icon as a hint */}
+      {collapsed && (
+        <div className="mt-2 flex flex-col items-center gap-1">
+          {TOOLS.filter(({ id }) => id === selectedTool).map(({ id, label, Icon }) => (
+            <div
+              key={id}
+              title={label}
+              className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100"
+            >
+              <Icon active={true} />
+            </div>
+          ))}
+        </div>
+      )}
     </aside>
   );
 }
