@@ -208,51 +208,51 @@ export default function PlaybackControls() {
 
   return (
     <div
-      className="flex items-center gap-3 border-t border-gray-200 bg-white px-4 py-2"
+      className="flex items-center gap-2 border-t border-gray-200 bg-white px-3 py-2 md:gap-3 md:px-4"
       aria-label="Playback controls"
     >
-      {/* Step back */}
+      {/* Step back — hidden on mobile */}
       <button
         onClick={() => { pausePlayback(); stepBack(); }}
         title="Step back (Left Arrow)"
         aria-label="Step back"
         disabled={currentSceneIndex === 0}
-        className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+        className="hidden h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 disabled:opacity-30 md:flex"
       >
         <StepBackIcon />
       </button>
 
-      {/* Play / Pause */}
+      {/* Play / Pause — always visible */}
       <button
         onClick={togglePlayback}
         title={isPlaying ? "Pause (Space)" : "Play (Space)"}
         aria-label={isPlaying ? "Pause" : "Play"}
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-white shadow hover:bg-blue-700"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white shadow hover:bg-blue-700"
       >
         {isPlaying ? <PauseIcon /> : <PlayIcon />}
       </button>
 
-      {/* Step forward */}
+      {/* Step forward — hidden on mobile */}
       <button
         onClick={() => { pausePlayback(); stepForward(); }}
         title="Step forward (Right Arrow)"
         aria-label="Step forward"
         disabled={currentSceneIndex >= sceneCount - 1}
-        className="flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 disabled:opacity-30"
+        className="hidden h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 disabled:opacity-30 md:flex"
       >
         <StepForwardIcon />
       </button>
 
-      {/* Scene / step indicator */}
+      {/* Scene / step indicator — hidden on mobile */}
       <span
-        className="min-w-[160px] select-none text-center text-xs font-medium text-gray-500"
+        className="hidden min-w-[140px] select-none text-center text-xs font-medium text-gray-500 md:block lg:min-w-[160px]"
         aria-live="polite"
         aria-atomic="true"
       >
         {stepLabel}
       </span>
 
-      {/* Timeline scrubber */}
+      {/* Timeline scrubber — always visible, fills available space */}
       <div
         className="flex flex-1 items-center gap-1 overflow-x-auto"
         role="group"
@@ -273,7 +273,7 @@ export default function PlaybackControls() {
               aria-pressed={isActive}
               title={`Scene ${i + 1}${s.note ? ` — ${s.note}` : ""}`}
               className={[
-                "h-2 flex-1 min-w-[32px] rounded-full transition-colors",
+                "h-2 min-w-[32px] flex-1 rounded-full transition-colors",
                 isActive ? "bg-blue-600" : "bg-gray-200 hover:bg-gray-300",
               ].join(" ")}
             />
@@ -281,8 +281,8 @@ export default function PlaybackControls() {
         })}
       </div>
 
-      {/* Speed selector */}
-      <div className="flex items-center gap-1">
+      {/* Speed selector — hidden on mobile */}
+      <div className="hidden items-center gap-1 md:flex">
         {SPEED_OPTIONS.map((s) => (
           <button
             key={s}
@@ -301,14 +301,14 @@ export default function PlaybackControls() {
         ))}
       </div>
 
-      {/* Loop toggle */}
+      {/* Loop toggle — hidden on mobile */}
       <button
         onClick={() => setLoop(!loop)}
         title="Loop (L)"
         aria-label="Toggle loop"
         aria-pressed={loop}
         className={[
-          "flex h-8 w-8 items-center justify-center rounded-md transition-colors",
+          "hidden h-8 w-8 items-center justify-center rounded-md transition-colors md:flex",
           loop ? "bg-blue-100 text-blue-600" : "text-gray-400 hover:bg-gray-100",
         ].join(" ")}
       >

@@ -8,6 +8,7 @@ import EditorKeyboardManager from "@/components/editor/EditorKeyboardManager";
 import ShortcutsButton from "@/components/editor/ShortcutsButton";
 import UndoRedoButtons from "@/components/editor/UndoRedoButtons";
 import ExportMenu from "@/components/editor/ExportMenu";
+import MobileViewerBanner from "@/components/editor/MobileViewerBanner";
 
 interface PlayEditorPageProps {
   params: { id: string };
@@ -23,9 +24,23 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
        */}
       <EditorKeyboardManager />
 
-      <header className="flex items-center justify-between border-b border-gray-200 px-4 py-2">
-        <h1 className="text-lg font-semibold text-gray-900">Play Editor — {params.id}</h1>
-        <div className="flex items-center gap-2">
+      {/*
+       * Mobile viewer-only banner (<768px).
+       * On small screens editing is disabled; a banner explains this and
+       * the full controls are hidden. Playback controls remain accessible.
+       */}
+      <MobileViewerBanner />
+
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <header className="flex min-w-0 items-center justify-between border-b border-gray-200 px-3 py-2 md:px-4">
+        <h1 className="truncate text-base font-semibold text-gray-900 md:text-lg">
+          {/* Shorter label on mobile to avoid overflow */}
+          <span className="hidden sm:inline">Play Editor — </span>
+          <span className="font-mono text-gray-500">{params.id}</span>
+        </h1>
+
+        {/* Action buttons — hidden on mobile (viewer-only) */}
+        <div className="hidden items-center gap-2 md:flex">
           {/* Undo / Redo buttons (issue #83) */}
           <UndoRedoButtons />
           <div className="mx-1 h-5 w-px bg-gray-200" aria-hidden="true" />
@@ -42,22 +57,46 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
           <ShortcutsButton />
         </div>
       </header>
-      <div className="flex flex-1 overflow-hidden">
-        {/* Tools Panel */}
-        <DrawingToolsPanel />
-        {/* Court Canvas with draggable players */}
-        <div className="flex flex-1 items-center justify-center overflow-auto bg-gray-100 p-4">
+
+      {/* ── Main editor area ────────────────────────────────────────────── */}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/*
+         * Tools panel — visible on md+ (tablet/desktop).
+         * On tablet (md–lg) the panel is collapsible via DrawingToolsPanel's
+         * internal toggle. On mobile it is entirely hidden.
+         */}
+        <div className="hidden md:flex">
+          <DrawingToolsPanel />
+        </div>
+
+        {/* Court canvas — fills the remaining space */}
+        <div className="flex flex-1 items-center justify-center overflow-auto bg-gray-100 p-2 md:p-4">
           <EditorCourtArea />
         </div>
-        {/* Player roster: display mode + per-scene visibility */}
-        <PlayerRosterPanel />
+
+        {/*
+         * Player roster panel — visible on lg+ (wide desktop).
+         * On tablet it collapses into the panel's own toggle (rendered inside
+         * PlayerRosterPanel). On mobile it is hidden entirely.
+         */}
+        <div className="hidden lg:flex">
+          <PlayerRosterPanel />
+        </div>
       </div>
-      {/* Timing steps strip */}
-      <TimingStripPanel />
-      {/* Playback controls */}
+
+      {/* ── Bottom panels — hidden on mobile ───────────────────────────── */}
+      <div className="hidden md:block">
+        {/* Timing steps strip */}
+        <TimingStripPanel />
+      </div>
+
+      {/* Playback controls — always visible (condensed on mobile) */}
       <PlaybackControls />
-      {/* Scene Strip */}
-      <SceneStrip />
+
+      {/* Scene Strip — hidden on mobile */}
+      <div className="hidden md:block">
+        <SceneStrip />
+      </div>
     </main>
   );
 }

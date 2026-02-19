@@ -28,10 +28,16 @@ export default function EditorCourtArea() {
   }, [currentPlay, setCurrentPlay, setSelectedSceneId]);
 
   return (
+    /*
+     * Issue #81 — responsive court sizing:
+     *   - Mobile (<768px): full width, no side panels
+     *   - Tablet (768–1024px): max-w-xl to leave room for any side chrome
+     *   - Desktop (>1024px): max-w-3xl for a large comfortable canvas
+     */
     <CourtWithPlayers
       sceneId={selectedSceneId ?? scene?.id}
       scene={scene}
-      className="w-full max-w-3xl"
+      className="w-full max-w-full md:max-w-xl lg:max-w-3xl"
     />
   );
 }

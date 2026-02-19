@@ -15,7 +15,7 @@
  *   - First (and only) scene cannot be deleted.
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useStore, selectEditorScene } from "@/lib/store";
 import type { Scene } from "@/lib/types";
 
@@ -24,8 +24,8 @@ import type { Scene } from "@/lib/types";
 // ---------------------------------------------------------------------------
 
 /** Renders a tiny SVG court with coloured dots for visible players. */
-function SceneThumbnail({ scene }: { scene: Scene }) {
-  const W = 120;
+function SceneThumbnail({ scene, compact = false }: { scene: Scene; compact?: boolean }) {
+  const W = compact ? 80 : 120;
   const H = Math.round(W / (50 / 47)); // maintain half-court aspect ratio ≈ 113
 
   // Normalised → pixel
@@ -235,10 +235,11 @@ interface SceneCardProps {
   index: number;
   totalScenes: number;
   isActive: boolean;
+  compact: boolean;
   onClick: () => void;
 }
 
-function SceneCard({ scene, index, totalScenes, isActive, onClick }: SceneCardProps) {
+function SceneCard({ scene, index, totalScenes, isActive, compact, onClick }: SceneCardProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -275,7 +276,7 @@ function SceneCard({ scene, index, totalScenes, isActive, onClick }: SceneCardPr
           if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "#F9FAFB";
         }}
       >
-        <SceneThumbnail scene={scene} />
+        <SceneThumbnail scene={scene} compact={compact} />
         <span
           style={{
             fontSize: 11,
@@ -307,12 +308,36 @@ function SceneCard({ scene, index, totalScenes, isActive, onClick }: SceneCardPr
 // SceneStrip
 // ---------------------------------------------------------------------------
 
+/** Hook that returns true when the viewport is narrower than 1024 px (tablet). */
+function useIsTablet() {
+  const [isTablet, setIsTablet] = useState(false);
+
+  const check = useCallback(() => {
+    setIsTablet(window.innerWidth < 1024);
+  }, []);
+
+  useEffect(() => {
+    // Run once on mount (client-side only)
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, [check]);
+
+  return isTablet;
+}
+
 export default function SceneStrip() {
   const currentPlay = useStore((s) => s.currentPlay);
   const selectedSceneId = useStore((s) => s.selectedSceneId);
   const setSelectedSceneId = useStore((s) => s.setSelectedSceneId);
   const addScene = useStore((s) => s.addScene);
   const scene = useStore(selectEditorScene);
+
+  /**
+   * Issue #81 — at tablet widths use compact (smaller) scene thumbnails
+   * so the strip fits without triggering horizontal overflow.
+   */
+  const isTablet = useIsTablet();
 
   // Sort scenes by order for display
   const scenes = currentPlay
@@ -331,12 +356,12 @@ export default function SceneStrip() {
       style={{
         borderTop: "1px solid #E5E7EB",
         background: "#fff",
-        padding: "8px 12px",
+        padding: isTablet ? "6px 10px" : "8px 12px",
         display: "flex",
         alignItems: "center",
         gap: 8,
         overflowX: "auto",
-        minHeight: 80,
+        minHeight: isTablet ? 64 : 80,
       }}
       aria-label="Scene strip"
     >
@@ -348,6 +373,7 @@ export default function SceneStrip() {
           index={i}
           totalScenes={scenes.length}
           isActive={s.id === activeId}
+          compact={isTablet}
           onClick={() => setSelectedSceneId(s.id)}
         />
       ))}
