@@ -9,6 +9,7 @@ import ShortcutsButton from "@/components/editor/ShortcutsButton";
 import UndoRedoButtons from "@/components/editor/UndoRedoButtons";
 import ExportMenu from "@/components/editor/ExportMenu";
 import MobileViewerBanner from "@/components/editor/MobileViewerBanner";
+import EditorHeader from "./EditorHeader";
 
 interface PlayEditorPageProps {
   params: { id: string };
@@ -31,14 +32,8 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
        */}
       <MobileViewerBanner />
 
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <header className="flex min-w-0 items-center justify-between border-b border-gray-200 px-3 py-2 md:px-4">
-        <h1 className="truncate text-base font-semibold text-gray-900 md:text-lg">
-          {/* Shorter label on mobile to avoid overflow */}
-          <span className="hidden sm:inline">Play Editor — </span>
-          <span className="font-mono text-gray-500">{params.id}</span>
-        </h1>
-
+      {/* ── Header — client component so it can show play title from store ── */}
+      <EditorHeader playId={params.id}>
         {/* Action buttons — hidden on mobile (viewer-only) */}
         <div className="hidden items-center gap-2 md:flex">
           {/* Undo / Redo buttons (issue #83) */}
@@ -56,7 +51,7 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
           </button>
           <ShortcutsButton />
         </div>
-      </header>
+      </EditorHeader>
 
       {/* ── Main editor area ────────────────────────────────────────────── */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -71,7 +66,7 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
 
         {/* Court canvas — fills the remaining space */}
         <div className="flex flex-1 items-center justify-center overflow-auto bg-gray-100 p-2 md:p-4">
-          <EditorCourtArea />
+          <EditorCourtArea playId={params.id} />
         </div>
 
         {/*

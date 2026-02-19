@@ -44,6 +44,13 @@ export type PlayerDisplayMode = "numbers" | "names" | "abbreviations";
 // ---------------------------------------------------------------------------
 
 export interface AppStore {
+  // ------- Playbook list (issue #67 / #69) -------
+  plays: Play[];
+  addPlay: (play: Play) => void;
+  removePlay: (playId: string) => void;
+  updatePlayInList: (play: Play) => void;
+  getPlayById: (playId: string) => Play | undefined;
+
   // ------- Play data -------
   currentPlay: Play | null;
 
@@ -176,6 +183,25 @@ function withUpdatedScene(play: Play, sceneId: string, updater: (s: Scene) => Sc
 export const useStore = create<AppStore>()(
   subscribeWithSelector((set, get) => ({
     // =======================================================================
+    // Playbook list (issue #67 / #69)
+    // =======================================================================
+
+    plays: [],
+
+    addPlay: (play) =>
+      set((state) => ({ plays: [...state.plays, play] })),
+
+    removePlay: (playId) =>
+      set((state) => ({ plays: state.plays.filter((p) => p.id !== playId) })),
+
+    updatePlayInList: (play) =>
+      set((state) => ({
+        plays: state.plays.map((p) => (p.id === play.id ? play : p)),
+      })),
+
+    getPlayById: (playId) => get().plays.find((p) => p.id === playId),
+
+    // =======================================================================
     // Play data
     // =======================================================================
 
@@ -188,14 +214,19 @@ export const useStore = create<AppStore>()(
 
     clearCurrentPlay: () => {
       useHistoryStore.getState().resetHistory();
-      set({
+      // Sync the current play state back to the plays list before clearing
+      const current = get().currentPlay;
+      set((state) => ({
         currentPlay: null,
         selectedSceneId: null,
         selectedAnnotationId: null,
         isPlaying: false,
         currentSceneIndex: 0,
         currentStep: 1,
-      });
+        plays: current
+          ? state.plays.map((p) => (p.id === current.id ? current : p))
+          : state.plays,
+      }));
     },
 
     // -----------------------------------------------------------------------
