@@ -1,5 +1,6 @@
 import EditorCourtArea from "./EditorCourtArea";
 import DrawingToolsPanel from "@/components/editor/DrawingToolsPanel";
+import SceneStrip from "@/components/editor/SceneStrip";
 
 interface PlayEditorPageProps {
   params: { id: string };
@@ -36,9 +37,7 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
         </aside>
       </div>
       {/* Scene Strip */}
-      <footer className="border-t border-gray-200 bg-white p-2">
-        <p className="text-center text-sm text-gray-400">Scene strip coming soon</p>
-      </footer>
+      <SceneStrip />
     </main>
   );
 }
