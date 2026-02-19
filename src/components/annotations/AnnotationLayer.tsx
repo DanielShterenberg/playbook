@@ -73,11 +73,35 @@ interface RenderedAnnotationProps {
   ann: Annotation;
   selected: boolean;
   onSelect: (id: string) => void;
+  /** The timing step this annotation belongs to (for the badge). */
+  step?: number;
+  /** Whether to show the step badge. */
+  showStepBadge?: boolean;
 }
 
-function RenderedAnnotation({ ann, selected, onSelect }: RenderedAnnotationProps) {
+function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge }: RenderedAnnotationProps) {
   const { from, to, type } = ann;
   const hitStyle: React.CSSProperties = { cursor: "pointer", pointerEvents: "stroke" };
+
+  // Step badge — small circle at the midpoint of the annotation
+  const midX = (from.x + to.x) / 2;
+  const midY = (from.y + to.y) / 2;
+  const stepBadge = showStepBadge && step !== undefined ? (
+    <g pointerEvents="none">
+      <circle cx={midX} cy={midY} r={9} fill="#3B82F6" opacity={0.9} />
+      <text
+        x={midX}
+        y={midY}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontSize={9}
+        fontWeight="bold"
+        fill="#fff"
+      >
+        {step}
+      </text>
+    </g>
+  ) : null;
 
   const headPoints = arrowHead(to.x, to.y, from.x, from.y);
   const selectRing = selected ? (
@@ -118,6 +142,7 @@ function RenderedAnnotation({ ann, selected, onSelect }: RenderedAnnotationProps
         {headPoints && (
           <polygon points={headPoints} fill="#1E3A5F" />
         )}
+        {stepBadge}
       </g>
     );
   }
@@ -153,6 +178,7 @@ function RenderedAnnotation({ ann, selected, onSelect }: RenderedAnnotationProps
           fill="none"
         />
         {headPoints && <polygon points={headPoints} fill="#1E3A5F" />}
+        {stepBadge}
       </g>
     );
   }
@@ -173,6 +199,7 @@ function RenderedAnnotation({ ann, selected, onSelect }: RenderedAnnotationProps
           strokeLinecap="round"
         />
         {headPoints && <polygon points={headPoints} fill="#059669" />}
+        {stepBadge}
       </g>
     );
   }
@@ -199,6 +226,7 @@ function RenderedAnnotation({ ann, selected, onSelect }: RenderedAnnotationProps
           x2={to.x - perp.x} y2={to.y - perp.y}
           stroke="#7C3AED" strokeWidth={3} strokeLinecap="round"
         />
+        {stepBadge}
       </g>
     );
   }
@@ -219,6 +247,7 @@ function RenderedAnnotation({ ann, selected, onSelect }: RenderedAnnotationProps
           strokeDasharray="7 5"
         />
         {headPoints && <polygon points={headPoints} fill="#DC2626" />}
+        {stepBadge}
       </g>
     );
   }
@@ -373,6 +402,18 @@ export default function AnnotationLayer({
   const removeAnnotation = useStore((s) => s.removeAnnotation);
   const scene = useStore(selectEditorScene);
   const annotations = selectAllAnnotations(scene);
+
+  // Build a map from annotation id → timing step for badge display
+  const annotationStepMap = new Map<string, number>();
+  if (scene) {
+    for (const group of scene.timingGroups) {
+      for (const ann of group.annotations) {
+        annotationStepMap.set(ann.id, group.step);
+      }
+    }
+  }
+  // Show step badges only when there are multiple timing steps
+  const showStepBadges = (scene?.timingGroups.length ?? 1) > 1;
 
   // In-progress stroke state
   const [drawing, setDrawing] = useState<{ from: Point; to: Point } | null>(null);
@@ -552,6 +593,8 @@ export default function AnnotationLayer({
           ann={ann}
           selected={selectedAnnotationId === ann.id}
           onSelect={handleAnnotationSelect}
+          step={annotationStepMap.get(ann.id)}
+          showStepBadge={showStepBadges}
         />
       ))}
 

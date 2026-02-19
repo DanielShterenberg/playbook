@@ -1,6 +1,8 @@
 import EditorCourtArea from "./EditorCourtArea";
 import DrawingToolsPanel from "@/components/editor/DrawingToolsPanel";
 import SceneStrip from "@/components/editor/SceneStrip";
+import PlaybackControls from "@/components/editor/PlaybackControls";
+import TimingStripPanel from "@/components/editor/TimingStripPanel";
 
 interface PlayEditorPageProps {
   params: { id: string };
@@ -36,6 +38,10 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
           <p className="text-sm text-gray-400">Play details and notes will appear here.</p>
         </aside>
       </div>
+      {/* Timing steps strip */}
+      <TimingStripPanel />
+      {/* Playback controls */}
+      <PlaybackControls />
       {/* Scene Strip */}
       <SceneStrip />
     </main>
