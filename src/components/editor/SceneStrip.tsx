@@ -15,7 +15,7 @@
  *   - First (and only) scene cannot be deleted.
  */
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useStore, selectEditorScene } from "@/lib/store";
 import type { Scene } from "@/lib/types";
 
@@ -312,7 +312,6 @@ export default function SceneStrip() {
   const selectedSceneId = useStore((s) => s.selectedSceneId);
   const setSelectedSceneId = useStore((s) => s.setSelectedSceneId);
   const addScene = useStore((s) => s.addScene);
-  const removeScene = useStore((s) => s.removeScene);
   const scene = useStore(selectEditorScene);
 
   // Sort scenes by order for display
@@ -322,27 +321,8 @@ export default function SceneStrip() {
 
   const activeId = selectedSceneId ?? scene?.id ?? null;
 
-  // Keyboard: Delete removes selected scene
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Delete" || e.key === "Backspace") {
-        const tag = (e.target as HTMLElement).tagName;
-        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-        // Only delete if no annotation is selected (annotation layer handles its own delete)
-        const annotationId = useStore.getState().selectedAnnotationId;
-        if (annotationId) return;
-        if (activeId && scenes.length > 1) {
-          removeScene(activeId);
-        }
-      }
-    },
-    [activeId, scenes.length, removeScene],
-  );
-
-  useEffect(() => {
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
+  // Keyboard Delete/Backspace for scene removal is handled centrally by
+  // EditorKeyboardManager (useKeyboardShortcuts, issue #82). No listener here.
 
   if (!currentPlay) return null;
 
