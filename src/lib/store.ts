@@ -298,8 +298,63 @@ export const useStore = create<AppStore>()(
       if (snapshot) useHistoryStore.getState().pushSnapshot(snapshot);
       set((s) => {
         if (!s.currentPlay) return s;
+
+        // Find the scene currently being edited to project positions from.
+        const currentScene =
+          s.currentPlay.scenes.find((sc) => sc.id === s.selectedSceneId) ??
+          s.currentPlay.scenes[s.currentPlay.scenes.length - 1] ??
+          null;
+
         const order = s.currentPlay.scenes.length;
         const newScene = createEmptyScene(order);
+
+        if (currentScene) {
+          // Start from the current scene's player positions and visibility.
+          newScene.players = JSON.parse(JSON.stringify(currentScene.players)) as typeof newScene.players;
+
+          // Collect every annotation in the current scene across all timing steps.
+          const allAnnotations = currentScene.timingGroups.flatMap((g) => g.annotations);
+
+          // Project player positions: movement / cut / dribble arrows tell us
+          // where each player ends up, so start the new scene there.
+          for (const ann of allAnnotations) {
+            if (!ann.fromPlayer) continue;
+            const { side, position } = ann.fromPlayer;
+            const validSide = side as "offense" | "defense";
+            if (ann.type === "movement" || ann.type === "cut" || ann.type === "dribble") {
+              // ann.to is stored in normalised [0-1] coords — same space as PlayerState.x/y.
+              newScene.players[validSide] = newScene.players[validSide].map((p) =>
+                p.position === position ? { ...p, x: ann.to.x, y: ann.to.y } : p,
+              );
+            }
+          }
+
+          // Carry over ball state, then update if a pass annotation transferred it.
+          newScene.ball = { ...currentScene.ball };
+
+          // If the ball was attached to a player who moved, update its position too.
+          if (newScene.ball.attachedTo) {
+            const { side, position } = newScene.ball.attachedTo;
+            const mover = newScene.players[side as "offense" | "defense"].find(
+              (p) => p.position === position,
+            );
+            if (mover) newScene.ball = { ...newScene.ball, x: mover.x, y: mover.y };
+          }
+
+          // Update ball if a pass annotation transferred it to another player.
+          for (const ann of allAnnotations) {
+            if (ann.type === "pass" && ann.toPlayer) {
+              const { side, position } = ann.toPlayer;
+              const validSide = side as "offense" | "defense";
+              // Use the receiver's position AFTER applying movement projections above.
+              const player = newScene.players[validSide].find((p) => p.position === position);
+              if (player) {
+                newScene.ball = { x: player.x, y: player.y, attachedTo: { side: validSide, position } };
+              }
+            }
+          }
+        }
+
         return {
           currentPlay: {
             ...s.currentPlay,
