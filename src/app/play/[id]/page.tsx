@@ -1,4 +1,5 @@
 import EditorCourtArea from "./EditorCourtArea";
+import DrawingToolsPanel from "@/components/editor/DrawingToolsPanel";
 
 interface PlayEditorPageProps {
   params: { id: string };
@@ -23,9 +24,7 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
       </header>
       <div className="flex flex-1 overflow-hidden">
         {/* Tools Panel */}
-        <aside className="flex w-16 flex-col items-center gap-3 border-r border-gray-200 bg-gray-50 py-4">
-          <div className="text-xs text-gray-400">Tools</div>
-        </aside>
+        <DrawingToolsPanel />
         {/* Court Canvas with draggable players */}
         <div className="flex flex-1 items-center justify-center overflow-auto bg-gray-100 p-4">
           <EditorCourtArea />

@@ -33,6 +33,7 @@ import { useState, useCallback, useRef } from "react";
 import Court, { type CourtReadyPayload } from "@/components/court/Court";
 import PlayerToken from "./PlayerToken";
 import BallToken, { type NearbyPlayer, DETACH_RADIUS } from "./BallToken";
+import AnnotationLayer from "@/components/annotations/AnnotationLayer";
 import { useStore } from "@/lib/store";
 import type { Scene, PlayerState, BallState } from "@/lib/types";
 
@@ -450,6 +451,18 @@ export default function CourtWithPlayers({ sceneId, scene, className }: CourtWit
             )}
           </g>
         </svg>
+      )}
+
+      {/* Annotation drawing layer — sits above the player SVG so pointer events
+          can be captured by the active drawing tool without interfering with
+          player dragging when the select tool is active. */}
+      {courtSize && (
+        <AnnotationLayer
+          width={courtSize.width}
+          height={courtSize.height}
+          sceneId={sceneId ?? null}
+          players={allPlayers}
+        />
       )}
     </div>
   );
