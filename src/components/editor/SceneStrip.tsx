@@ -68,9 +68,19 @@ function SceneThumbnail({ scene, compact = false }: { scene: Scene; compact?: bo
         strokeWidth={0.8}
       />
 
-      {/* Three-point arc — rough approximation */}
+      {/* Free-throw circle — top semicircle curving toward half-court */}
       <path
-        d={`M ${px(0.06)},${py(0.702)} L ${px(0.06)},${py(0.596)} A ${px(0.476)},${py(0.476)} 0 0 1 ${px(0.94)},${py(0.596)} L ${px(0.94)},${py(0.702)}`}
+        d={`M ${px(0.32)},${py(0.596)} A ${px(0.18)},${px(0.18)} 0 0 0 ${px(0.68)},${py(0.596)}`}
+        fill="none"
+        stroke="#fff"
+        strokeWidth={0.8}
+      />
+
+      {/* Three-point arc — corner straights + arc curving toward half-court */}
+      {/* Corner straights go from baseline (py(1.0)) up to arc start (py(0.702)). */}
+      {/* Arc uses sweep-flag=0 (counterclockwise) so it bows toward y=0 (half-court). */}
+      <path
+        d={`M ${px(0.06)},${py(1.0)} L ${px(0.06)},${py(0.702)} A ${px(0.476)},${py(0.476)} 0 0 0 ${px(0.94)},${py(0.702)} L ${px(0.94)},${py(1.0)}`}
         fill="none"
         stroke="#fff"
         strokeWidth={0.8}

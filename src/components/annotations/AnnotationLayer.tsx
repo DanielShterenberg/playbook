@@ -77,10 +77,16 @@ interface RenderedAnnotationProps {
   step?: number;
   /** Whether to show the step badge. */
   showStepBadge?: boolean;
+  /** Court canvas pixel dimensions — used to convert stored normalized coords to pixels. */
+  width: number;
+  height: number;
 }
 
-function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge }: RenderedAnnotationProps) {
-  const { from, to, type } = ann;
+function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, width, height }: RenderedAnnotationProps) {
+  const { type } = ann;
+  // Annotations are stored in normalised [0-1] coords. Convert to CSS pixels for rendering.
+  const from = { x: ann.from.x * width, y: ann.from.y * height };
+  const to   = { x: ann.to.x   * width, y: ann.to.y   * height };
   const hitStyle: React.CSSProperties = { cursor: "pointer", pointerEvents: "stroke" };
 
   // Step badge — small circle at the midpoint of the annotation
@@ -505,8 +511,10 @@ export default function AnnotationLayer({
         const annotation: Annotation = {
           id: crypto.randomUUID(),
           type: selectedTool as Annotation["type"],
-          from,
-          to,
+          // Store in normalised [0-1] coords so the store is resolution-independent
+          // and addScene can use annotation endpoints directly as player positions.
+          from: { x: from.x / width, y: from.y / height },
+          to:   { x: to.x   / width, y: to.y   / height },
           fromPlayer: fromNearest
             ? { side: fromNearest.side, position: fromNearest.position }
             : null,
@@ -531,6 +539,8 @@ export default function AnnotationLayer({
       players,
       addAnnotation,
       setSelectedAnnotationId,
+      width,
+      height,
     ],
   );
 
@@ -578,6 +588,8 @@ export default function AnnotationLayer({
           onSelect={handleAnnotationSelect}
           step={annotationStepMap.get(ann.id)}
           showStepBadge={showStepBadges}
+          width={width}
+          height={height}
         />
       ))}
 
