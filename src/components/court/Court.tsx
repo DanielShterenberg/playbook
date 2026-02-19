@@ -263,7 +263,7 @@ function drawHalfCourtInner(ctx: CanvasRenderingContext2D, W: number, H: number)
 // Top-level draw function
 // ---------------------------------------------------------------------------
 
-function drawCourt(
+export function drawCourt(
   canvas: HTMLCanvasElement,
   cssWidth: number,
   cssHeight: number,
