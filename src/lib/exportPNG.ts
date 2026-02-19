@@ -31,7 +31,6 @@ import {
   CORNER_THREE_RIGHT_X,
   FT_CIRCLE_CENTER_X,
   FT_CIRCLE_CENTER_Y,
-  FT_CIRCLE_RADIUS,
   CENTRE_CIRCLE_RADIUS,
 } from "@/components/court/courtDimensions";
 
@@ -106,26 +105,27 @@ function drawCourtOnCanvas(canvas: HTMLCanvasElement): void {
   const leftCornerX_ft = CORNER_THREE_LEFT_X * 50;
   const rightCornerX_ft = CORNER_THREE_RIGHT_X * 50;
 
-  const dy3 = basketY_ft - cornerY_ft;
-  const dx3 = Math.sqrt(23.75 * 23.75 - dy3 * dy3);
-  const arcAngleLeft = Math.atan2(-dy3, -dx3);
-  const arcAngleRight = Math.atan2(-dy3, dx3);
-
   ctx.strokeStyle = COLOR_LINE;
   ctx.lineWidth = COLOR_LINE_WIDTH_PX * FT_PER_PX_X;
 
+  // Left corner three straight: vertical line from baseline (y=47) up to 14ft depth
   ctx.beginPath();
-  ctx.moveTo(leftCornerX_ft, cornerY_ft);
-  ctx.lineTo(basketX_ft - dx3, cornerY_ft);
+  ctx.moveTo(leftCornerX_ft, 47);
+  ctx.lineTo(leftCornerX_ft, cornerY_ft);
   ctx.stroke();
 
+  // Right corner three straight: vertical line from baseline (y=47) up to 14ft depth
   ctx.beginPath();
-  ctx.moveTo(basketX_ft + dx3, cornerY_ft);
+  ctx.moveTo(rightCornerX_ft, 47);
   ctx.lineTo(rightCornerX_ft, cornerY_ft);
   ctx.stroke();
 
+  // Arc angles measured from basket center to each corner x at cornerY_ft
+  const arcAngleLeftCorner = Math.atan2(cornerY_ft - basketY_ft, leftCornerX_ft - basketX_ft);
+  const arcAngleRightCorner = Math.atan2(cornerY_ft - basketY_ft, rightCornerX_ft - basketX_ft);
+
   ctx.beginPath();
-  ctx.arc(basketX_ft, basketY_ft, 23.75, arcAngleRight, arcAngleLeft, true);
+  ctx.arc(basketX_ft, basketY_ft, 23.75, arcAngleRightCorner, arcAngleLeftCorner, true);
   ctx.stroke();
 
   // 7. Restricted area arc
@@ -145,17 +145,26 @@ function drawCourtOnCanvas(canvas: HTMLCanvasElement): void {
   ctx.lineTo(cx(LANE_RIGHT), cy(FT_CIRCLE_CENTER_Y));
   ctx.stroke();
 
-  // 10. Free-throw circle
+  // 10. Free-throw circle — drawn in feet-coordinate system for a true circle
   ctx.save();
-  ctx.scale(1, scaleY);
+  ctx.scale(1 / FT_PER_PX_X, 1 / FT_PER_PX_Y);
 
+  const ftCenterX_ft = FT_CIRCLE_CENTER_X * 50; // 25ft
+  const ftCenterY_ft = FT_CIRCLE_CENTER_Y * 47;
+  const ftRadius_ft = 6; // 6ft radius
+
+  ctx.strokeStyle = COLOR_LINE;
+  ctx.lineWidth = COLOR_LINE_WIDTH_PX * FT_PER_PX_X;
+
+  // Upper semicircle (solid) — toward half court (counterclockwise π → 0)
   ctx.beginPath();
-  ctx.arc(cx(FT_CIRCLE_CENTER_X), cy(FT_CIRCLE_CENTER_Y) / scaleY, rx(FT_CIRCLE_RADIUS), Math.PI, 0, true);
+  ctx.arc(ftCenterX_ft, ftCenterY_ft, ftRadius_ft, Math.PI, 0, true);
   ctx.stroke();
 
-  ctx.setLineDash([rx(0.015), rx(0.015)]);
+  // Lower semicircle (dashed) — into the paint (clockwise 0 → π)
+  ctx.setLineDash([0.75, 0.75]);
   ctx.beginPath();
-  ctx.arc(cx(FT_CIRCLE_CENTER_X), cy(FT_CIRCLE_CENTER_Y) / scaleY, rx(FT_CIRCLE_RADIUS), 0, Math.PI, false);
+  ctx.arc(ftCenterX_ft, ftCenterY_ft, ftRadius_ft, 0, Math.PI, false);
   ctx.stroke();
   ctx.setLineDash([]);
 
