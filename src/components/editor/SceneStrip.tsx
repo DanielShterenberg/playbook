@@ -26,11 +26,22 @@ import type { Scene } from "@/lib/types";
 /** Renders a tiny SVG court with coloured dots for visible players. */
 function SceneThumbnail({ scene, compact = false }: { scene: Scene; compact?: boolean }) {
   const W = compact ? 80 : 120;
-  const H = Math.round(W / (50 / 47)); // maintain half-court aspect ratio ≈ 113
+  const H = Math.round(W * (47 / 50)); // half-court aspect ratio: 50ft wide × 47ft deep
 
-  // Normalised → pixel
+  // Normalised → pixel helpers.
+  // px() scales to width; py() scales to height.
+  // Arc radii: a physical radius R_ft has pixel radius = (R_ft/50)*W in BOTH x and y
+  // because H = W*(47/50), so (R_ft/47)*H = (R_ft/50)*W. Use px() for all arc radii.
   const px = (nx: number) => nx * W;
   const py = (ny: number) => ny * H;
+
+  // NBA court dimensions (normalised, matching courtDimensions.ts):
+  //   y=0 = half-court line, y=1 = baseline
+  //   LANE_LEFT=0.34, LANE_RIGHT=0.66, LANE_TOP≈0.596 (19ft from baseline)
+  //   FT circle radius = 6ft = px(0.12)
+  //   3P radius = 23.75ft = px(0.475), corner y≈0.702, corner x=0.06/0.94
+  //   BASKET_Y≈0.888 (5.25ft from baseline), BACKBOARD_Y≈0.915 (4ft from baseline)
+  //   CENTRE_CIRCLE_RADIUS = 6ft = px(0.12), RESTRICTED_RADIUS = 4ft = px(0.08)
 
   return (
     <svg
@@ -43,11 +54,11 @@ function SceneThumbnail({ scene, compact = false }: { scene: Scene; compact?: bo
       {/* Court background */}
       <rect width={W} height={H} fill="#F0C878" rx={3} />
 
-      {/* Paint */}
+      {/* Paint (free-throw lane) — 16ft wide × 19ft deep from baseline */}
       <rect
-        x={px(0.32)}
+        x={px(0.34)}
         y={py(0.596)}
-        width={px(0.36)}
+        width={px(0.32)}
         height={py(0.404)}
         fill="#E07B39"
       />
@@ -55,41 +66,78 @@ function SceneThumbnail({ scene, compact = false }: { scene: Scene; compact?: bo
       {/* Court outline */}
       <rect width={W} height={H} fill="none" stroke="#fff" strokeWidth={1} rx={3} />
 
-      {/* Half-court line */}
-      <line x1={0} y1={py(0)} x2={W} y2={py(0)} stroke="#fff" strokeWidth={0.8} />
+      {/* Half-court line (top border) */}
+      <line x1={0} y1={0} x2={W} y2={0} stroke="#fff" strokeWidth={0.8} />
 
-      {/* Free-throw line */}
-      <line
-        x1={px(0.32)}
-        y1={py(0.596)}
-        x2={px(0.68)}
-        y2={py(0.596)}
-        stroke="#fff"
-        strokeWidth={0.8}
-      />
-
-      {/* Free-throw circle — top semicircle curving toward half-court */}
+      {/* Half-court centre-circle arc — bows into the court (downward, sweep=0=CCW) */}
       <path
-        d={`M ${px(0.32)},${py(0.596)} A ${px(0.18)},${px(0.18)} 0 0 0 ${px(0.68)},${py(0.596)}`}
+        d={`M ${px(0.38)},0 A ${px(0.12)},${px(0.12)} 0 0 0 ${px(0.62)},0`}
         fill="none"
         stroke="#fff"
         strokeWidth={0.8}
       />
 
-      {/* Three-point arc — corner straights + arc curving toward half-court */}
-      {/* Corner straights go from baseline (py(1.0)) up to arc start (py(0.702)). */}
-      {/* Arc uses sweep-flag=0 (counterclockwise) so it bows toward y=0 (half-court). */}
+      {/* Three-point line: corner straights + arc */}
+      {/* Arc: major arc (large-arc=1) going counterclockwise (sweep=0) = upward over half-court */}
       <path
-        d={`M ${px(0.06)},${py(1.0)} L ${px(0.06)},${py(0.702)} A ${px(0.476)},${py(0.476)} 0 0 0 ${px(0.94)},${py(0.702)} L ${px(0.94)},${py(1.0)}`}
+        d={`M ${px(0.06)},${py(1)} L ${px(0.06)},${py(0.702)} A ${px(0.475)},${px(0.475)} 0 1 0 ${px(0.94)},${py(0.702)} L ${px(0.94)},${py(1)}`}
+        fill="none"
+        stroke="#fff"
+        strokeWidth={0.8}
+      />
+
+      {/* Lane outline */}
+      <rect
+        x={px(0.34)}
+        y={py(0.596)}
+        width={px(0.32)}
+        height={py(0.404)}
+        fill="none"
+        stroke="#fff"
+        strokeWidth={0.8}
+      />
+
+      {/* Free-throw line */}
+      <line
+        x1={px(0.34)}
+        y1={py(0.596)}
+        x2={px(0.66)}
+        y2={py(0.596)}
+        stroke="#fff"
+        strokeWidth={0.8}
+      />
+
+      {/* Free-throw circle — upper semicircle toward half-court (sweep=1=CW=upward) */}
+      {/* Radius = 6ft = px(0.12); endpoints at lane-center ± radius */}
+      <path
+        d={`M ${px(0.38)},${py(0.596)} A ${px(0.12)},${px(0.12)} 0 0 1 ${px(0.62)},${py(0.596)}`}
+        fill="none"
+        stroke="#fff"
+        strokeWidth={0.8}
+      />
+
+      {/* Backboard (4ft from baseline, 6ft wide) */}
+      <line
+        x1={px(0.44)}
+        y1={py(0.915)}
+        x2={px(0.56)}
+        y2={py(0.915)}
+        stroke="#fff"
+        strokeWidth={1}
+      />
+
+      {/* Restricted area arc — 4ft radius, toward half-court (sweep=1=CW=upward) */}
+      <path
+        d={`M ${px(0.42)},${py(0.888)} A ${px(0.08)},${px(0.08)} 0 0 1 ${px(0.58)},${py(0.888)}`}
         fill="none"
         stroke="#fff"
         strokeWidth={0.8}
       />
 
       {/* Basket */}
-      <circle cx={px(0.5)} cy={py(0.888)} r={3} fill="none" stroke="#fff" strokeWidth={0.8} />
+      <circle cx={px(0.5)} cy={py(0.888)} r={compact ? 2 : 3} fill="none" stroke="#fff" strokeWidth={0.8} />
 
-      {/* Offensive players — white circles with blue fill */}
+      {/* Offensive players — blue fill */}
       {scene.players.offense
         .filter((p) => p.visible)
         .map((p) => (
@@ -104,7 +152,7 @@ function SceneThumbnail({ scene, compact = false }: { scene: Scene; compact?: bo
           />
         ))}
 
-      {/* Defensive players — white circles with dark fill */}
+      {/* Defensive players — dark fill */}
       {scene.players.defense
         .filter((p) => p.visible)
         .map((p) => (
