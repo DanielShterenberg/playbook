@@ -23,6 +23,7 @@
 import { useState } from "react";
 import { useStore } from "@/lib/store";
 import type { DrawingTool } from "@/lib/store";
+import { useTeam } from "@/contexts/TeamContext";
 
 // ---------------------------------------------------------------------------
 // Tool definitions
@@ -207,6 +208,7 @@ function CollapseIcon({ collapsed }: { collapsed: boolean }) {
 export default function DrawingToolsPanel() {
   const selectedTool = useStore((s) => s.selectedTool);
   const setSelectedTool = useStore((s) => s.setSelectedTool);
+  const { role } = useTeam();
 
   /**
    * Collapse state — only meaningful at tablet breakpoint (md–lg).
@@ -217,6 +219,27 @@ export default function DrawingToolsPanel() {
 
   // Keyboard shortcut registration is handled centrally by EditorKeyboardManager
   // (useKeyboardShortcuts hook, issue #82). No listener is registered here.
+
+  // Viewers see a collapsed read-only badge instead of the drawing tools (#76)
+  if (role === "viewer") {
+    return (
+      <aside
+        className="flex flex-col items-center border-r border-gray-200 bg-gray-50 w-8"
+        aria-label="View only — drawing tools disabled"
+        title="You have viewer access — editing is disabled"
+      >
+        <div
+          className="mt-3 flex h-6 w-6 items-center justify-center rounded text-gray-400"
+          aria-hidden="true"
+        >
+          <svg width={14} height={14} viewBox="0 0 20 20" fill="currentColor">
+            <path d="M10 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />
+            <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z" clipRule="evenodd" />
+          </svg>
+        </div>
+      </aside>
+    );
+  }
 
   return (
     <aside

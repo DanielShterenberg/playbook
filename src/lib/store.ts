@@ -46,6 +46,7 @@ export type PlayerDisplayMode = "numbers" | "names" | "abbreviations";
 export interface AppStore {
   // ------- Playbook list (issue #67 / #69) -------
   plays: Play[];
+  setPlays: (plays: Play[]) => void;
   addPlay: (play: Play) => void;
   removePlay: (playId: string) => void;
   duplicatePlay: (playId: string) => void;
@@ -215,6 +216,8 @@ export const useStore = create<AppStore>()(
     // =======================================================================
 
     plays: [],
+
+    setPlays: (plays) => set({ plays }),
 
     addPlay: (play) =>
       set((state) => ({ plays: [...state.plays, play] })),

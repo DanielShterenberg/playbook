@@ -135,9 +135,11 @@ export interface CourtWithPlayersProps {
    */
   variant?: CourtVariant;
   className?: string;
+  /** When true, player/ball dragging is disabled and the store is not updated. */
+  readOnly?: boolean;
 }
 
-export default function CourtWithPlayers({ sceneId, scene, variant = "half", className }: CourtWithPlayersProps) {
+export default function CourtWithPlayers({ sceneId, scene, variant = "half", className, readOnly = false }: CourtWithPlayersProps) {
   const updatePlayerState  = useStore((s) => s.updatePlayerState);
   const updateBallState    = useStore((s) => s.updateBallState);
   const displayMode        = useStore((s) => s.playerDisplayMode);
@@ -507,8 +509,8 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
           viewBox={`0 0 ${courtSize.width} ${courtSize.height}`}
           aria-hidden="true"
         >
-          {/* Enable pointer events only on the tokens themselves */}
-          <g style={{ pointerEvents: "all" }}>
+          {/* Enable pointer events only on the tokens themselves (disabled in readOnly mode) */}
+          <g style={{ pointerEvents: readOnly ? "none" : "all" }}>
             {/* Defensive players (rendered first = underneath offensive) */}
             {defensePx
               ?.filter((p) => {
@@ -573,10 +575,8 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
         </svg>
       )}
 
-      {/* Annotation drawing layer — sits above the player SVG so pointer events
-          can be captured by the active drawing tool without interfering with
-          player dragging when the select tool is active. */}
-      {courtSize && (
+      {/* Annotation drawing layer — hidden in readOnly mode (shared view). */}
+      {courtSize && !readOnly && (
         <AnnotationLayer
           width={courtSize.width}
           height={courtSize.height}

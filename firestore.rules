@@ -1,14 +1,13 @@
 rules_version = '2';
 
-// Firestore security rules — implements issue #85.
+// Firestore security rules — implements issues #85 and #76.
 //
 // Data model:
-//   users/{userId}                — user profile
-//   teams/{teamId}                — team document (members stored as map)
-//   teams/{teamId}/plays/{playId} — play documents
-//   sharedPlays/{shareId}         — lightweight read-only share tokens (public)
-//
-// Team members map shape: { [userId]: { role: "admin" | "editor" | "viewer" } }
+//   users/{userId}           — user profile (teamId, role cached here)
+//   teams/{teamId}           — team document
+//                              members map: { [userId]: { role: "admin"|"editor"|"viewer" } }
+//   plays/{playId}           — flat play collection (teamId="" for solo users)
+//   sharedPlays/{shareToken} — lightweight public share token { playId, createdBy, snapshot }
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -30,7 +29,7 @@ service cloud.firestore {
     }
 
     function isMember(teamId) {
-      return isSignedIn() && request.auth.uid in teamData(teamId).members;
+      return isSignedIn() && teamId != "" && request.auth.uid in teamData(teamId).members;
     }
 
     function memberRole(teamId) {
@@ -53,42 +52,64 @@ service cloud.firestore {
       allow read:   if isOwner(userId);
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
-      // No delete — soft-delete is handled by the app if needed
     }
 
     // -----------------------------------------------------------------------
-    // Teams
+    // Teams (#74, #75, #76)
     // -----------------------------------------------------------------------
 
     match /teams/{teamId} {
-      // Any team member may read
+      // Any team member may read the team document
       allow read: if isMember(teamId);
 
       // Only the creator can create a new team document
       allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
 
-      // Only admin can update team settings (name, roster, inviteCode)
-      allow update: if isAdmin(teamId);
-
-      // Plays subcollection
-      match /plays/{playId} {
-        allow read:   if isMember(teamId);
-        allow create: if isEditor(teamId);
-        allow update: if isEditor(teamId);
-        // Only admin or the play's creator may delete
-        allow delete: if isAdmin(teamId) || resource.data.createdBy == request.auth.uid;
-      }
+      // Admins can update team settings; any signed-in user can join via invite code
+      allow update: if isSignedIn() && (
+        isAdmin(teamId) ||
+        // Allow a user to add themselves to the members map (join via invite code)
+        request.resource.data.members.keys().hasOnly(resource.data.members.keys().concat([request.auth.uid]))
+      );
     }
 
     // -----------------------------------------------------------------------
-    // Shared play tokens (public read, authenticated write)
+    // Plays (#68, #76)
     // -----------------------------------------------------------------------
 
-    match /sharedPlays/{shareId} {
+    match /plays/{playId} {
+      // Signed-in owner or team member can read
+      allow read: if isSignedIn() && (
+        resource.data.createdBy == request.auth.uid ||
+        isMember(resource.data.teamId)
+      );
+
+      // Authenticated users can create their own plays
+      allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
+
+      // Creator or team editor can update
+      allow update: if isSignedIn() && (
+        resource.data.createdBy == request.auth.uid ||
+        isEditor(resource.data.teamId)
+      );
+
+      // Creator or team admin can delete
+      allow delete: if isSignedIn() && (
+        resource.data.createdBy == request.auth.uid ||
+        isAdmin(resource.data.teamId)
+      );
+    }
+
+    // -----------------------------------------------------------------------
+    // Shared play tokens (public read-only, #78)
+    // -----------------------------------------------------------------------
+
+    match /sharedPlays/{shareToken} {
       // Anyone (even unauthenticated) can read a share token
       allow read: if true;
-      // Only authenticated users who own the referenced play can create/delete
+      // Only authenticated users can create share tokens
       allow create: if isSignedIn();
+      // Only the token creator can delete it
       allow delete: if isSignedIn() && resource.data.createdBy == request.auth.uid;
     }
   }
