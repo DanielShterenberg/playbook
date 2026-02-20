@@ -95,7 +95,7 @@ export default function NewPlayModal({ onClose }: NewPlayModalProps) {
     setSelectedSceneId(play.scenes[0].id);
 
     // Persist to Firestore in the background — don't block navigation
-    savePlay(play).catch(() => {});
+    savePlay(play).catch((err) => console.error("[Firestore] savePlay failed:", err));
 
     router.push(`/play/${play.id}`);
     onClose();

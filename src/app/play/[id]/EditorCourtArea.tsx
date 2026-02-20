@@ -24,6 +24,7 @@ import CourtWithPlayers from "@/components/players/CourtWithPlayers";
 import type { CourtVariant } from "@/components/court/Court";
 import { loadPlay } from "@/lib/db";
 import { useTeam } from "@/contexts/TeamContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface EditorCourtAreaProps {
   playId?: string;
@@ -35,6 +36,10 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
   const courtType = useStore((s) => s.currentPlay?.courtType ?? "half");
   const { role } = useTeam();
   const isReadOnly = role === "viewer";
+  // Wait for Firebase Auth to restore the previous session before hitting
+  // Firestore. Without this, the getDoc call runs before the auth token is
+  // available and is rejected by Firestore security rules.
+  const { loading: authLoading } = useAuth();
 
   const [notFound, setNotFound] = useState(false);
   const [loadingFromDb, setLoadingFromDb] = useState(false);
@@ -44,6 +49,7 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
   const initialized = useRef(false);
 
   useEffect(() => {
+    if (authLoading) return; // auth not yet resolved — wait before touching Firestore
     if (initialized.current) return;
     initialized.current = true;
 
@@ -95,7 +101,7 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
     addPlay(play);
     setCurrentPlay(play);
     setSelectedSceneId(play.scenes[0].id);
-  }, [playId]);
+  }, [playId, authLoading]);
 
   if (loadingFromDb) {
     return (
