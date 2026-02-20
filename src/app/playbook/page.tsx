@@ -19,6 +19,7 @@ import NewPlayModal from "@/components/playbook/NewPlayModal";
 import PlayCard from "@/components/playbook/PlayCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { signOut } from "@/lib/auth";
+import { loadPlaysForUser } from "@/lib/db";
 
 const CATEGORY_FILTERS: { value: Category | "all"; label: string }[] = [
   { value: "all", label: "All" },
@@ -33,9 +34,11 @@ const CATEGORY_FILTERS: { value: Category | "all"; label: string }[] = [
 
 export default function PlaybookPage() {
   const plays = useStore((s) => s.plays);
+  const setPlays = useStore((s) => s.setPlays);
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
+  const [, setLoadingPlays] = useState(false);
 
   // Auth guard — redirect to sign-in if not authenticated
   const { user, loading } = useAuth();
@@ -43,6 +46,24 @@ export default function PlaybookPage() {
   useEffect(() => {
     if (!loading && !user) router.replace("/sign-in");
   }, [user, loading, router]);
+
+  // Load plays from Firestore once auth resolves
+  useEffect(() => {
+    if (!user) return;
+    setLoadingPlays(true);
+    const fetchPlays = async () => {
+      try {
+        // For now we load by userId; team-based loading is wired in PR 3.
+        const fetched = await loadPlaysForUser(user.uid);
+        setPlays(fetched);
+      } catch {
+        // Silently fall back to whatever is in the local store
+      } finally {
+        setLoadingPlays(false);
+      }
+    };
+    void fetchPlays();
+  }, [user, setPlays]);
 
   // User avatar dropdown
   const [showUserMenu, setShowUserMenu] = useState(false);

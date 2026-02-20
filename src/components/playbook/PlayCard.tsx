@@ -20,6 +20,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
 import type { Play, Scene } from "@/lib/types";
+import { deletePlay, savePlay } from "@/lib/db";
 
 // ---------------------------------------------------------------------------
 // Inline mini court thumbnail (same logic as SceneStrip's SceneThumbnail)
@@ -203,6 +204,8 @@ export default function PlayCard({ play }: PlayCardProps) {
       return;
     }
     removePlay(play.id);
+    // Fire-and-forget Firestore delete
+    deletePlay(play.id).catch(() => {});
   }
 
   function handleDeleteBlur() {
@@ -273,7 +276,15 @@ export default function PlayCard({ play }: PlayCardProps) {
           {/* Action buttons: duplicate + delete */}
           <div style={{ display: "flex", gap: 4, flexShrink: 0, opacity: hovered ? 1 : 0, pointerEvents: hovered ? "auto" : "none", transition: "opacity 0.15s" }}>
             <button
-              onClick={(e) => { e.stopPropagation(); duplicatePlay(play.id); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                duplicatePlay(play.id);
+                // Persist the newly created copy to Firestore.
+                // The copy is always appended last in the plays list.
+                const { plays } = useStore.getState();
+                const copy = plays[plays.length - 1];
+                if (copy && copy.id !== play.id) savePlay(copy).catch(() => {});
+              }}
               aria-label="Duplicate play"
               title="Duplicate play"
               style={{
