@@ -23,6 +23,7 @@ import { useStore, createDefaultPlay, selectEditorScene } from "@/lib/store";
 import CourtWithPlayers from "@/components/players/CourtWithPlayers";
 import type { CourtVariant } from "@/components/court/Court";
 import { loadPlay } from "@/lib/db";
+import { useTeam } from "@/contexts/TeamContext";
 
 interface EditorCourtAreaProps {
   playId?: string;
@@ -32,6 +33,8 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
   const scene = useStore(selectEditorScene);
   const selectedSceneId = useStore((s) => s.selectedSceneId);
   const courtType = useStore((s) => s.currentPlay?.courtType ?? "half");
+  const { role } = useTeam();
+  const isReadOnly = role === "viewer";
 
   const [notFound, setNotFound] = useState(false);
   const [loadingFromDb, setLoadingFromDb] = useState(false);
@@ -147,6 +150,7 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
       scene={scene}
       variant={courtType as CourtVariant}
       className="w-full max-w-full md:max-w-xl lg:max-w-3xl"
+      readOnly={isReadOnly}
     />
   );
 }
