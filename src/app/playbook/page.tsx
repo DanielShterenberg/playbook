@@ -18,8 +18,10 @@ import type { Category } from "@/lib/types";
 import NewPlayModal from "@/components/playbook/NewPlayModal";
 import PlayCard from "@/components/playbook/PlayCard";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTeam } from "@/contexts/TeamContext";
 import { signOut } from "@/lib/auth";
-import { loadPlaysForUser } from "@/lib/db";
+import { loadPlaysForUser, loadPlaysForTeam } from "@/lib/db";
+import CreateTeamModal from "@/components/playbook/CreateTeamModal";
 
 const CATEGORY_FILTERS: { value: Category | "all"; label: string }[] = [
   { value: "all", label: "All" },
@@ -36,25 +38,29 @@ export default function PlaybookPage() {
   const plays = useStore((s) => s.plays);
   const setPlays = useStore((s) => s.setPlays);
   const [showModal, setShowModal] = useState(false);
+  const [showCreateTeam, setShowCreateTeam] = useState(false);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
   const [, setLoadingPlays] = useState(false);
 
   // Auth guard — redirect to sign-in if not authenticated
   const { user, loading } = useAuth();
+  const { teamId, role, team } = useTeam();
   const router = useRouter();
   useEffect(() => {
     if (!loading && !user) router.replace("/sign-in");
   }, [user, loading, router]);
 
-  // Load plays from Firestore once auth resolves
+  // Load plays from Firestore once auth + team info resolves
   useEffect(() => {
     if (!user) return;
     setLoadingPlays(true);
     const fetchPlays = async () => {
       try {
-        // For now we load by userId; team-based loading is wired in PR 3.
-        const fetched = await loadPlaysForUser(user.uid);
+        // Load team plays if the user is in a team; otherwise load personal plays.
+        const fetched = teamId
+          ? await loadPlaysForTeam(teamId)
+          : await loadPlaysForUser(user.uid);
         setPlays(fetched);
       } catch {
         // Silently fall back to whatever is in the local store
@@ -63,7 +69,7 @@ export default function PlaybookPage() {
       }
     };
     void fetchPlays();
-  }, [user, setPlays]);
+  }, [user, teamId, setPlays]);
 
   // User avatar dropdown
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -160,6 +166,69 @@ export default function PlaybookPage() {
             >
               Playbook
             </h1>
+          </div>
+
+          {/* Team badge / Create Team button */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {team ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    padding: "4px 10px",
+                    borderRadius: 99,
+                    background: "#EEF2FF",
+                    color: "#4338CA",
+                    maxWidth: 160,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={`Team: ${team.name} · Your role: ${role ?? "viewer"}`}
+                >
+                  {team.name}
+                </span>
+                {(role === "admin") && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(
+                        `${window.location.origin}/join/${team.inviteCode}`,
+                      ).catch(() => {});
+                    }}
+                    title="Copy invite link"
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: 99,
+                      border: "1.5px solid #E5E7EB",
+                      background: "#fff",
+                      fontSize: 11,
+                      fontWeight: 500,
+                      color: "#6B7280",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Copy invite
+                  </button>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowCreateTeam(true)}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 8,
+                  border: "1.5px solid #E5E7EB",
+                  background: "#fff",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: "#374151",
+                  cursor: "pointer",
+                }}
+              >
+                + Create Team
+              </button>
+            )}
           </div>
 
           <button
@@ -525,6 +594,9 @@ export default function PlaybookPage() {
 
       {/* New Play Modal */}
       {showModal && <NewPlayModal onClose={() => setShowModal(false)} />}
+
+      {/* Create Team Modal */}
+      {showCreateTeam && <CreateTeamModal onClose={() => setShowCreateTeam(false)} />}
     </main>
   );
 }

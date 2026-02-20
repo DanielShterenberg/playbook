@@ -15,6 +15,8 @@ import Link from "next/link";
 import { useStore } from "@/lib/store";
 import type { Category, CourtType } from "@/lib/types";
 import { exportPlayToPdf } from "@/lib/exportPdf";
+import { useAuth } from "@/contexts/AuthContext";
+import { createShareToken } from "@/lib/team";
 
 const CATEGORY_OPTIONS: { value: Category; label: string }[] = [
   { value: "offense", label: "Offense" },
@@ -32,6 +34,7 @@ interface EditorHeaderProps {
 }
 
 export default function EditorHeader({ playId, children }: EditorHeaderProps) {
+  const { user } = useAuth();
   const currentPlay = useStore((s) => s.currentPlay);
   const updatePlayInList = useStore((s) => s.updatePlayInList);
   const updatePlayMeta = useStore((s) => s.updatePlayMeta);
@@ -50,6 +53,8 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
   // ---------------------------------------------------------------------------
 
   const [isExporting, setIsExporting] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareMsg, setShareMsg] = useState<string | null>(null);
 
   async function handleExportPdf() {
     if (!currentPlay || isExporting) return;
@@ -58,6 +63,23 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
       await exportPlayToPdf(currentPlay);
     } finally {
       setIsExporting(false);
+    }
+  }
+
+  async function handleShare() {
+    if (!currentPlay || !user || isSharing) return;
+    setIsSharing(true);
+    setShareMsg(null);
+    try {
+      const token = await createShareToken(currentPlay, user.uid);
+      const url = `${window.location.origin}/view/${token}`;
+      await navigator.clipboard.writeText(url);
+      setShareMsg("Link copied!");
+    } catch {
+      setShareMsg("Failed to create link");
+    } finally {
+      setIsSharing(false);
+      setTimeout(() => setShareMsg(null), 3000);
     }
   }
 
@@ -218,6 +240,35 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
             )}
             {isExporting ? "Exporting…" : "PDF"}
           </button>
+
+          {/* Share button (#78) */}
+          <button
+            onClick={handleShare}
+            disabled={!currentPlay || !user || isSharing}
+            aria-label="Share play"
+            title="Create a shareable read-only link"
+            className="flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {isSharing ? (
+              <svg
+                width={11}
+                height={11}
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+                className="animate-spin"
+              >
+                <circle cx={12} cy={12} r={10} stroke="currentColor" strokeWidth={3} strokeDasharray="31.4 31.4" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg width={11} height={11} viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path d="M13 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM7 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM13 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M9 8.5l3-2M9 11.5l3 2" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
+              </svg>
+            )}
+            {shareMsg ?? (isSharing ? "Sharing…" : "Share")}
+          </button>
+
           {children}
         </div>
       </header>

@@ -30,6 +30,19 @@ import type { Play } from "./types";
 // Serialisation helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Serialise a play for storage in the sharedPlays snapshot field.
+ * Unlike serialisePlay, this returns a plain JS object (not Firestore DocumentData)
+ * so it can be stored as a nested map inside another document.
+ */
+export function serialisePlayForShare(play: Play): Record<string, unknown> {
+  return {
+    ...play,
+    createdAt: play.createdAt instanceof Date ? play.createdAt.toISOString() : String(play.createdAt),
+    updatedAt: play.updatedAt instanceof Date ? play.updatedAt.toISOString() : String(play.updatedAt),
+  };
+}
+
 /** Strip client-side Date objects before writing to Firestore. */
 function serialisePlay(play: Play): DocumentData {
   return {
