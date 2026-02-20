@@ -22,6 +22,7 @@ import Link from "next/link";
 import { useStore, createDefaultPlay, selectEditorScene } from "@/lib/store";
 import CourtWithPlayers from "@/components/players/CourtWithPlayers";
 import type { CourtVariant } from "@/components/court/Court";
+import { loadPlay } from "@/lib/db";
 
 interface EditorCourtAreaProps {
   playId?: string;
@@ -33,6 +34,7 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
   const courtType = useStore((s) => s.currentPlay?.courtType ?? "half");
 
   const [notFound, setNotFound] = useState(false);
+  const [loadingFromDb, setLoadingFromDb] = useState(false);
 
   // Guard: only initialise once to prevent the re-render cycle where setting
   // currentPlay triggers the effect to run again with a non-matching playId.
@@ -66,9 +68,22 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
         setSelectedSceneId(found.scenes[0].id);
         return;
       }
-      // Play not found — store is in-memory only, so this happens after a page
-      // refresh. Show a friendly message instead of silently redirecting (#84).
-      setNotFound(true);
+
+      // Not in local store — try Firestore (e.g. after page refresh).
+      setLoadingFromDb(true);
+      loadPlay(playId)
+        .then((remote) => {
+          if (remote) {
+            const { addPlay, setCurrentPlay, setSelectedSceneId } = useStore.getState();
+            addPlay(remote);
+            setCurrentPlay(remote);
+            setSelectedSceneId(remote.scenes[0]?.id ?? null);
+          } else {
+            setNotFound(true);
+          }
+        })
+        .catch(() => setNotFound(true))
+        .finally(() => setLoadingFromDb(false));
       return;
     }
 
@@ -78,6 +93,24 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
     setCurrentPlay(play);
     setSelectedSceneId(play.scenes[0].id);
   }, [playId]);
+
+  if (loadingFromDb) {
+    return (
+      <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
+        <svg
+          width={16}
+          height={16}
+          viewBox="0 0 24 24"
+          fill="none"
+          aria-hidden="true"
+          className="animate-spin"
+        >
+          <circle cx={12} cy={12} r={10} stroke="currentColor" strokeWidth={3} strokeDasharray="31 31" strokeLinecap="round" />
+        </svg>
+        Loading play…
+      </div>
+    );
+  }
 
   if (notFound) {
     return (
@@ -89,8 +122,8 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
         </svg>
         <p className="text-base font-semibold text-gray-700">Play not found</p>
         <p className="max-w-xs text-sm text-gray-400">
-          This play could not be loaded. Plays are stored in memory — refreshing the page clears
-          them. Return to the playbook to open a play or create a new one.
+          This play could not be found. It may have been deleted or you may not have access to it.
+          Return to the playbook to open a play or create a new one.
         </p>
         <Link
           href="/playbook"

@@ -11,6 +11,7 @@ import UndoRedoButtons from "@/components/editor/UndoRedoButtons";
 import ExportMenu from "@/components/editor/ExportMenu";
 import MobileViewerBanner from "@/components/editor/MobileViewerBanner";
 import EditorHeader from "./EditorHeader";
+import SaveIndicator from "@/components/editor/SaveIndicator";
 
 interface PlayEditorPageProps {
   params: { id: string };
@@ -41,6 +42,8 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
           {/* Undo / Redo buttons (issue #83) */}
           <UndoRedoButtons />
           <div className="mx-1 h-5 w-px bg-gray-200" aria-hidden="true" />
+          {/* Auto-save indicator (issue #68) */}
+          <SaveIndicator />
           <button
             className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
             title="Save (Ctrl+S)"
