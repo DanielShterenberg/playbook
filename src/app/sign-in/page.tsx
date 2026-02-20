@@ -14,7 +14,7 @@
  * Already-authenticated users are redirected away immediately.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -26,7 +26,9 @@ import {
 
 type Mode = "signin" | "signup";
 
-export default function SignInPage() {
+// useSearchParams() must be inside a Suspense boundary in Next.js App Router.
+// SignInContent contains the real logic; the exported default wraps it.
+function SignInContent() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -290,6 +292,14 @@ export default function SignInPage() {
         </button>
       </div>
     </main>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignInContent />
+    </Suspense>
   );
 }
 
