@@ -1,3 +1,4 @@
+import EditorAuthGate from "./EditorAuthGate";
 import EditorCourtArea from "./EditorCourtArea";
 import DrawingToolsPanel from "@/components/editor/DrawingToolsPanel";
 import PlayerRosterPanel from "@/components/editor/PlayerRosterPanel";
@@ -17,6 +18,7 @@ interface PlayEditorPageProps {
 
 export default function PlayEditorPage({ params }: PlayEditorPageProps) {
   return (
+    <EditorAuthGate>
     <main className="flex h-screen flex-col overflow-hidden">
       {/*
        * Centralised keyboard shortcut handler (issue #82).
@@ -93,5 +95,6 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
         <SceneStrip />
       </div>
     </main>
+    </EditorAuthGate>
   );
 }

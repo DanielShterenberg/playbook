@@ -11,11 +11,14 @@
  * State is stored in the Zustand store (Firebase comes later in #45/#68).
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
 import type { Category } from "@/lib/types";
 import NewPlayModal from "@/components/playbook/NewPlayModal";
 import PlayCard from "@/components/playbook/PlayCard";
+import { useAuth } from "@/contexts/AuthContext";
+import { signOut } from "@/lib/auth";
 
 const CATEGORY_FILTERS: { value: Category | "all"; label: string }[] = [
   { value: "all", label: "All" },
@@ -33,6 +36,34 @@ export default function PlaybookPage() {
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
+
+  // Auth guard — redirect to sign-in if not authenticated
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  useEffect(() => {
+    if (!loading && !user) router.replace("/sign-in");
+  }, [user, loading, router]);
+
+  // User avatar dropdown
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!showUserMenu) return;
+    function handleClick(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showUserMenu]);
+
+  async function handleSignOut() {
+    await signOut();
+    router.replace("/sign-in");
+  }
+
+  if (loading || !user) return null;
 
   return (
     <main
@@ -133,6 +164,85 @@ export default function PlaybookPage() {
             <span style={{ fontSize: 18, lineHeight: 1, marginTop: -1 }}>+</span>
             New Play
           </button>
+
+          {/* User avatar + dropdown */}
+          <div ref={userMenuRef} style={{ position: "relative" }}>
+            <button
+              onClick={() => setShowUserMenu((v) => !v)}
+              aria-label="User menu"
+              aria-expanded={showUserMenu}
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: "50%",
+                border: "2px solid #E5E7EB",
+                background: "#4F46E5",
+                color: "#fff",
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                overflow: "hidden",
+                padding: 0,
+              }}
+            >
+              {user.photoURL ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={user.photoURL} alt="" width={34} height={34} style={{ borderRadius: "50%" }} />
+              ) : (
+                (user.displayName ?? user.email ?? "?")[0].toUpperCase()
+              )}
+            </button>
+
+            {showUserMenu && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 6px)",
+                  right: 0,
+                  background: "#fff",
+                  border: "1px solid #E5E7EB",
+                  borderRadius: 10,
+                  boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
+                  minWidth: 200,
+                  zIndex: 50,
+                  padding: "6px 0",
+                }}
+                role="menu"
+              >
+                <div style={{ padding: "8px 14px 10px", borderBottom: "1px solid #F3F4F6" }}>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#111827" }}>
+                    {user.displayName ?? "User"}
+                  </p>
+                  <p style={{ margin: "1px 0 0", fontSize: 12, color: "#6B7280" }}>
+                    {user.email}
+                  </p>
+                </div>
+                <button
+                  onClick={handleSignOut}
+                  role="menuitem"
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "8px 14px",
+                    border: "none",
+                    background: "none",
+                    fontSize: 13,
+                    color: "#374151",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "#F9FAFB"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
