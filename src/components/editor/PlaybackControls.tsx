@@ -147,19 +147,26 @@ export default function PlaybackControls() {
         if (stepIndex < sortedGroups.length - 1) {
           state.setCurrentStep(sortedGroups[stepIndex + 1].step);
         } else {
-          // End of last step — move to next scene
+          // End of last step — move to next scene.
+          // Use useStore.setState directly (not setCurrentSceneIndex) to avoid
+          // the action's isPlaying:false side-effect which would kill the loop.
           const nextSceneIdx = sceneIdx + 1;
           if (nextSceneIdx < scenes.length) {
-            state.setCurrentSceneIndex(nextSceneIdx);
-            // Set to first step of next scene
             const nextScene = scenes[nextSceneIdx];
             const nextSteps = [...nextScene.timingGroups].sort((a, b) => a.step - b.step);
-            state.setCurrentStep(nextSteps[0]?.step ?? 1);
+            useStore.setState({
+              currentSceneIndex: nextSceneIdx,
+              currentStep: nextSteps[0]?.step ?? 1,
+              selectedSceneId: nextScene.id,
+            });
           } else if (state.loop) {
-            state.setCurrentSceneIndex(0);
             const firstScene = scenes[0];
             const firstSteps = [...firstScene.timingGroups].sort((a, b) => a.step - b.step);
-            state.setCurrentStep(firstSteps[0]?.step ?? 1);
+            useStore.setState({
+              currentSceneIndex: 0,
+              currentStep: firstSteps[0]?.step ?? 1,
+              selectedSceneId: firstScene.id,
+            });
           } else {
             // Playback complete
             state.pausePlayback();

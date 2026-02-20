@@ -406,8 +406,17 @@ export default function AnnotationLayer({
   const setSelectedAnnotationId = useStore((s) => s.setSelectedAnnotationId);
   const addAnnotation = useStore((s) => s.addAnnotation);
   const removeAnnotation = useStore((s) => s.removeAnnotation);
+  const isPlaying = useStore((s) => s.isPlaying);
+  const currentStep = useStore((s) => s.currentStep);
   const scene = useStore(selectEditorScene);
-  const annotations = selectAllAnnotations(scene);
+
+  // During playback: progressive reveal — show only annotations from steps 1..currentStep.
+  // While editing: show all annotations (with step badges when there are multiple steps).
+  const annotations = isPlaying
+    ? (scene?.timingGroups ?? [])
+        .filter((g) => g.step <= currentStep)
+        .flatMap((g) => g.annotations)
+    : selectAllAnnotations(scene);
 
   // Build a map from annotation id → timing step for badge display
   const annotationStepMap = new Map<string, number>();
