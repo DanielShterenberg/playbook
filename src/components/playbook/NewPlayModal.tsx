@@ -20,6 +20,9 @@ import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
 import { createDefaultPlay } from "@/lib/store";
 import type { Category, CourtType } from "@/lib/types";
+import { useAuth } from "@/contexts/AuthContext";
+import { useTeam } from "@/contexts/TeamContext";
+import { savePlay } from "@/lib/db";
 
 interface NewPlayModalProps {
   onClose: () => void;
@@ -37,6 +40,8 @@ const CATEGORY_OPTIONS: { value: Category; label: string }[] = [
 
 export default function NewPlayModal({ onClose }: NewPlayModalProps) {
   const router = useRouter();
+  const { user } = useAuth();
+  const { teamId } = useTeam();
   const addPlay = useStore((s) => s.addPlay);
   const setCurrentPlay = useStore((s) => s.setCurrentPlay);
   const setSelectedSceneId = useStore((s) => s.setSelectedSceneId);
@@ -68,7 +73,7 @@ export default function NewPlayModal({ onClose }: NewPlayModalProps) {
     if (e.target === overlayRef.current) onClose();
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = title.trim();
     if (!trimmed) {
@@ -82,10 +87,16 @@ export default function NewPlayModal({ onClose }: NewPlayModalProps) {
     play.description = description.trim();
     play.courtType = courtType;
     play.category = category;
+    if (user) play.createdBy = user.uid;
+    if (teamId) play.teamId = teamId;
 
     addPlay(play);
     setCurrentPlay(play);
     setSelectedSceneId(play.scenes[0].id);
+
+    // Persist to Firestore in the background — don't block navigation
+    savePlay(play).catch((err) => console.error("[Firestore] savePlay failed:", err));
+
     router.push(`/play/${play.id}`);
     onClose();
   }
