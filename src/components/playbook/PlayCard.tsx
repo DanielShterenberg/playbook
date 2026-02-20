@@ -185,7 +185,6 @@ export default function PlayCard({ play }: PlayCardProps) {
   const setCurrentPlay = useStore((s) => s.setCurrentPlay);
   const removePlay = useStore((s) => s.removePlay);
   const duplicatePlay = useStore((s) => s.duplicatePlay);
-  const getPlayById = useStore((s) => s.getPlayById);
   const [hovered, setHovered] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 

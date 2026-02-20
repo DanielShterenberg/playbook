@@ -38,7 +38,7 @@ export default function PlaybookPage() {
   const [showModal, setShowModal] = useState(false);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
-  const [loadingPlays, setLoadingPlays] = useState(false);
+  const [, setLoadingPlays] = useState(false);
 
   // Auth guard — redirect to sign-in if not authenticated
   const { user, loading } = useAuth();
