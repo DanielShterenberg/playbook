@@ -260,12 +260,13 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
         userSelect: "none",
       }}
     >
-      {/* Thumbnail */}
+      {/* Thumbnail — action buttons float as an overlay in the top-right corner */}
       <div
         style={{
           background: "#F5F3EF",
           padding: "12px 12px 0",
           lineHeight: 0,
+          position: "relative",
         }}
       >
         {firstScene ? (
@@ -280,11 +281,100 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
             }}
           />
         )}
+
+        {/* Action buttons: float over thumbnail, visible on hover */}
+        <div
+          style={{
+            position: "absolute",
+            top: 8,
+            right: 8,
+            display: "flex",
+            gap: 4,
+            opacity: hovered ? 1 : 0,
+            pointerEvents: hovered ? "auto" : "none",
+            transition: "opacity 0.15s",
+          }}
+        >
+          {canAddToTeam && (
+            <button
+              onClick={(e) => { void handleAddToTeam(e); }}
+              aria-label="Add play to team"
+              title="Add to team"
+              disabled={addingToTeam}
+              style={{
+                padding: "3px 8px",
+                borderRadius: 6,
+                border: "1px solid #A5B4FC",
+                background: "rgba(255,255,255,0.92)",
+                color: "#4F46E5",
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: addingToTeam ? "default" : "pointer",
+                transition: "all 0.15s",
+                whiteSpace: "nowrap",
+                opacity: addingToTeam ? 0.6 : 1,
+              }}
+              onMouseEnter={(e) => { if (!addingToTeam) { (e.currentTarget as HTMLButtonElement).style.background = "#EEF2FF"; } }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.92)"; }}
+            >
+              {addingToTeam ? "Adding…" : "+ Team"}
+            </button>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              duplicatePlay(play.id);
+              // Persist the newly created copy to Firestore.
+              // The copy is always appended last in the plays list.
+              const { plays } = useStore.getState();
+              const copy = plays[plays.length - 1];
+              if (copy && copy.id !== play.id) savePlay(copy).catch(() => {});
+            }}
+            aria-label="Duplicate play"
+            title="Duplicate play"
+            style={{
+              padding: "3px 8px",
+              borderRadius: 6,
+              border: "1px solid #E5E7EB",
+              background: "rgba(255,255,255,0.92)",
+              color: "#9CA3AF",
+              fontSize: 12,
+              fontWeight: 500,
+              cursor: "pointer",
+              transition: "all 0.15s",
+              whiteSpace: "nowrap",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#4F46E5"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#A5B4FC"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#9CA3AF"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#E5E7EB"; }}
+          >
+            Copy
+          </button>
+          <button
+            onClick={handleDelete}
+            onBlur={handleDeleteBlur}
+            aria-label={confirmDelete ? "Confirm delete play" : "Delete play"}
+            title={confirmDelete ? "Click again to confirm delete" : "Delete play"}
+            style={{
+              padding: "3px 8px",
+              borderRadius: 6,
+              border: `1px solid ${confirmDelete ? "#FCA5A5" : "#E5E7EB"}`,
+              background: confirmDelete ? "#FEE2E2" : "rgba(255,255,255,0.92)",
+              color: confirmDelete ? "#B91C1C" : "#9CA3AF",
+              fontSize: 12,
+              fontWeight: 500,
+              cursor: "pointer",
+              transition: "all 0.15s",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {confirmDelete ? "Sure?" : "Delete"}
+          </button>
+        </div>
       </div>
 
       {/* Info */}
       <div style={{ padding: "12px 14px 14px", flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+        <div>
           <h3
             style={{
               margin: 0,
@@ -292,91 +382,11 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
               fontWeight: 700,
               color: "#111827",
               lineHeight: 1.3,
-              flex: 1,
-              minWidth: 0,
               overflowWrap: "break-word",
             }}
           >
             {play.title}
           </h3>
-
-          {/* Action buttons: add to team (personal only) + duplicate + delete */}
-          <div style={{ display: "flex", gap: 4, flexShrink: 0, opacity: hovered ? 1 : 0, pointerEvents: hovered ? "auto" : "none", transition: "opacity 0.15s" }}>
-            {canAddToTeam && (
-              <button
-                onClick={(e) => { void handleAddToTeam(e); }}
-                aria-label="Add play to team"
-                title="Add to team"
-                disabled={addingToTeam}
-                style={{
-                  padding: "3px 8px",
-                  borderRadius: 6,
-                  border: "1px solid #A5B4FC",
-                  background: "transparent",
-                  color: "#4F46E5",
-                  fontSize: 12,
-                  fontWeight: 500,
-                  cursor: addingToTeam ? "default" : "pointer",
-                  transition: "all 0.15s",
-                  whiteSpace: "nowrap",
-                  opacity: addingToTeam ? 0.6 : 1,
-                }}
-                onMouseEnter={(e) => { if (!addingToTeam) { (e.currentTarget as HTMLButtonElement).style.background = "#EEF2FF"; } }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
-              >
-                {addingToTeam ? "Adding…" : "+ Team"}
-              </button>
-            )}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                duplicatePlay(play.id);
-                // Persist the newly created copy to Firestore.
-                // The copy is always appended last in the plays list.
-                const { plays } = useStore.getState();
-                const copy = plays[plays.length - 1];
-                if (copy && copy.id !== play.id) savePlay(copy).catch(() => {});
-              }}
-              aria-label="Duplicate play"
-              title="Duplicate play"
-              style={{
-                padding: "3px 8px",
-                borderRadius: 6,
-                border: "1px solid #E5E7EB",
-                background: "transparent",
-                color: "#9CA3AF",
-                fontSize: 12,
-                fontWeight: 500,
-                cursor: "pointer",
-                transition: "all 0.15s",
-                whiteSpace: "nowrap",
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#4F46E5"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#A5B4FC"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#9CA3AF"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#E5E7EB"; }}
-            >
-              Copy
-            </button>
-            <button
-              onClick={handleDelete}
-              onBlur={handleDeleteBlur}
-              aria-label={confirmDelete ? "Confirm delete play" : "Delete play"}
-              title={confirmDelete ? "Click again to confirm delete" : "Delete play"}
-              style={{
-                padding: "3px 8px",
-                borderRadius: 6,
-                border: `1px solid ${confirmDelete ? "#FCA5A5" : "#E5E7EB"}`,
-                background: confirmDelete ? "#FEE2E2" : "transparent",
-                color: confirmDelete ? "#B91C1C" : "#9CA3AF",
-                fontSize: 12,
-                fontWeight: 500,
-                cursor: "pointer",
-                transition: "all 0.15s",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {confirmDelete ? "Sure?" : "Delete"}
-            </button>
-          </div>
         </div>
 
         {play.description && (
