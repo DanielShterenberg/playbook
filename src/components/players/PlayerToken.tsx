@@ -45,7 +45,7 @@ const COLOR_OFFENSE_STROKE = "#FFFFFF";
 const COLOR_DEFENSE_FILL = "#FFFFFF";
 const COLOR_DEFENSE_STROKE = "#1E3A5F"; // dark navy
 const COLOR_TEXT_OFFENSE = "#FFFFFF";
-const COLOR_TEXT_DEFENSE = "#1E3A5F";
+// Defense text color uses the resolved defense color (same as border/X stroke)
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,6 +80,16 @@ export interface PlayerTokenProps {
   playerName?: string;
   /** Token radius in CSS pixels. Defaults to PLAYER_RADIUS (18). */
   radius?: number;
+  /**
+   * Custom fill color for the offense token (overrides COLOR_OFFENSE_FILL).
+   * Only used when side === "offense".
+   */
+  offenseColor?: string;
+  /**
+   * Custom accent color for the defense token (overrides COLOR_DEFENSE_STROKE).
+   * Only used when side === "defense".
+   */
+  defenseColor?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -97,6 +107,8 @@ export default function PlayerToken({
   displayMode = "numbers",
   playerName,
   radius = PLAYER_RADIUS,
+  offenseColor,
+  defenseColor,
 }: PlayerTokenProps) {
   const isDragging = useRef(false);
   const dragStart = useRef<{ mouseX: number; mouseY: number; playerCx: number; playerCy: number }>({
@@ -200,9 +212,11 @@ export default function PlayerToken({
   );
 
   const isOffense = side === "offense";
-  const fillColor = isOffense ? COLOR_OFFENSE_FILL : COLOR_DEFENSE_FILL;
-  const strokeColor = isOffense ? COLOR_OFFENSE_STROKE : COLOR_DEFENSE_STROKE;
-  const textColor = isOffense ? COLOR_TEXT_OFFENSE : COLOR_TEXT_DEFENSE;
+  const resolvedOffenseColor = offenseColor ?? COLOR_OFFENSE_FILL;
+  const resolvedDefenseColor = defenseColor ?? COLOR_DEFENSE_STROKE;
+  const fillColor = isOffense ? resolvedOffenseColor : COLOR_DEFENSE_FILL;
+  const strokeColor = isOffense ? COLOR_OFFENSE_STROKE : resolvedDefenseColor;
+  const textColor = isOffense ? COLOR_TEXT_OFFENSE : resolvedDefenseColor;
   const strokeWidth = isOffense ? 2 : 2.5;
 
   // Build label based on display mode
@@ -259,7 +273,7 @@ export default function PlayerToken({
             y1={-xSize}
             x2={xSize}
             y2={xSize}
-            stroke={COLOR_DEFENSE_STROKE}
+            stroke={resolvedDefenseColor}
             strokeWidth={scaledStrokeWidth}
             strokeLinecap="round"
           />
@@ -268,7 +282,7 @@ export default function PlayerToken({
             y1={-xSize}
             x2={-xSize}
             y2={xSize}
-            stroke={COLOR_DEFENSE_STROKE}
+            stroke={resolvedDefenseColor}
             strokeWidth={scaledStrokeWidth}
             strokeLinecap="round"
           />

@@ -78,13 +78,18 @@ export interface CourtProps {
    */
   onReady?: (payload: CourtReadyPayload) => void;
   className?: string;
+  /**
+   * Optional color for the paint (free-throw lane) fill.
+   * Defaults to "#E07B39" (orange).
+   */
+  paintColor?: string;
 }
 
 // ---------------------------------------------------------------------------
 // Colours
 // ---------------------------------------------------------------------------
 const COLOR_COURT = "#F0C878"; // warm maple
-const COLOR_PAINT = "#E07B39"; // standard orange paint
+const DEFAULT_COLOR_PAINT = "#E07B39"; // standard orange paint
 const COLOR_LINE = "#FFFFFF";  // white lines
 const COLOR_LINE_WIDTH_PX = 2; // base line width — scaled by canvas resolution
 
@@ -100,7 +105,7 @@ const COLOR_LINE_WIDTH_PX = 2; // base line width — scaled by canvas resolutio
  * full court (the far end is drawn with an additional ctx.scale(1,-1) so it
  * appears mirrored / upside-down, which is the correct NBA full-court layout).
  */
-function drawHalfCourtInner(ctx: CanvasRenderingContext2D, W: number, H: number): void {
+function drawHalfCourtInner(ctx: CanvasRenderingContext2D, W: number, H: number, paintColor = DEFAULT_COLOR_PAINT): void {
   const cx = (nx: number) => nx * W;
   const cy = (ny: number) => ny * H;
   const rx = (nr: number) => nr * W;
@@ -117,7 +122,7 @@ function drawHalfCourtInner(ctx: CanvasRenderingContext2D, W: number, H: number)
   // ------------------------------------------------------------------
   // 2. Paint (free-throw lane)
   // ------------------------------------------------------------------
-  ctx.fillStyle = COLOR_PAINT;
+  ctx.fillStyle = paintColor;
   ctx.fillRect(cx(LANE_LEFT), cy(LANE_TOP), cx(LANE_RIGHT) - cx(LANE_LEFT), cy(1) - cy(LANE_TOP));
 
   // ------------------------------------------------------------------
@@ -268,6 +273,7 @@ export function drawCourt(
   cssWidth: number,
   cssHeight: number,
   variant: CourtVariant,
+  paintColor?: string,
 ): void {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
@@ -280,14 +286,14 @@ export function drawCourt(
     // Near basket end (bottom half) — normal orientation
     ctx.save();
     ctx.translate(0, halfH);
-    drawHalfCourtInner(ctx, cssWidth, halfH);
+    drawHalfCourtInner(ctx, cssWidth, halfH, paintColor);
     ctx.restore();
 
     // Far basket end (top half) — mirrored vertically around the centre line
     ctx.save();
     ctx.translate(0, halfH);
     ctx.scale(1, -1);
-    drawHalfCourtInner(ctx, cssWidth, halfH);
+    drawHalfCourtInner(ctx, cssWidth, halfH, paintColor);
     ctx.restore();
 
     // Draw the centre line and full centre circle explicitly to avoid any
@@ -311,7 +317,7 @@ export function drawCourt(
     ctx.restore();
     ctx.stroke();
   } else {
-    drawHalfCourtInner(ctx, cssWidth, cssHeight);
+    drawHalfCourtInner(ctx, cssWidth, cssHeight, paintColor);
   }
 }
 
@@ -319,7 +325,7 @@ export function drawCourt(
 // Component
 // ---------------------------------------------------------------------------
 
-export default function Court({ variant = "half", onReady, className }: CourtProps) {
+export default function Court({ variant = "half", onReady, className, paintColor }: CourtProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -346,7 +352,7 @@ export default function Court({ variant = "half", onReady, className }: CourtPro
       ctx.scale(dpr, dpr);
     }
 
-    drawCourt(canvas, cssWidth, cssHeight, variant);
+    drawCourt(canvas, cssWidth, cssHeight, variant, paintColor);
 
     // Notify parent with coordinate conversion helper and play-area metadata
     if (onReady) {
@@ -367,7 +373,7 @@ export default function Court({ variant = "half", onReady, className }: CourtPro
         playAreaOffsetY,
       });
     }
-  }, [variant, onReady]);
+  }, [variant, onReady, paintColor]);
 
   useEffect(() => {
     draw();
