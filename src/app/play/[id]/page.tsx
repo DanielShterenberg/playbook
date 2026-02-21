@@ -67,7 +67,7 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
         </div>
 
         {/* Court canvas — fills the remaining space */}
-        <div className="flex flex-1 items-center justify-center overflow-auto bg-gray-100 p-2 md:p-4">
+        <div className="flex flex-1 items-center justify-center overflow-auto bg-gray-100 p-0 md:p-4">
           <EditorCourtArea playId={params.id} />
         </div>
 

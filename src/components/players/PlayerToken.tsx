@@ -19,7 +19,7 @@ import type { PlayerDisplayMode } from "@/lib/store";
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Radius of the player token in CSS pixels (independent of DPR). */
+/** Default radius of the player token in CSS pixels (independent of DPR). */
 const PLAYER_RADIUS = 18;
 
 /** Standard position abbreviations for offense (by 1-based position). */
@@ -78,6 +78,8 @@ export interface PlayerTokenProps {
    * Falls back to the position number if absent.
    */
   playerName?: string;
+  /** Token radius in CSS pixels. Defaults to PLAYER_RADIUS (18). */
+  radius?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -94,6 +96,7 @@ export default function PlayerToken({
   courtBounds,
   displayMode = "numbers",
   playerName,
+  radius = PLAYER_RADIUS,
 }: PlayerTokenProps) {
   const isDragging = useRef(false);
   const dragStart = useRef<{ mouseX: number; mouseY: number; playerCx: number; playerCy: number }>({
@@ -105,10 +108,10 @@ export default function PlayerToken({
 
   const clamp = useCallback(
     (x: number, y: number): { x: number; y: number } => ({
-      x: Math.max(PLAYER_RADIUS, Math.min(courtBounds.width - PLAYER_RADIUS, x)),
-      y: Math.max((courtBounds.minY ?? 0) + PLAYER_RADIUS, Math.min(courtBounds.height - PLAYER_RADIUS, y)),
+      x: Math.max(radius, Math.min(courtBounds.width - radius, x)),
+      y: Math.max((courtBounds.minY ?? 0) + radius, Math.min(courtBounds.height - radius, y)),
     }),
-    [courtBounds],
+    [courtBounds, radius],
   );
 
   const handleMouseMove = useCallback(
@@ -214,9 +217,16 @@ export default function PlayerToken({
     label = isOffense ? String(position) : `X${position}`;
   }
 
+  // Scale X-line extent and font proportionally to radius
+  const xSize = Math.round(radius * 7 / PLAYER_RADIUS);
+  const scaledStrokeWidth = Math.max(1.5, strokeWidth * radius / PLAYER_RADIUS);
+
   // Shrink font for long names so they fit inside the token
-  const baseFontSize = isOffense ? 11 : 9;
-  const fontSize = label.length > 2 ? Math.max(6, baseFontSize - (label.length - 2) * 1.5) : baseFontSize;
+  const baseFontSize = Math.max(6, Math.round((isOffense ? 11 : 9) * radius / PLAYER_RADIUS));
+  const fontSize = label.length > 2 ? Math.max(5, baseFontSize - (label.length - 2) * 1.5) : baseFontSize;
+
+  // Defense label sits above the X mark; scale the offset with radius
+  const textDy = isOffense ? 0 : -Math.round(radius * 9 / PLAYER_RADIUS);
 
   return (
     <g
@@ -229,37 +239,37 @@ export default function PlayerToken({
     >
       {/* Drop shadow */}
       <circle
-        r={PLAYER_RADIUS}
+        r={radius}
         cx={1}
         cy={2}
         fill="rgba(0,0,0,0.25)"
       />
       {/* Main circle */}
       <circle
-        r={PLAYER_RADIUS}
+        r={radius}
         fill={fillColor}
         stroke={strokeColor}
-        strokeWidth={strokeWidth}
+        strokeWidth={scaledStrokeWidth}
       />
       {/* Defensive X lines */}
       {!isOffense && (
         <>
           <line
-            x1={-7}
-            y1={-7}
-            x2={7}
-            y2={7}
+            x1={-xSize}
+            y1={-xSize}
+            x2={xSize}
+            y2={xSize}
             stroke={COLOR_DEFENSE_STROKE}
-            strokeWidth={2.5}
+            strokeWidth={scaledStrokeWidth}
             strokeLinecap="round"
           />
           <line
-            x1={7}
-            y1={-7}
-            x2={-7}
-            y2={7}
+            x1={xSize}
+            y1={-xSize}
+            x2={-xSize}
+            y2={xSize}
             stroke={COLOR_DEFENSE_STROKE}
-            strokeWidth={2.5}
+            strokeWidth={scaledStrokeWidth}
             strokeLinecap="round"
           />
         </>
@@ -272,7 +282,7 @@ export default function PlayerToken({
         fontSize={fontSize}
         fontWeight="700"
         fontFamily="system-ui, sans-serif"
-        dy={isOffense ? 0 : -9}
+        dy={textDy}
         style={{ pointerEvents: "none", userSelect: "none" }}
       >
         {label}

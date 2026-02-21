@@ -81,6 +81,8 @@ export interface BallTokenProps {
   players: NearbyPlayer[];
   /** Court bounding box for clamping */
   courtBounds: { width: number; height: number; minY?: number };
+  /** Visual radius in CSS pixels. Defaults to BALL_RADIUS (12). */
+  radius?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -119,6 +121,7 @@ export default function BallToken({
   onDragEnd,
   players,
   courtBounds,
+  radius = BALL_RADIUS,
 }: BallTokenProps) {
   const isDragging = useRef(false);
   const dragStart = useRef<{ mouseX: number; mouseY: number; ballCx: number; ballCy: number }>({
@@ -130,10 +133,10 @@ export default function BallToken({
 
   const clamp = useCallback(
     (x: number, y: number): { x: number; y: number } => ({
-      x: Math.max(BALL_RADIUS, Math.min(courtBounds.width - BALL_RADIUS, x)),
-      y: Math.max((courtBounds.minY ?? 0) + BALL_RADIUS, Math.min(courtBounds.height - BALL_RADIUS, y)),
+      x: Math.max(radius, Math.min(courtBounds.width - radius, x)),
+      y: Math.max((courtBounds.minY ?? 0) + radius, Math.min(courtBounds.height - radius, y)),
     }),
-    [courtBounds],
+    [courtBounds, radius],
   );
 
   // -------------------------------------------------------------------------
@@ -234,7 +237,7 @@ export default function BallToken({
   // Render
   // -------------------------------------------------------------------------
 
-  const r = BALL_RADIUS;
+  const r = radius;
 
   return (
     <g

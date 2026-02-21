@@ -67,11 +67,19 @@ const DEFENSE_DEFAULTS: [number, number][] = [
 /** Default ball position — near the PG (O1). */
 const BALL_DEFAULT: { x: number; y: number } = { x: 0.5, y: 0.35 };
 
-/**
- * CSS pixel offset from the player centre at which the attached ball is drawn
- * (above the token so both are visible).
- */
+/** Default CSS pixel offset from player centre for the attached ball. */
 const BALL_ATTACH_OFFSET_Y = -22;
+
+/**
+ * Compute token radius proportional to court width.
+ * Keeps the same size as the legacy constant (18px) at ~600px court width.
+ */
+function computeTokenRadius(courtWidth: number): number {
+  return Math.max(10, Math.round(courtWidth * 0.03));
+}
+function computeBallRadius(courtWidth: number): number {
+  return Math.max(7, Math.round(courtWidth * 0.02));
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -190,12 +198,13 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
     offense: PixelPlayer[] | null,
     defense: PixelPlayer[] | null,
     freeBall: { x: number; y: number } | null,
+    attachOffsetY: number,
   ): { x: number; y: number } | null {
     if (attachment) {
       const pool = attachment.side === "offense" ? offense : defense;
       const player = pool?.find((p) => p.position === attachment.position);
       if (player) {
-        return { x: player.px, y: player.py + BALL_ATTACH_OFFSET_Y };
+        return { x: player.px, y: player.py + attachOffsetY };
       }
     }
     return freeBall;
@@ -487,7 +496,12 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
   // -------------------------------------------------------------------------
 
   const allPlayers = buildPlayerList(offensePx, defensePx);
-  const effectiveBall = getEffectiveBallPx(ballAttachment, offensePx, defensePx, ballPx);
+
+  const tokenRadius = courtSize ? computeTokenRadius(courtSize.width) : undefined;
+  const ballRadius = courtSize ? computeBallRadius(courtSize.width) : undefined;
+  const ballAttachOffsetY = tokenRadius && ballRadius ? -(tokenRadius + ballRadius + 2) : BALL_ATTACH_OFFSET_Y;
+
+  const effectiveBall = getEffectiveBallPx(ballAttachment, offensePx, defensePx, ballPx, ballAttachOffsetY);
 
   return (
     <div className={`relative ${className ?? "w-full"}`}>
@@ -532,6 +546,7 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
                   onDragEnd={(x, y) => handleDefenseDragEnd(p.position, x, y)}
                   displayMode={displayMode}
                   playerName={playerNames[`defense-${p.position}`]}
+                  radius={tokenRadius}
                 />
               ))}
 
@@ -556,6 +571,7 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
                   onDragEnd={(x, y) => handleOffenseDragEnd(p.position, x, y)}
                   displayMode={displayMode}
                   playerName={playerNames[`offense-${p.position}`]}
+                  radius={tokenRadius}
                 />
               ))}
 
@@ -569,6 +585,7 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
                 onDragEnd={handleBallDragEnd}
                 players={allPlayers}
                 courtBounds={{ width: courtSize.width, height: courtSize.height, minY: playAreaRef.current.offsetY > 0 ? playAreaRef.current.offsetY : undefined }}
+                radius={ballRadius}
               />
             )}
           </g>
