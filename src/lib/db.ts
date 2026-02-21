@@ -17,6 +17,7 @@ import {
   getDocs,
   setDoc,
   deleteDoc,
+  updateDoc,
   query,
   where,
   serverTimestamp,
@@ -110,4 +111,12 @@ export async function loadPlaysForUser(userId: string): Promise<Play[]> {
   const q = query(collection(db, "plays"), where("createdBy", "==", userId));
   const snap = await getDocs(q);
   return snap.docs.map((d) => deserialisePlay(d.id, d.data()));
+}
+
+/**
+ * Transfer a personal play to a team by setting its teamId field.
+ * The play owner (admin/editor) must have write access to the document.
+ */
+export async function addPlayToTeam(playId: string, teamId: string): Promise<void> {
+  await updateDoc(doc(db, "plays", playId), { teamId });
 }

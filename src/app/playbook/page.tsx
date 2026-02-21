@@ -51,17 +51,30 @@ export default function PlaybookPage() {
     if (!loading && !user) router.replace("/sign-in");
   }, [user, loading, router]);
 
-  // Load plays from Firestore once auth + team info resolves
+  // Load plays from Firestore once auth + team info resolves.
+  // When the user is in a team, load both team plays and their personal plays
+  // (plays with no teamId created by this user), then merge and deduplicate by id.
   useEffect(() => {
     if (!user) return;
     setLoadingPlays(true);
     const fetchPlays = async () => {
       try {
-        // Load team plays if the user is in a team; otherwise load personal plays.
-        const fetched = teamId
-          ? await loadPlaysForTeam(teamId)
-          : await loadPlaysForUser(user.uid);
-        setPlays(fetched);
+        if (teamId) {
+          const [teamPlays, personalPlays] = await Promise.all([
+            loadPlaysForTeam(teamId),
+            loadPlaysForUser(user.uid),
+          ]);
+          // Deduplicate: team plays take precedence; personal plays that already
+          // have this teamId are already covered by loadPlaysForTeam.
+          const teamPlayIds = new Set(teamPlays.map((p) => p.id));
+          const uniquePersonal = personalPlays.filter(
+            (p) => !teamPlayIds.has(p.id) && !p.teamId,
+          );
+          setPlays([...teamPlays, ...uniquePersonal]);
+        } else {
+          const fetched = await loadPlaysForUser(user.uid);
+          setPlays(fetched);
+        }
       } catch {
         // Silently fall back to whatever is in the local store
       } finally {
@@ -581,7 +594,7 @@ export default function PlaybookPage() {
                       }}
                     >
                       {filteredPlays.map((play) => (
-                        <PlayCard key={play.id} play={play} />
+                        <PlayCard key={play.id} play={play} teamId={teamId} role={role} />
                       ))}
                     </div>
                   )}

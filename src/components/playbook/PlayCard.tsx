@@ -19,8 +19,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
-import type { Play, Scene } from "@/lib/types";
-import { deletePlay, savePlay } from "@/lib/db";
+import type { Play, Role, Scene } from "@/lib/types";
+import { addPlayToTeam, deletePlay, savePlay } from "@/lib/db";
 
 // ---------------------------------------------------------------------------
 // Inline mini court thumbnail (same logic as SceneStrip's SceneThumbnail)
@@ -178,15 +178,26 @@ const CATEGORY_COLOURS: Record<string, { bg: string; text: string }> = {
 
 interface PlayCardProps {
   play: Play;
+  /** The current user's team id, if any. */
+  teamId?: string | null;
+  /** The current user's role in the team, if any. */
+  role?: Role | null;
 }
 
-export default function PlayCard({ play }: PlayCardProps) {
+export default function PlayCard({ play, teamId, role }: PlayCardProps) {
   const router = useRouter();
   const setCurrentPlay = useStore((s) => s.setCurrentPlay);
   const removePlay = useStore((s) => s.removePlay);
   const duplicatePlay = useStore((s) => s.duplicatePlay);
+  const updatePlayTeamId = useStore((s) => s.updatePlayTeamId);
   const [hovered, setHovered] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [addingToTeam, setAddingToTeam] = useState(false);
+
+  // A play is "personal" when: user is in a team, the play has no teamId, and
+  // the user has permission to edit (admin or editor).
+  const isPersonal = Boolean(teamId && !play.teamId);
+  const canAddToTeam = isPersonal && (role === "admin" || role === "editor");
 
   const firstScene = play.scenes[0] ?? null;
   const sceneCount = play.scenes.length;
@@ -211,6 +222,20 @@ export default function PlayCard({ play }: PlayCardProps) {
   function handleDeleteBlur() {
     // Reset confirm state if focus leaves
     setConfirmDelete(false);
+  }
+
+  async function handleAddToTeam(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!teamId || addingToTeam) return;
+    setAddingToTeam(true);
+    try {
+      await addPlayToTeam(play.id, teamId);
+      updatePlayTeamId(play.id, teamId);
+    } catch {
+      // Silently fail — the play remains personal; user can retry
+    } finally {
+      setAddingToTeam(false);
+    }
   }
 
   return (
@@ -273,8 +298,33 @@ export default function PlayCard({ play }: PlayCardProps) {
             {play.title}
           </h3>
 
-          {/* Action buttons: duplicate + delete */}
+          {/* Action buttons: add to team (personal only) + duplicate + delete */}
           <div style={{ display: "flex", gap: 4, flexShrink: 0, opacity: hovered ? 1 : 0, pointerEvents: hovered ? "auto" : "none", transition: "opacity 0.15s" }}>
+            {canAddToTeam && (
+              <button
+                onClick={(e) => { void handleAddToTeam(e); }}
+                aria-label="Add play to team"
+                title="Add to team"
+                disabled={addingToTeam}
+                style={{
+                  padding: "3px 8px",
+                  borderRadius: 6,
+                  border: "1px solid #A5B4FC",
+                  background: "transparent",
+                  color: "#4F46E5",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: addingToTeam ? "default" : "pointer",
+                  transition: "all 0.15s",
+                  whiteSpace: "nowrap",
+                  opacity: addingToTeam ? 0.6 : 1,
+                }}
+                onMouseEnter={(e) => { if (!addingToTeam) { (e.currentTarget as HTMLButtonElement).style.background = "#EEF2FF"; } }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+              >
+                {addingToTeam ? "Adding…" : "+ Team"}
+              </button>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -360,6 +410,24 @@ export default function PlayCard({ play }: PlayCardProps) {
           >
             {play.category.replace("-", " ")}
           </span>
+
+          {/* Personal badge — shown when this play has not yet been added to the team */}
+          {isPersonal && (
+            <span
+              title="This play is personal and not yet shared with the team"
+              style={{
+                padding: "2px 7px",
+                borderRadius: 99,
+                background: "#FEF9C3",
+                color: "#92400E",
+                fontSize: 11,
+                fontWeight: 600,
+                letterSpacing: "0.01em",
+              }}
+            >
+              Personal
+            </span>
+          )}
 
           {/* Scene count */}
           <span style={{ fontSize: 12, color: "#9CA3AF", marginLeft: "auto" }}>
