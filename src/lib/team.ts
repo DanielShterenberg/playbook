@@ -13,11 +13,8 @@ import {
   collection,
   doc,
   getDoc,
-  getDocs,
   setDoc,
   updateDoc,
-  query,
-  where,
   serverTimestamp,
   Timestamp,
   type DocumentData,
@@ -80,6 +77,15 @@ function deserialiseTeam(id: string, data: DocumentData): TeamDoc {
 // ---------------------------------------------------------------------------
 
 /**
+ * Upsert an invite document so that joinTeamByInviteCode can resolve it
+ * without querying the protected teams collection.
+ * Safe to call multiple times (idempotent).
+ */
+export async function ensureInviteDoc(inviteCode: string, teamId: string): Promise<void> {
+  await setDoc(doc(db, "invites", inviteCode.toUpperCase()), { teamId }, { merge: true });
+}
+
+/**
  * Create a new team and add the creator as admin.
  * Also updates the user's document with the new teamId.
  */
@@ -98,6 +104,9 @@ export async function createTeam(name: string, userId: string): Promise<TeamDoc>
   };
 
   await setDoc(doc(db, "teams", teamId), teamData);
+
+  // Write invite lookup document so new users can join via the invite link
+  await ensureInviteDoc(inviteCode, teamId);
 
   // Cache teamId + role on the user's own document
   await updateDoc(doc(db, "users", userId), { teamId, role: "admin" });
@@ -127,22 +136,29 @@ export async function loadTeam(teamId: string): Promise<TeamDoc | null> {
 
 /**
  * Look up a team by invite code and add the user as a viewer.
+ * Reads from /invites/{code} (readable by any signed-in user) to resolve
+ * the teamId, then reads the team document directly.
  * Returns the team document on success.
  */
 export async function joinTeamByInviteCode(
   inviteCode: string,
   userId: string,
 ): Promise<TeamDoc> {
-  // Find team with this invite code
-  const q = query(collection(db, "teams"), where("inviteCode", "==", inviteCode.toUpperCase()));
-  const snap = await getDocs(q);
+  const code = inviteCode.toUpperCase();
 
-  if (snap.empty) {
+  // Resolve teamId from the invite lookup collection (no membership required)
+  const inviteSnap = await getDoc(doc(db, "invites", code));
+  if (!inviteSnap.exists()) {
     throw new Error("Invalid invite code. Please check and try again.");
   }
+  const teamId = inviteSnap.data().teamId as string;
 
-  const teamDoc = snap.docs[0];
-  const team = deserialiseTeam(teamDoc.id, teamDoc.data());
+  // Read the team document (the user will be granted membership below)
+  const teamSnap = await getDoc(doc(db, "teams", teamId));
+  if (!teamSnap.exists()) {
+    throw new Error("Team not found. The invite link may be outdated.");
+  }
+  const team = deserialiseTeam(teamSnap.id, teamSnap.data());
 
   // Already a member — return without modifying
   if (team.members[userId]) return team;
@@ -152,8 +168,8 @@ export async function joinTeamByInviteCode(
     [`members.${userId}`]: { role: "viewer" as Role },
   });
 
-  // Cache teamId + role on user doc
-  await updateDoc(doc(db, "users", userId), { teamId: team.id, role: "viewer" });
+  // Cache teamId + role on user doc (setDoc merge is safe for brand-new accounts)
+  await setDoc(doc(db, "users", userId), { teamId: team.id, role: "viewer" as Role }, { merge: true });
 
   return {
     ...team,
