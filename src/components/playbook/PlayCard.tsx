@@ -260,13 +260,12 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
         userSelect: "none",
       }}
     >
-      {/* Thumbnail — action buttons float as an overlay in the top-right corner */}
+      {/* Thumbnail */}
       <div
         style={{
           background: "#F5F3EF",
           padding: "12px 12px 0",
           lineHeight: 0,
-          position: "relative",
         }}
       >
         {firstScene ? (
@@ -281,15 +280,30 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
             }}
           />
         )}
+      </div>
 
-        {/* Action buttons: float over thumbnail, visible on hover */}
+      {/* Info — three rows: title / buttons / tags */}
+      <div style={{ padding: "12px 14px 14px", flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+        {/* Row 1: title */}
+        <h3
+          style={{
+            margin: 0,
+            fontSize: 15,
+            fontWeight: 700,
+            color: "#111827",
+            lineHeight: 1.3,
+            overflowWrap: "break-word",
+          }}
+        >
+          {play.title}
+        </h3>
+
+        {/* Row 2: action buttons — always reserve height, fade in on hover */}
         <div
           style={{
-            position: "absolute",
-            top: 8,
-            right: 8,
             display: "flex",
             gap: 4,
+            flexWrap: "wrap",
             opacity: hovered ? 1 : 0,
             pointerEvents: hovered ? "auto" : "none",
             transition: "opacity 0.15s",
@@ -302,10 +316,10 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
               title="Add to team"
               disabled={addingToTeam}
               style={{
-                padding: "3px 8px",
+                padding: "4px 10px",
                 borderRadius: 6,
                 border: "1px solid #A5B4FC",
-                background: "rgba(255,255,255,0.92)",
+                background: "transparent",
                 color: "#4F46E5",
                 fontSize: 12,
                 fontWeight: 500,
@@ -315,7 +329,7 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
                 opacity: addingToTeam ? 0.6 : 1,
               }}
               onMouseEnter={(e) => { if (!addingToTeam) { (e.currentTarget as HTMLButtonElement).style.background = "#EEF2FF"; } }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.92)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
             >
               {addingToTeam ? "Adding…" : "+ Team"}
             </button>
@@ -333,10 +347,10 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
             aria-label="Duplicate play"
             title="Duplicate play"
             style={{
-              padding: "3px 8px",
+              padding: "4px 10px",
               borderRadius: 6,
               border: "1px solid #E5E7EB",
-              background: "rgba(255,255,255,0.92)",
+              background: "transparent",
               color: "#9CA3AF",
               fontSize: 12,
               fontWeight: 500,
@@ -355,10 +369,10 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
             aria-label={confirmDelete ? "Confirm delete play" : "Delete play"}
             title={confirmDelete ? "Click again to confirm delete" : "Delete play"}
             style={{
-              padding: "3px 8px",
+              padding: "4px 10px",
               borderRadius: 6,
               border: `1px solid ${confirmDelete ? "#FCA5A5" : "#E5E7EB"}`,
-              background: confirmDelete ? "#FEE2E2" : "rgba(255,255,255,0.92)",
+              background: confirmDelete ? "#FEE2E2" : "transparent",
               color: confirmDelete ? "#B91C1C" : "#9CA3AF",
               fontSize: 12,
               fontWeight: 500,
@@ -369,24 +383,6 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
           >
             {confirmDelete ? "Sure?" : "Delete"}
           </button>
-        </div>
-      </div>
-
-      {/* Info */}
-      <div style={{ padding: "12px 14px 14px", flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
-        <div>
-          <h3
-            style={{
-              margin: 0,
-              fontSize: 15,
-              fontWeight: 700,
-              color: "#111827",
-              lineHeight: 1.3,
-              overflowWrap: "break-word",
-            }}
-          >
-            {play.title}
-          </h3>
         </div>
 
         {play.description && (
