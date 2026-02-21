@@ -368,43 +368,48 @@ The bottom panel has two levels:
 
 ## 7. MVP Scope vs. Future Enhancements
 
-### MVP (v1.0)
+### Shipped ✓
 - [x] Half court and full court
 - [x] 5 offensive + 5 defensive players, draggable
-- [x] Player display: numbers or names
+- [x] Player display: numbers, names, or position abbreviations
 - [x] Show/hide individual players per scene
 - [x] Ball placement and attachment
 - [x] Drawing tools: movement, dribble, pass, screen, cut
-- [x] Multi-scene plays with add/remove/reorder
+- [x] Multi-scene plays with add/remove/reorder/duplicate
 - [x] Timing groups within scenes (sequential action ordering)
 - [x] Animated transitions between scenes and within timing groups
-- [x] Playback controls (play, pause, step, speed)
-- [x] Play CRUD with title, category, tags
+- [x] Playback controls (play, pause, step, speed, loop)
+- [x] Play CRUD with title, description, category, court type
 - [x] Playbook grid view with thumbnails
-- [x] Filter and search plays
-- [x] Firebase auth (email + Google)
+- [x] Filter by category, search by title
+- [x] Firebase auth (email/password + Google)
 - [x] Team creation and invite link
 - [x] Role-based permissions (admin, editor, viewer)
-- [x] GIF export
-- [x] Share link for individual plays
+- [x] Personal vs. team plays (promote personal play to team)
+- [x] PDF export (one page per scene)
+- [x] PNG export (single scene)
+- [x] Undo/redo (50-step history)
+- [x] Keyboard shortcuts (tools, playback, scenes, ?)
+- [x] Auto-save with Firestore sync
+- [x] Mobile viewer mode (playback only on small screens)
+- [x] Responsive court (height-constrained, proportional player tokens)
 
-### v1.1
-- [ ] PDF export (scene per page)
-- [ ] PNG export (single scene)
-- [ ] Duplicate plays
-- [ ] Play description and per-scene notes
-- [ ] Presentation mode (full-screen)
-- [ ] MP4 video export
+### In Progress / Planned
+- [ ] GIF export of play animation (#77)
+- [ ] Presentation mode — full-screen playback for practice/projector (#132)
+- [ ] Scene comments with threading and resolve (#133) — Google Docs-style
+- [ ] Defender follow/guard assignment (#128)
+- [ ] Multi-leg player paths within a scene (#129)
+- [ ] Custom team colors for offense and defense (#130)
 
 ### v2.0 (Future)
 - [ ] 3x3 court support
 - [ ] Drill timer / practice plan builder
-- [ ] Collaborative real-time editing (multiple editors)
+- [ ] Collaborative real-time editing (multiple simultaneous editors)
 - [ ] Mobile-optimized editor (currently viewer-only on mobile)
 - [ ] Template plays library (common plays to start from)
 - [ ] Analytics: track which plays team members have viewed
 - [ ] Offline mode with full sync
-- [ ] Custom court colors / team branding
 - [ ] Voice-over recording on plays
 - [ ] Integration with video clips (attach game footage to plays)
 

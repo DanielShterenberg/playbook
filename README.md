@@ -4,12 +4,19 @@ A web-based basketball playbook application that allows coaches to diagram plays
 
 ## Features
 
-- Interactive court editor with standard basketball diagramming symbols
-- Multi-scene play creation with animated transitions
-- Shared team playbook accessible to all members
+- Interactive court editor with standard basketball diagramming symbols (movement, dribble, pass, screen, cut)
+- Multi-scene play creation with animated transitions and per-scene timing steps
+- Shared team playbook with search and category filters
 - Role-based permissions (admin, editor, viewer)
-- GIF export and share links for plays
-- Firebase authentication and real-time sync
+- Personal vs. team plays — create personal plays and promote them to the team playbook
+- Firebase authentication (email + Google) and real-time Firestore sync
+- Export: PDF (one page per scene), PNG (single scene)
+- Undo/redo, keyboard shortcuts, auto-save indicator
+- Mobile viewer mode (playback on phones, edit on desktop/tablet)
+
+### Live App
+
+https://playbook-brown.vercel.app
 
 ## Tech Stack
 
