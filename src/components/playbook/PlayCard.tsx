@@ -133,10 +133,10 @@ function PlayThumbnail({ scene }: { scene: Scene }) {
             key={`o-${p.position}`}
             cx={px(p.x)}
             cy={py(p.y)}
-            r={7}
-            fill="#3B82F6"
+            r={4}
+            fill="#E07B39"
             stroke="#fff"
-            strokeWidth={1.5}
+            strokeWidth={1}
           />
         ))}
 
@@ -148,10 +148,10 @@ function PlayThumbnail({ scene }: { scene: Scene }) {
             key={`d-${p.position}`}
             cx={px(p.x)}
             cy={py(p.y)}
-            r={7}
+            r={4}
             fill="#1E3A5F"
             stroke="#fff"
-            strokeWidth={1.5}
+            strokeWidth={1}
           />
         ))}
     </svg>
@@ -423,6 +423,8 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
                 fontSize: 11,
                 fontWeight: 600,
                 letterSpacing: "0.01em",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
               }}
             >
               Personal

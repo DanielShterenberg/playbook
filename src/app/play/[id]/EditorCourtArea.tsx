@@ -22,6 +22,7 @@ import Link from "next/link";
 import { useStore, createDefaultPlay, selectEditorScene } from "@/lib/store";
 import CourtWithPlayers from "@/components/players/CourtWithPlayers";
 import type { CourtVariant } from "@/components/court/Court";
+import { COURT_ASPECT_RATIO } from "@/components/court/courtDimensions";
 import { loadPlay } from "@/lib/db";
 import { useTeam } from "@/contexts/TeamContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -43,6 +44,21 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
 
   const [notFound, setNotFound] = useState(false);
   const [loadingFromDb, setLoadingFromDb] = useState(false);
+
+  // Measure the available area height so we can cap the court width to
+  // availableHeight × COURT_ASPECT_RATIO. Without this the court overflows
+  // vertically on typical laptop screens (e.g. 768px height).
+  const areaRef = useRef<HTMLDivElement>(null);
+  const [maxCourtWidth, setMaxCourtWidth] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    const el = areaRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(() => {
+      if (el) setMaxCourtWidth(Math.round(el.clientHeight * COURT_ASPECT_RATIO));
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   // Guard: only initialise once to prevent the re-render cycle where setting
   // currentPlay triggers the effect to run again with a non-matching playId.
@@ -146,17 +162,20 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
 
   return (
     /*
-     * Issue #81 — responsive court sizing:
-     *   - Mobile (<768px): full width, no side panels
-     *   - Tablet (768–1024px): max-w-xl to leave room for any side chrome
-     *   - Desktop (>1024px): max-w-3xl for a large comfortable canvas
+     * Outer div fills the flex parent and measures available height so the
+     * inner court is capped to availableHeight × COURT_ASPECT_RATIO — this
+     * prevents the court from overflowing vertically on laptop screens.
      */
-    <CourtWithPlayers
-      sceneId={selectedSceneId ?? scene?.id}
-      scene={scene}
-      variant={courtType as CourtVariant}
-      className="w-full max-w-full md:max-w-xl lg:max-w-3xl"
-      readOnly={isReadOnly}
-    />
+    <div ref={areaRef} className="flex h-full w-full items-center justify-center">
+      <div style={{ width: "100%", maxWidth: maxCourtWidth ?? "100%" }}>
+        <CourtWithPlayers
+          sceneId={selectedSceneId ?? scene?.id}
+          scene={scene}
+          variant={courtType as CourtVariant}
+          className="w-full max-w-full md:max-w-xl lg:max-w-3xl"
+          readOnly={isReadOnly}
+        />
+      </div>
+    </div>
   );
 }
