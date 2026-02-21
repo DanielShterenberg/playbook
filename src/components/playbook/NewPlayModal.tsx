@@ -41,7 +41,7 @@ const CATEGORY_OPTIONS: { value: Category; label: string }[] = [
 export default function NewPlayModal({ onClose }: NewPlayModalProps) {
   const router = useRouter();
   const { user } = useAuth();
-  const { teamId } = useTeam();
+  const { teamId, team } = useTeam();
   const addPlay = useStore((s) => s.addPlay);
   const setCurrentPlay = useStore((s) => s.setCurrentPlay);
   const setSelectedSceneId = useStore((s) => s.setSelectedSceneId);
@@ -50,6 +50,8 @@ export default function NewPlayModal({ onClose }: NewPlayModalProps) {
   const [description, setDescription] = useState("");
   const [courtType, setCourtType] = useState<CourtType>("half");
   const [category, setCategory] = useState<Category>("offense");
+  // When user is in a team, default to saving to the team; they can opt out.
+  const [saveToTeam, setSaveToTeam] = useState(true);
   const [error, setError] = useState("");
 
   const titleRef = useRef<HTMLInputElement>(null);
@@ -88,7 +90,7 @@ export default function NewPlayModal({ onClose }: NewPlayModalProps) {
     play.courtType = courtType;
     play.category = category;
     if (user) play.createdBy = user.uid;
-    if (teamId) play.teamId = teamId;
+    if (teamId && saveToTeam) play.teamId = teamId;
 
     addPlay(play);
     setCurrentPlay(play);
@@ -274,6 +276,55 @@ export default function NewPlayModal({ onClose }: NewPlayModalProps) {
               </select>
             </div>
           </div>
+
+          {/* Save to — only shown when the user is in a team */}
+          {teamId && (
+            <div style={{ marginBottom: 24 }}>
+              <label
+                style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}
+              >
+                Save to
+              </label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setSaveToTeam(true)}
+                  style={{
+                    flex: 1,
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    border: `1.5px solid ${saveToTeam ? "#4F46E5" : "#D1D5DB"}`,
+                    background: saveToTeam ? "#EEF2FF" : "#fff",
+                    color: saveToTeam ? "#4F46E5" : "#374151",
+                    fontSize: 13,
+                    fontWeight: saveToTeam ? 600 : 400,
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  {team?.name ?? "Team"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSaveToTeam(false)}
+                  style={{
+                    flex: 1,
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    border: `1.5px solid ${!saveToTeam ? "#4F46E5" : "#D1D5DB"}`,
+                    background: !saveToTeam ? "#EEF2FF" : "#fff",
+                    color: !saveToTeam ? "#4F46E5" : "#374151",
+                    fontSize: 13,
+                    fontWeight: !saveToTeam ? 600 : 400,
+                    cursor: "pointer",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  Personal
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Actions */}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
