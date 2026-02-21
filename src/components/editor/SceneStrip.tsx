@@ -78,9 +78,9 @@ function SceneThumbnail({ scene, compact = false }: { scene: Scene; compact?: bo
       />
 
       {/* Three-point line: corner straights + arc */}
-      {/* Arc: major arc (large-arc=1) going counterclockwise (sweep=0) = upward over half-court */}
+      {/* Arc: minor arc (large-arc=0) going clockwise (sweep=1) = bows upward over basket */}
       <path
-        d={`M ${px(0.06)},${py(1)} L ${px(0.06)},${py(0.702)} A ${px(0.475)},${px(0.475)} 0 1 0 ${px(0.94)},${py(0.702)} L ${px(0.94)},${py(1)}`}
+        d={`M ${px(0.06)},${py(1)} L ${px(0.06)},${py(0.702)} A ${px(0.475)},${px(0.475)} 0 0 1 ${px(0.94)},${py(0.702)} L ${px(0.94)},${py(1)}`}
         fill="none"
         stroke="#fff"
         strokeWidth={0.8}
