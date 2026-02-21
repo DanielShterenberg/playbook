@@ -292,7 +292,9 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
               fontWeight: 700,
               color: "#111827",
               lineHeight: 1.3,
-              wordBreak: "break-word",
+              flex: 1,
+              minWidth: 0,
+              overflowWrap: "break-word",
             }}
           >
             {play.title}
