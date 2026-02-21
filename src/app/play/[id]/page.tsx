@@ -12,6 +12,7 @@ import ExportMenu from "@/components/editor/ExportMenu";
 import MobileViewerBanner from "@/components/editor/MobileViewerBanner";
 import EditorHeader from "./EditorHeader";
 import SaveIndicator from "@/components/editor/SaveIndicator";
+import EditorCoachMark from "@/components/editor/EditorCoachMark";
 
 interface PlayEditorPageProps {
   params: { id: string };
@@ -83,6 +84,8 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
 
       {/* ── Bottom panels — hidden on mobile ───────────────────────────── */}
       <div className="hidden md:block">
+        {/* First-use coach mark — explains scenes vs. steps */}
+        <EditorCoachMark />
         {/* Timing steps strip */}
         <TimingStripPanel />
       </div>

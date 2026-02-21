@@ -18,6 +18,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useStore, selectEditorScene } from "@/lib/store";
 import type { Scene } from "@/lib/types";
+import InfoTooltip from "./InfoTooltip";
 
 // ---------------------------------------------------------------------------
 // Mini court thumbnail
@@ -424,6 +425,14 @@ export default function SceneStrip() {
       }}
       aria-label="Scene strip"
     >
+      {/* Label */}
+      <div style={{ display: "flex", alignItems: "center", gap: 4, paddingRight: 4, flexShrink: 0 }}>
+        <span style={{ fontSize: 10, fontWeight: 600, color: "#9CA3AF", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+          Scenes
+        </span>
+        <InfoTooltip tip="Each scene is a frame of your play. Click to edit it, right-click to duplicate or reorder." />
+      </div>
+
       {/* Scene cards */}
       {scenes.map((s, i) => (
         <SceneCard
@@ -436,6 +445,13 @@ export default function SceneStrip() {
           onClick={() => { setSelectedSceneId(s.id); setCurrentSceneIndex(i); }}
         />
       ))}
+
+      {/* Empty-state hint */}
+      {scenes.length === 1 && (
+        <span style={{ fontSize: 11, color: "#9CA3AF", fontStyle: "italic", alignSelf: "center", flexShrink: 0 }}>
+          Add a scene for the next moment →
+        </span>
+      )}
 
       {/* Add scene button */}
       <button

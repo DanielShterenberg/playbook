@@ -22,6 +22,7 @@ import {
   selectEditorScene,
   selectTimingStepCount,
 } from "@/lib/store";
+import InfoTooltip from "./InfoTooltip";
 
 // ---------------------------------------------------------------------------
 // Step duration editor
@@ -139,8 +140,11 @@ export default function TimingStripPanel() {
       aria-label="Timing steps"
     >
       {/* Label */}
-      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-        Steps
+      <span className="flex shrink-0 items-center gap-1">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+          Steps
+        </span>
+        <InfoTooltip tip="Steps play in order within a scene. Annotations in the same step animate simultaneously — useful for sequencing a screen before a cut." />
       </span>
 
       {/* Step buttons */}
@@ -203,6 +207,13 @@ export default function TimingStripPanel() {
           </div>
         );
       })}
+
+      {/* Empty-state hint */}
+      {sortedGroups.length === 1 && !isPlaying && (
+        <span className="ml-1 text-[11px] italic text-gray-400">
+          Add a step to sequence actions one after another
+        </span>
+      )}
 
       {/* Add step button */}
       {!isPlaying && (
