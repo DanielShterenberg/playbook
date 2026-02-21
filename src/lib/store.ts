@@ -52,6 +52,8 @@ export interface AppStore {
   duplicatePlay: (playId: string) => void;
   updatePlayInList: (play: Play) => void;
   getPlayById: (playId: string) => Play | undefined;
+  /** Update the teamId of a play in the local store after it is added to a team. */
+  updatePlayTeamId: (playId: string, teamId: string) => void;
 
   // ------- Play data -------
   currentPlay: Play | null;
@@ -255,6 +257,13 @@ export const useStore = create<AppStore>()(
       })),
 
     getPlayById: (playId) => get().plays.find((p) => p.id === playId),
+
+    updatePlayTeamId: (playId, teamId) =>
+      set((state) => ({
+        plays: state.plays.map((p) =>
+          p.id === playId ? { ...p, teamId } : p,
+        ),
+      })),
 
     // =======================================================================
     // Play data
