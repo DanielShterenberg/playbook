@@ -218,15 +218,15 @@ export default function PlayerToken({
   }
 
   // Scale X-line extent and font proportionally to radius
-  const xSize = Math.round(radius * 7 / PLAYER_RADIUS);
+  const xSize = Math.round(radius * 5 / PLAYER_RADIUS);
   const scaledStrokeWidth = Math.max(1.5, strokeWidth * radius / PLAYER_RADIUS);
 
   // Shrink font for long names so they fit inside the token
-  const baseFontSize = Math.max(6, Math.round((isOffense ? 11 : 9) * radius / PLAYER_RADIUS));
+  const baseFontSize = Math.max(6, Math.round(11 * radius / PLAYER_RADIUS));
   const fontSize = label.length > 2 ? Math.max(5, baseFontSize - (label.length - 2) * 1.5) : baseFontSize;
 
   // Defense label sits above the X mark; scale the offset with radius
-  const textDy = isOffense ? 0 : -Math.round(radius * 9 / PLAYER_RADIUS);
+  const textDy = isOffense ? 0 : -Math.round(radius * 7 / PLAYER_RADIUS);
 
   return (
     <g
