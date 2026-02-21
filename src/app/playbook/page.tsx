@@ -21,6 +21,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTeam } from "@/contexts/TeamContext";
 import { signOut } from "@/lib/auth";
 import { loadPlaysForUser, loadPlaysForTeam } from "@/lib/db";
+import { ensureInviteDoc } from "@/lib/team";
 import CreateTeamModal from "@/components/playbook/CreateTeamModal";
 
 const CATEGORY_FILTERS: { value: Category | "all"; label: string }[] = [
@@ -205,6 +206,8 @@ export default function PlaybookPage() {
                 {(role === "admin") && (
                   <button
                     onClick={() => {
+                      // Ensure invite doc exists for existing teams (backward compat)
+                      void ensureInviteDoc(team.inviteCode, team.id);
                       navigator.clipboard.writeText(
                         `${window.location.origin}/join/${team.inviteCode}`,
                       ).catch(() => {});

@@ -101,6 +101,18 @@ service cloud.firestore {
     }
 
     // -----------------------------------------------------------------------
+    // Invite documents (readable by any signed-in user, #75)
+    // Each document: invites/{inviteCode} → { teamId }
+    // Allows joinTeamByInviteCode to look up the teamId without querying
+    // the protected teams collection.
+    // -----------------------------------------------------------------------
+
+    match /invites/{inviteCode} {
+      allow read:  if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // -----------------------------------------------------------------------
     // Shared play tokens (public read-only, #78)
     // -----------------------------------------------------------------------
 
