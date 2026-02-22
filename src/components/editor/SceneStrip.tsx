@@ -24,8 +24,21 @@ import InfoTooltip from "./InfoTooltip";
 // Mini court thumbnail
 // ---------------------------------------------------------------------------
 
+const DEFAULT_OFFENSE_COLOR = "#3B82F6"; // blue used in strip thumbnails
+const DEFAULT_DEFENSE_COLOR = "#1E3A5F";
+
 /** Renders a tiny SVG court with coloured dots for visible players. */
-function SceneThumbnail({ scene, compact = false }: { scene: Scene; compact?: boolean }) {
+function SceneThumbnail({
+  scene,
+  compact = false,
+  offenseColor = DEFAULT_OFFENSE_COLOR,
+  defenseColor = DEFAULT_DEFENSE_COLOR,
+}: {
+  scene: Scene;
+  compact?: boolean;
+  offenseColor?: string;
+  defenseColor?: string;
+}) {
   const W = compact ? 80 : 120;
   const H = Math.round(W * (47 / 50)); // half-court aspect ratio: 50ft wide × 47ft deep
 
@@ -138,7 +151,7 @@ function SceneThumbnail({ scene, compact = false }: { scene: Scene; compact?: bo
       {/* Basket */}
       <circle cx={px(0.5)} cy={py(0.888)} r={compact ? 2 : 3} fill="none" stroke="#fff" strokeWidth={0.8} />
 
-      {/* Offensive players — blue fill */}
+      {/* Offensive players */}
       {scene.players.offense
         .filter((p) => p.visible)
         .map((p) => (
@@ -147,13 +160,13 @@ function SceneThumbnail({ scene, compact = false }: { scene: Scene; compact?: bo
             cx={px(p.x)}
             cy={py(p.y)}
             r={4}
-            fill="#3B82F6"
+            fill={offenseColor}
             stroke="#fff"
             strokeWidth={0.8}
           />
         ))}
 
-      {/* Defensive players — dark fill */}
+      {/* Defensive players */}
       {scene.players.defense
         .filter((p) => p.visible)
         .map((p) => (
@@ -162,7 +175,7 @@ function SceneThumbnail({ scene, compact = false }: { scene: Scene; compact?: bo
             cx={px(p.x)}
             cy={py(p.y)}
             r={4}
-            fill="#1E3A5F"
+            fill={defenseColor}
             stroke="#fff"
             strokeWidth={0.8}
           />
@@ -296,9 +309,11 @@ interface SceneCardProps {
   isActive: boolean;
   compact: boolean;
   onClick: () => void;
+  offenseColor?: string;
+  defenseColor?: string;
 }
 
-function SceneCard({ scene, index, totalScenes, isActive, compact, onClick }: SceneCardProps) {
+function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, offenseColor, defenseColor }: SceneCardProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -335,7 +350,7 @@ function SceneCard({ scene, index, totalScenes, isActive, compact, onClick }: Sc
           if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "#F9FAFB";
         }}
       >
-        <SceneThumbnail scene={scene} compact={compact} />
+        <SceneThumbnail scene={scene} compact={compact} offenseColor={offenseColor} defenseColor={defenseColor} />
         <span
           style={{
             fontSize: 11,
@@ -392,6 +407,7 @@ export default function SceneStrip() {
   const setCurrentSceneIndex = useStore((s) => s.setCurrentSceneIndex);
   const addScene = useStore((s) => s.addScene);
   const scene = useStore(selectEditorScene);
+  const playColors = useStore((s) => s.currentPlay?.colors);
 
   /**
    * Issue #81 — at tablet widths use compact (smaller) scene thumbnails
@@ -443,6 +459,8 @@ export default function SceneStrip() {
           isActive={s.id === activeId}
           compact={isTablet}
           onClick={() => { setSelectedSceneId(s.id); setCurrentSceneIndex(i); }}
+          offenseColor={playColors?.offense}
+          defenseColor={playColors?.defense}
         />
       ))}
 

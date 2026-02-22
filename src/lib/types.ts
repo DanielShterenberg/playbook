@@ -87,6 +87,13 @@ export interface Team {
   inviteCode: string;
 }
 
+export interface PlayColors {
+  /** Fill color for offensive player tokens (defaults to "#E07B39"). */
+  offense: string;
+  /** Stroke/X color for defensive player tokens (defaults to "#1E3A5F"). */
+  defense: string;
+}
+
 export interface Play {
   id: string;
   teamId: string;
@@ -99,6 +106,8 @@ export interface Play {
   createdAt: Date;
   updatedAt: Date;
   scenes: Scene[];
+  /** Optional custom colors for offensive and defensive player tokens. */
+  colors?: PlayColors;
 }
 
 export interface User {

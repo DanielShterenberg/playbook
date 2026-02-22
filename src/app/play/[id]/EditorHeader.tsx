@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
-import type { Category, CourtType } from "@/lib/types";
+import type { Category, CourtType, PlayColors } from "@/lib/types";
 import { exportPlayToPdf } from "@/lib/exportPdf";
 import { useAuth } from "@/contexts/AuthContext";
 import { createShareToken } from "@/lib/team";
@@ -38,6 +38,7 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
   const currentPlay = useStore((s) => s.currentPlay);
   const updatePlayInList = useStore((s) => s.updatePlayInList);
   const updatePlayMeta = useStore((s) => s.updatePlayMeta);
+  const updatePlayColors = useStore((s) => s.updatePlayColors);
 
   const title = currentPlay?.title ?? null;
 
@@ -83,11 +84,16 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
     }
   }
 
+  const DEFAULT_OFFENSE_COLOR = "#E07B39";
+  const DEFAULT_DEFENSE_COLOR = "#1E3A5F";
+
   const [showEdit, setShowEdit] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [editCategory, setEditCategory] = useState<Category>("offense");
   const [editCourtType, setEditCourtType] = useState<CourtType>("half");
+  const [editOffenseColor, setEditOffenseColor] = useState(DEFAULT_OFFENSE_COLOR);
+  const [editDefenseColor, setEditDefenseColor] = useState(DEFAULT_DEFENSE_COLOR);
   const [editError, setEditError] = useState("");
 
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -99,6 +105,8 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
     setEditDesc(currentPlay.description);
     setEditCategory(currentPlay.category);
     setEditCourtType(currentPlay.courtType);
+    setEditOffenseColor(currentPlay.colors?.offense ?? DEFAULT_OFFENSE_COLOR);
+    setEditDefenseColor(currentPlay.colors?.defense ?? DEFAULT_DEFENSE_COLOR);
     setEditError("");
     setShowEdit(true);
   }
@@ -132,10 +140,12 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
       return;
     }
     const patch = { title: trimmed, description: editDesc, category: editCategory, courtType: editCourtType };
+    const colors: PlayColors = { offense: editOffenseColor, defense: editDefenseColor };
     updatePlayMeta(patch);
+    updatePlayColors(colors);
     // Sync immediately to the plays list so the playbook grid reflects the update.
     if (currentPlay) {
-      updatePlayInList({ ...currentPlay, ...patch, updatedAt: new Date() });
+      updatePlayInList({ ...currentPlay, ...patch, colors, updatedAt: new Date() });
     }
     setShowEdit(false);
   }
@@ -375,7 +385,7 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
               </div>
 
               {/* Court type + Category row */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
                 <div>
                   <label
                     htmlFor="edit-court-type"
@@ -435,6 +445,126 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
                       </option>
                     ))}
                   </select>
+                </div>
+              </div>
+
+              {/* Team colors row */}
+              <div style={{ marginBottom: 24 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+                  Team Colors
+                </p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  {/* Offense color */}
+                  <div>
+                    <label
+                      htmlFor="edit-offense-color"
+                      style={{ display: "block", fontSize: 12, fontWeight: 500, color: "#6B7280", marginBottom: 6 }}
+                    >
+                      Offense
+                    </label>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <input
+                        id="edit-offense-color"
+                        type="color"
+                        value={editOffenseColor}
+                        onChange={(e) => setEditOffenseColor(e.target.value)}
+                        style={{
+                          width: 36,
+                          height: 36,
+                          padding: 2,
+                          border: "1.5px solid #D1D5DB",
+                          borderRadius: 6,
+                          cursor: "pointer",
+                          background: "none",
+                        }}
+                        aria-label="Offense team color"
+                      />
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: "#6B7280",
+                          fontFamily: "monospace",
+                          userSelect: "all",
+                        }}
+                      >
+                        {editOffenseColor.toUpperCase()}
+                      </span>
+                      {editOffenseColor !== DEFAULT_OFFENSE_COLOR && (
+                        <button
+                          type="button"
+                          onClick={() => setEditOffenseColor(DEFAULT_OFFENSE_COLOR)}
+                          title="Reset to default"
+                          style={{
+                            fontSize: 11,
+                            color: "#9CA3AF",
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: 0,
+                            textDecoration: "underline",
+                          }}
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Defense color */}
+                  <div>
+                    <label
+                      htmlFor="edit-defense-color"
+                      style={{ display: "block", fontSize: 12, fontWeight: 500, color: "#6B7280", marginBottom: 6 }}
+                    >
+                      Defense
+                    </label>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <input
+                        id="edit-defense-color"
+                        type="color"
+                        value={editDefenseColor}
+                        onChange={(e) => setEditDefenseColor(e.target.value)}
+                        style={{
+                          width: 36,
+                          height: 36,
+                          padding: 2,
+                          border: "1.5px solid #D1D5DB",
+                          borderRadius: 6,
+                          cursor: "pointer",
+                          background: "none",
+                        }}
+                        aria-label="Defense team color"
+                      />
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: "#6B7280",
+                          fontFamily: "monospace",
+                          userSelect: "all",
+                        }}
+                      >
+                        {editDefenseColor.toUpperCase()}
+                      </span>
+                      {editDefenseColor !== DEFAULT_DEFENSE_COLOR && (
+                        <button
+                          type="button"
+                          onClick={() => setEditDefenseColor(DEFAULT_DEFENSE_COLOR)}
+                          title="Reset to default"
+                          style={{
+                            fontSize: 11,
+                            color: "#9CA3AF",
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: 0,
+                            textDecoration: "underline",
+                          }}
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 

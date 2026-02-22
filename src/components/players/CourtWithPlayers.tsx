@@ -152,6 +152,7 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
   const updateBallState    = useStore((s) => s.updateBallState);
   const displayMode        = useStore((s) => s.playerDisplayMode);
   const playerNames        = useStore((s) => s.playerNames);
+  const playColors         = useStore((s) => s.currentPlay?.colors);
 
   // Court layout reported by the Court canvas
   const [courtSize, setCourtSize] = useState<{ width: number; height: number } | null>(null);
@@ -506,7 +507,7 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
   return (
     <div className={`relative ${className ?? "w-full"}`}>
       {/* Court canvas */}
-      <Court variant={variant} onReady={handleCourtReady} className="w-full" />
+      <Court variant={variant} onReady={handleCourtReady} className="w-full" paintColor={playColors?.offense} />
 
       {/* SVG player + ball overlay — same dimensions as the canvas */}
       {courtSize && (
@@ -547,6 +548,7 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
                   displayMode={displayMode}
                   playerName={playerNames[`defense-${p.position}`]}
                   radius={tokenRadius}
+                  defenseColor={playColors?.defense}
                 />
               ))}
 
@@ -572,6 +574,7 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
                   displayMode={displayMode}
                   playerName={playerNames[`offense-${p.position}`]}
                   radius={tokenRadius}
+                  offenseColor={playColors?.offense}
                 />
               ))}
 

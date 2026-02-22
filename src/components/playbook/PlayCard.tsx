@@ -26,7 +26,18 @@ import { addPlayToTeam, deletePlay, savePlay } from "@/lib/db";
 // Inline mini court thumbnail (same logic as SceneStrip's SceneThumbnail)
 // ---------------------------------------------------------------------------
 
-function PlayThumbnail({ scene }: { scene: Scene }) {
+const DEFAULT_OFFENSE_COLOR = "#E07B39";
+const DEFAULT_DEFENSE_COLOR = "#1E3A5F";
+
+function PlayThumbnail({
+  scene,
+  offenseColor = DEFAULT_OFFENSE_COLOR,
+  defenseColor = DEFAULT_DEFENSE_COLOR,
+}: {
+  scene: Scene;
+  offenseColor?: string;
+  defenseColor?: string;
+}) {
   const W = 200;
   const H = Math.round(W / (50 / 47)); // ~188 px
 
@@ -50,7 +61,7 @@ function PlayThumbnail({ scene }: { scene: Scene }) {
         y={py(0.596)}
         width={px(0.32)}
         height={py(0.404)}
-        fill="#E07B39"
+        fill={offenseColor}
       />
 
       {/* Court outline */}
@@ -134,7 +145,7 @@ function PlayThumbnail({ scene }: { scene: Scene }) {
             cx={px(p.x)}
             cy={py(p.y)}
             r={4}
-            fill="#E07B39"
+            fill={offenseColor}
             stroke="#fff"
             strokeWidth={1}
           />
@@ -149,7 +160,7 @@ function PlayThumbnail({ scene }: { scene: Scene }) {
             cx={px(p.x)}
             cy={py(p.y)}
             r={4}
-            fill="#1E3A5F"
+            fill={defenseColor}
             stroke="#fff"
             strokeWidth={1}
           />
@@ -269,7 +280,11 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
         }}
       >
         {firstScene ? (
-          <PlayThumbnail scene={firstScene} />
+          <PlayThumbnail
+            scene={firstScene}
+            offenseColor={play.colors?.offense}
+            defenseColor={play.colors?.defense}
+          />
         ) : (
           <div
             style={{

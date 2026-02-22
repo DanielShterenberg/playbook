@@ -6,6 +6,7 @@ import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import type {
   Play,
+  PlayColors,
   Scene,
   TimingGroup,
   Annotation,
@@ -63,6 +64,7 @@ export interface AppStore {
   updatePlayMeta: (
     patch: Partial<Pick<Play, "title" | "description" | "category" | "tags" | "courtType">>,
   ) => void;
+  updatePlayColors: (colors: PlayColors) => void;
 
   // Undo / Redo (issue #83)
   undo: () => void;
@@ -327,6 +329,12 @@ export const useStore = create<AppStore>()(
       set((state) => {
         if (!state.currentPlay) return state;
         return { currentPlay: { ...state.currentPlay, ...patch, updatedAt: new Date() } };
+      }),
+
+    updatePlayColors: (colors) =>
+      set((state) => {
+        if (!state.currentPlay) return state;
+        return { currentPlay: { ...state.currentPlay, colors, updatedAt: new Date() } };
       }),
 
     // -----------------------------------------------------------------------
