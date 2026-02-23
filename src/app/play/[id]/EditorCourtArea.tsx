@@ -54,11 +54,15 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
     const el = areaRef.current;
     if (!el) return;
     const obs = new ResizeObserver(() => {
-      if (el) setMaxCourtWidth(Math.round(el.clientHeight * COURT_ASPECT_RATIO));
+      if (!el) return;
+      // Full court canvas is 2× taller than half court, so cap width at half
+      // the available height × aspect ratio to prevent vertical overflow.
+      const heightFactor = courtType === "full" ? 0.5 : 1;
+      setMaxCourtWidth(Math.round(el.clientHeight * heightFactor * COURT_ASPECT_RATIO));
     });
     obs.observe(el);
     return () => obs.disconnect();
-  }, []);
+  }, [courtType]);
 
   // Guard: only initialise once to prevent the re-render cycle where setting
   // currentPlay triggers the effect to run again with a non-matching playId.
