@@ -24,8 +24,8 @@ import InfoTooltip from "./InfoTooltip";
 // Mini court thumbnail
 // ---------------------------------------------------------------------------
 
-const DEFAULT_OFFENSE_COLOR = "#3B82F6"; // blue used in strip thumbnails
-const DEFAULT_DEFENSE_COLOR = "#1E3A5F";
+const DEFAULT_OFFENSE_COLOR = "#E07B39"; // warm orange — matches court paint and PlayerToken
+const DEFAULT_DEFENSE_COLOR = "#1E3A5F"; // dark navy
 
 /** Renders a tiny SVG court with coloured dots for visible players. */
 function SceneThumbnail({
