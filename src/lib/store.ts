@@ -124,6 +124,11 @@ export interface AppStore {
   setSpeed: (speed: PlaybackSpeed) => void;
   setLoop: (loop: boolean) => void;
   resetPlayback: () => void;
+
+  // ------- Presentation mode (issue #132) -------
+  isPresentationMode: boolean;
+  enterPresentationMode: () => void;
+  exitPresentationMode: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -763,6 +768,16 @@ export const useStore = create<AppStore>()(
 
     resetPlayback: () =>
       set({ isPlaying: false, currentSceneIndex: 0, currentStep: 1 }),
+
+    // =======================================================================
+    // Presentation mode (issue #132)
+    // =======================================================================
+
+    isPresentationMode: false,
+
+    enterPresentationMode: () => set({ isPresentationMode: true }),
+
+    exitPresentationMode: () => set({ isPresentationMode: false, isPlaying: false }),
   })),
 );
 
