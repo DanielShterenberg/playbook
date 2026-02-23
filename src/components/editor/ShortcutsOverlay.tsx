@@ -31,6 +31,7 @@ const SECTIONS: ShortcutSection[] = [
       { keys: ["P"], description: "Pass arrow" },
       { keys: ["S"], description: "Screen / pick" },
       { keys: ["C"], description: "Cut (dashed arrow)" },
+      { keys: ["G"], description: "Guard assignment (defender → offensive player)" },
       { keys: ["E"], description: "Eraser" },
       { keys: ["Esc"], description: "Back to Select" },
     ],

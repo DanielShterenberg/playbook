@@ -258,6 +258,30 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
     );
   }
 
+  if (type === "guard") {
+    // Guard assignment: dashed line from defender to offensive player.
+    // Rendered in amber/orange to be visually distinct from cut (red dashed)
+    // and from movement (solid navy). No arrowhead — it is a static assignment link.
+    return (
+      <g onClick={handleClick} style={hitStyle}>
+        {selectRing}
+        <line
+          x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+          stroke="transparent" strokeWidth={14}
+        />
+        <line
+          x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+          stroke="#D97706"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeDasharray="4 4"
+          opacity={0.85}
+        />
+        {stepBadge}
+      </g>
+    );
+  }
+
   return null;
 }
 
@@ -338,6 +362,14 @@ function PreviewAnnotation({
       <g pointerEvents="none" opacity={0.7}>
         <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#DC2626" strokeWidth={2.5} strokeLinecap="round" strokeDasharray="7 5" />
         {headPoints && <polygon points={headPoints} fill="#DC2626" opacity={0.8} />}
+      </g>
+    );
+  }
+
+  if (tool === "guard") {
+    return (
+      <g pointerEvents="none" opacity={0.7}>
+        <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#D97706" strokeWidth={2} strokeLinecap="round" strokeDasharray="4 4" />
       </g>
     );
   }
@@ -467,27 +499,39 @@ export default function AnnotationLayer({
   // Keyboard Delete/Backspace for annotation removal is handled centrally by
   // EditorKeyboardManager (useKeyboardShortcuts, issue #82). No listener here.
 
+  // For the guard tool we restrict snap-to-player by side:
+  //   - mousedown: snap to defense only (the defender is the "from")
+  //   - mousemove / mouseup: snap to offense only (the offensive player being guarded)
+  const defenseOnly = players.filter((p) => p.side === "defense");
+  const offenseOnly = players.filter((p) => p.side === "offense");
+
   // Mouse down — start drawing
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
       if (!isDrawingTool || selectedTool === "eraser") return;
       e.preventDefault();
       const pt = getSVGCoords(e);
-      const nearest = findNearestPlayer(pt.x, pt.y, players);
+      const snapPool = selectedTool === "guard" ? defenseOnly : players;
+      const nearest = findNearestPlayer(pt.x, pt.y, snapPool);
       const from: Point = nearest ? { x: nearest.px, y: nearest.py } : pt;
       const stroke = { from, to: from };
       setDrawing(stroke);
       drawingRef.current = stroke;
       setSnapTarget(null);
     },
-    [isDrawingTool, selectedTool, getSVGCoords, players],
+    [isDrawingTool, selectedTool, getSVGCoords, players, defenseOnly],
   );
 
   // Mouse move — update preview
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
       const pt = getSVGCoords(e);
-      const nearest = findNearestPlayer(pt.x, pt.y, players);
+      // While dragging a guard annotation, snap the endpoint to offense only.
+      const snapPool =
+        selectedTool === "guard" && drawingRef.current
+          ? offenseOnly
+          : players;
+      const nearest = findNearestPlayer(pt.x, pt.y, snapPool);
       setSnapTarget(nearest);
 
       if (!drawingRef.current) return;
@@ -496,7 +540,7 @@ export default function AnnotationLayer({
       drawingRef.current = next;
       setDrawing(next);
     },
-    [getSVGCoords, players],
+    [getSVGCoords, players, offenseOnly, selectedTool],
   );
 
   // Mouse up — commit annotation
@@ -509,14 +553,18 @@ export default function AnnotationLayer({
       }
       const { from } = drawingRef.current;
       const pt = getSVGCoords(e);
-      const nearest = findNearestPlayer(pt.x, pt.y, players);
+      // Guard: endpoint snaps to offense only
+      const toSnapPool = selectedTool === "guard" ? offenseOnly : players;
+      const nearest = findNearestPlayer(pt.x, pt.y, toSnapPool);
       const to: Point = nearest ? { x: nearest.px, y: nearest.py } : pt;
 
       // Ignore tiny strokes (accidental clicks)
       const dx = to.x - from.x;
       const dy = to.y - from.y;
       if (Math.sqrt(dx * dx + dy * dy) > 8) {
-        const fromNearest = findNearestPlayer(from.x, from.y, players);
+        // Guard: from-player must come from defense pool
+        const fromSnapPool = selectedTool === "guard" ? defenseOnly : players;
+        const fromNearest = findNearestPlayer(from.x, from.y, fromSnapPool);
         const annotation: Annotation = {
           id: crypto.randomUUID(),
           type: selectedTool as Annotation["type"],
@@ -546,6 +594,8 @@ export default function AnnotationLayer({
       selectedTimingStep,
       getSVGCoords,
       players,
+      offenseOnly,
+      defenseOnly,
       addAnnotation,
       setSelectedAnnotationId,
       width,

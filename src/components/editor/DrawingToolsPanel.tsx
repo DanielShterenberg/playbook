@@ -13,6 +13,7 @@
  *   Pass           (keyboard: P) — line with triangle tip
  *   Screen         (keyboard: S) — perpendicular line
  *   Cut            (keyboard: C) — dashed arrow line
+ *   Guard          (keyboard: G) — defender→offensive player assignment (amber dashed)
  *   Eraser         (keyboard: E) — remove annotations
  *
  * Note: keyboard shortcut registration has been centralised in
@@ -133,6 +134,30 @@ function CutIcon({ active }: { active: boolean }) {
   );
 }
 
+/** Guard tool icon (dashed line with a small shield / target at the end) */
+function GuardIcon({ active }: { active: boolean }) {
+  const c = active ? ACTIVE_COLOR : IDLE_COLOR;
+  return (
+    <svg viewBox="0 0 28 28" width={22} height={22} aria-hidden="true">
+      {/* Dashed line from defender to offensive player */}
+      <line
+        x1="6"
+        y1="22"
+        x2="20"
+        y2="8"
+        stroke={c}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeDasharray="3 3"
+      />
+      {/* Defender circle at start */}
+      <circle cx={6} cy={22} r={4} fill="none" stroke={c} strokeWidth={2} />
+      {/* Offensive player circle at end */}
+      <circle cx={20} cy={8} r={4} fill={c} />
+    </svg>
+  );
+}
+
 /** Eraser tool icon */
 function EraserIcon({ active }: { active: boolean }) {
   const c = active ? ACTIVE_COLOR : IDLE_COLOR;
@@ -162,6 +187,7 @@ const TOOLS: ToolDef[] = [
   { id: "pass",     label: "Pass",     shortcut: "P", Icon: PassIcon     },
   { id: "screen",   label: "Screen",   shortcut: "S", Icon: ScreenIcon   },
   { id: "cut",      label: "Cut",      shortcut: "C", Icon: CutIcon      },
+  { id: "guard",    label: "Guard",    shortcut: "G", Icon: GuardIcon    },
   { id: "eraser",   label: "Eraser",   shortcut: "E", Icon: EraserIcon   },
 ];
 
@@ -173,6 +199,7 @@ export const TOOL_CURSOR: Record<DrawingTool, string> = {
   pass:     "crosshair",
   screen:   "crosshair",
   cut:      "crosshair",
+  guard:    "crosshair",
   eraser:   "cell",
 };
 
