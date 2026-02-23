@@ -17,6 +17,7 @@ import type { Category, CourtType, PlayColors } from "@/lib/types";
 import { exportPlayToPdf } from "@/lib/exportPdf";
 import { useAuth } from "@/contexts/AuthContext";
 import { createShareToken } from "@/lib/team";
+import PresentationOverlay from "@/components/editor/PresentationOverlay";
 
 const CATEGORY_OPTIONS: { value: Category; label: string }[] = [
   { value: "offense", label: "Offense" },
@@ -39,6 +40,8 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
   const updatePlayInList = useStore((s) => s.updatePlayInList);
   const updatePlayMeta = useStore((s) => s.updatePlayMeta);
   const updatePlayColors = useStore((s) => s.updatePlayColors);
+  const isPresentationMode = useStore((s) => s.isPresentationMode);
+  const enterPresentationMode = useStore((s) => s.enterPresentationMode);
 
   const title = currentPlay?.title ?? null;
 
@@ -279,9 +282,27 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
             {shareMsg ?? (isSharing ? "Sharing…" : "Share")}
           </button>
 
+          {/* Present button */}
+          <button
+            onClick={enterPresentationMode}
+            disabled={!currentPlay}
+            aria-label="Enter presentation mode"
+            title="Present (full-screen view)"
+            className="flex items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100 hover:text-indigo-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            <svg width={12} height={12} viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <rect x="2" y="3" width="16" height="12" rx="1.5" stroke="currentColor" strokeWidth={1.5} />
+              <path d="M7 18h6M10 15v3" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
+            </svg>
+            Present
+          </button>
+
           {children}
         </div>
       </header>
+
+      {/* Presentation mode overlay */}
+      {isPresentationMode && <PresentationOverlay />}
 
       {/* Edit play modal */}
       {showEdit && (

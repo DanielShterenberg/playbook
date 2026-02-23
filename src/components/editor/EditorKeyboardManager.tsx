@@ -27,6 +27,10 @@ export default function EditorKeyboardManager() {
   const undo = useStore((s) => s.undo);
   const redo = useStore((s) => s.redo);
 
+  // Disable editor shortcuts while presentation mode is active — the
+  // PresentationOverlay registers its own Space / Arrow / Esc listeners.
+  const isPresentationMode = useStore((s) => s.isPresentationMode);
+
   const handleToggleHelp = useCallback(() => {
     setShowHelp((prev) => !prev);
   }, []);
@@ -50,6 +54,7 @@ export default function EditorKeyboardManager() {
   }, [redo]);
 
   useKeyboardShortcuts({
+    enabled: !isPresentationMode,
     onToggleHelp: handleToggleHelp,
     onSave: handleSave,
     onUndo: handleUndo,
