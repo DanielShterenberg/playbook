@@ -14,7 +14,7 @@ export type Category =
   | "oob"
   | "special";
 
-export type AnnotationType = "movement" | "dribble" | "pass" | "screen" | "cut" | "guard";
+export type AnnotationType = "movement" | "dribble" | "pass" | "screen" | "cut" | "guard" | "handoff";
 
 export interface Point {
   x: number;

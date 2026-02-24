@@ -158,6 +158,30 @@ function GuardIcon({ active }: { active: boolean }) {
   );
 }
 
+/** Hand-off (DHO) tool icon — short dashed line with double perpendicular tick marks */
+function HandoffIcon({ active }: { active: boolean }) {
+  const c = active ? ACTIVE_COLOR : IDLE_COLOR;
+  return (
+    <svg viewBox="0 0 28 28" width={22} height={22} aria-hidden="true">
+      {/* Dashed line from ball-handler to receiver */}
+      <line
+        x1="5"
+        y1="23"
+        x2="22"
+        y2="7"
+        stroke={c}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeDasharray="3 3"
+      />
+      {/* First perpendicular tick at delivery point */}
+      <line x1="17" y1="8" x2="21" y2="12" stroke={c} strokeWidth={2.5} strokeLinecap="round" />
+      {/* Second perpendicular tick (offset along line) */}
+      <line x1="14" y1="11" x2="18" y2="15" stroke={c} strokeWidth={2.5} strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /** Eraser tool icon */
 function EraserIcon({ active }: { active: boolean }) {
   const c = active ? ACTIVE_COLOR : IDLE_COLOR;
@@ -188,6 +212,7 @@ const TOOLS: ToolDef[] = [
   { id: "screen",   label: "Screen",   shortcut: "S", Icon: ScreenIcon   },
   { id: "cut",      label: "Cut",      shortcut: "C", Icon: CutIcon      },
   { id: "guard",    label: "Guard",    shortcut: "G", Icon: GuardIcon    },
+  { id: "handoff",  label: "Hand-off", shortcut: "H", Icon: HandoffIcon  },
   { id: "eraser",   label: "Eraser",   shortcut: "E", Icon: EraserIcon   },
 ];
 
@@ -200,6 +225,7 @@ export const TOOL_CURSOR: Record<DrawingTool, string> = {
   screen:   "crosshair",
   cut:      "crosshair",
   guard:    "crosshair",
+  handoff:  "crosshair",
   eraser:   "cell",
 };
 

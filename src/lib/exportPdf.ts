@@ -59,6 +59,8 @@ const ANN_COLOR: Record<string, string> = {
   pass:     "#059669",
   screen:   "#7C3AED",
   cut:      "#DC2626",
+  guard:    "#D97706",
+  handoff:  "#0369A1",
 };
 
 // ---------------------------------------------------------------------------
@@ -240,6 +242,52 @@ function drawAnnotation(
     ctx.lineTo(tx, ty);
     ctx.stroke();
     ctx.setLineDash([]);
+    drawArrowHead(ctx, tx, ty, fx, fy, ANN_ARROW_SIZE);
+
+  } else if (ann.type === "guard") {
+    ctx.globalAlpha = 0.85;
+    ctx.setLineDash([ANN_LINE_W * 4, ANN_LINE_W * 4]);
+    ctx.beginPath();
+    ctx.moveTo(fx, fy);
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+
+  } else if (ann.type === "handoff") {
+    const dx = tx - fx;
+    const dy = ty - fy;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const ux = len > 0 ? dx / len : 1;
+    const uy = len > 0 ? dy / len : 0;
+    const px2 = -uy;
+    const py2 = ux;
+    const tickLen = ANN_ARROW_SIZE * 0.75;
+    const t1 = 0.85;
+    const t1x = fx + dx * t1;
+    const t1y = fy + dy * t1;
+    const t2 = 0.72;
+    const t2x = fx + dx * t2;
+    const t2y = fy + dy * t2;
+
+    ctx.setLineDash([ANN_LINE_W * 3, ANN_LINE_W * 2]);
+    ctx.beginPath();
+    ctx.moveTo(fx, fy);
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Tick marks
+    ctx.beginPath();
+    ctx.moveTo(t1x + px2 * tickLen, t1y + py2 * tickLen);
+    ctx.lineTo(t1x - px2 * tickLen, t1y - py2 * tickLen);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(t2x + px2 * tickLen, t2y + py2 * tickLen);
+    ctx.lineTo(t2x - px2 * tickLen, t2y - py2 * tickLen);
+    ctx.stroke();
+
     drawArrowHead(ctx, tx, ty, fx, fy, ANN_ARROW_SIZE);
   }
 
