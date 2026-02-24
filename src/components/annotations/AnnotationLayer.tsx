@@ -294,6 +294,60 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
     );
   }
 
+  if (type === "handoff") {
+    // Dribble hand-off (DHO): dashed line from ball-handler to receiver with
+    // two small perpendicular tick marks near the delivery point (to endpoint).
+    // Standard DHO notation used in FastDraw / Synergy coaching diagrams.
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const ux = len > 0 ? dx / len : 1;
+    const uy = len > 0 ? dy / len : 0;
+    // Perpendicular direction
+    const px2 = -uy;
+    const py2 = ux;
+    // Tick bar length
+    const tickLen = 9;
+    // First tick: at 85% along the line
+    const t1 = 0.85;
+    const t1x = from.x + dx * t1;
+    const t1y = from.y + dy * t1;
+    // Second tick: at 72% along the line
+    const t2 = 0.72;
+    const t2x = from.x + dx * t2;
+    const t2y = from.y + dy * t2;
+    return (
+      <g onClick={handleClick} style={hitStyle}>
+        {selectRing}
+        {/* Invisible wide hit-area */}
+        <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="transparent" strokeWidth={14} />
+        {/* Dashed body line */}
+        <line
+          x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+          stroke="#0369A1"
+          strokeWidth={2.5}
+          strokeLinecap="round"
+          strokeDasharray="6 4"
+        />
+        {/* First perpendicular tick mark */}
+        <line
+          x1={t1x + px2 * tickLen} y1={t1y + py2 * tickLen}
+          x2={t1x - px2 * tickLen} y2={t1y - py2 * tickLen}
+          stroke="#0369A1" strokeWidth={2.5} strokeLinecap="round"
+        />
+        {/* Second perpendicular tick mark */}
+        <line
+          x1={t2x + px2 * tickLen} y1={t2y + py2 * tickLen}
+          x2={t2x - px2 * tickLen} y2={t2y - py2 * tickLen}
+          stroke="#0369A1" strokeWidth={2.5} strokeLinecap="round"
+        />
+        {/* Direction arrow at the receiver end */}
+        {headPoints && <polygon points={headPoints} fill="#0369A1" />}
+        {stepBadge}
+      </g>
+    );
+  }
+
   return null;
 }
 
@@ -382,6 +436,39 @@ function PreviewAnnotation({
     return (
       <g pointerEvents="none" opacity={0.7}>
         <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#D97706" strokeWidth={2} strokeLinecap="round" strokeDasharray="4 4" />
+      </g>
+    );
+  }
+
+  if (tool === "handoff") {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const ux = len > 0 ? dx / len : 1;
+    const uy = len > 0 ? dy / len : 0;
+    const px2 = -uy;
+    const py2 = ux;
+    const tickLen = 9;
+    const t1 = 0.85;
+    const t1x = from.x + dx * t1;
+    const t1y = from.y + dy * t1;
+    const t2 = 0.72;
+    const t2x = from.x + dx * t2;
+    const t2y = from.y + dy * t2;
+    return (
+      <g pointerEvents="none" opacity={0.7}>
+        <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#0369A1" strokeWidth={2.5} strokeLinecap="round" strokeDasharray="6 4" />
+        <line
+          x1={t1x + px2 * tickLen} y1={t1y + py2 * tickLen}
+          x2={t1x - px2 * tickLen} y2={t1y - py2 * tickLen}
+          stroke="#0369A1" strokeWidth={2.5} strokeLinecap="round"
+        />
+        <line
+          x1={t2x + px2 * tickLen} y1={t2y + py2 * tickLen}
+          x2={t2x - px2 * tickLen} y2={t2y - py2 * tickLen}
+          stroke="#0369A1" strokeWidth={2.5} strokeLinecap="round"
+        />
+        {headPoints && <polygon points={headPoints} fill="#0369A1" opacity={0.8} />}
       </g>
     );
   }

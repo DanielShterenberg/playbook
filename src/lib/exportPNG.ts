@@ -450,6 +450,66 @@ function drawAnnotation(
     ctx.stroke();
     ctx.setLineDash([]);
     drawArrowHead(ctx, from.x, from.y, to.x, to.y, arrowSize, "#DC2626");
+    return;
+  }
+
+  if (type === "guard") {
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.strokeStyle = "#D97706";
+    ctx.lineWidth = 2 * scale;
+    ctx.globalAlpha = 0.85;
+    ctx.setLineDash([4 * scale, 4 * scale]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+    return;
+  }
+
+  if (type === "handoff") {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const ux = len > 0 ? dx / len : 1;
+    const uy = len > 0 ? dy / len : 0;
+    // Perpendicular direction
+    const px2 = -uy;
+    const py2 = ux;
+    const tickLen = 9 * scale;
+    // Tick positions along the line
+    const t1 = 0.85;
+    const t1x = from.x + dx * t1;
+    const t1y = from.y + dy * t1;
+    const t2 = 0.72;
+    const t2x = from.x + dx * t2;
+    const t2y = from.y + dy * t2;
+
+    ctx.strokeStyle = "#0369A1";
+    ctx.lineWidth = 2.5 * scale;
+    ctx.lineCap = "round";
+
+    // Dashed body line
+    ctx.setLineDash([6 * scale, 4 * scale]);
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Tick marks
+    ctx.beginPath();
+    ctx.moveTo(t1x + px2 * tickLen, t1y + py2 * tickLen);
+    ctx.lineTo(t1x - px2 * tickLen, t1y - py2 * tickLen);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(t2x + px2 * tickLen, t2y + py2 * tickLen);
+    ctx.lineTo(t2x - px2 * tickLen, t2y - py2 * tickLen);
+    ctx.stroke();
+
+    // Arrowhead
+    drawArrowHead(ctx, from.x, from.y, to.x, to.y, arrowSize, "#0369A1");
   }
 }
 

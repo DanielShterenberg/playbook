@@ -47,6 +47,7 @@ const TOOL_KEY_MAP: Record<string, DrawingTool> = {
   s: "screen",
   c: "cut",
   g: "guard",
+  h: "handoff",
   e: "eraser",
 };
 
