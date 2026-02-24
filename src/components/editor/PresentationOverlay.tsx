@@ -106,12 +106,14 @@ export default function PresentationOverlay() {
   }, []);
 
   useEffect(() => {
-    // Show controls on mount and start the hide timer
-    showControls();
+    // Show controls on mount WITHOUT starting the hide timer — controls stay
+    // visible until the first mouse/pointer interaction, which then starts
+    // the 3-second auto-hide countdown via showControls().
+    setControlsVisible(true);
     return () => {
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     };
-  }, [showControls]);
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Keyboard shortcuts: Space, Left/Right, Esc
