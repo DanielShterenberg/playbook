@@ -358,10 +358,10 @@ export default function Court({ variant = "half", onReady, className, paintColor
     const cssWidth = container.clientWidth;
 
     // Compute OOB margins and inner court dimensions
-    const oobLeft = Math.round(cssWidth * OOB_SIDE_FRAC / (1 + 2 * OOB_SIDE_FRAC));
+    const oobLeft = Math.round((cssWidth * OOB_SIDE_FRAC) / (1 + 2 * OOB_SIDE_FRAC)); // OOB margin on the left (and right) side in CSS pixels
     const innerW  = cssWidth - 2 * oobLeft;
-    const innerH  = Math.round(innerW / COURT_ASPECT_RATIO);
-    const oobBot  = Math.round(innerH * OOB_BOTTOM_FRAC);
+    const innerH  = Math.round(innerW / COURT_ASPECT_RATIO); // inner court height based on width and aspect ratio
+    const oobBot  = Math.round(innerH * OOB_BOTTOM_FRAC); // OOB margin at the baseline end (bottom of the court)
     const cssHeight = variant === "full" ? innerH * 2 + oobBot : innerH + oobBot;
 
     // Set CSS size
@@ -369,8 +369,8 @@ export default function Court({ variant = "half", onReady, className, paintColor
     canvas.style.height = `${cssHeight}px`;
 
     // Set backing store size (high-DPI) — also clears the canvas and resets the context
-    canvas.width = Math.round(cssWidth * dpr);
-    canvas.height = Math.round(cssHeight * dpr);
+    canvas.width = Math.round(cssWidth * dpr); // actual pixel width
+    canvas.height = Math.round(cssHeight * dpr); // actual pixel height
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;

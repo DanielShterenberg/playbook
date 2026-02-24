@@ -90,12 +90,13 @@ export const FT_CIRCLE_CENTER_Y = FREE_THROW_LINE_Y;
 const THREE_POINT_RADIUS_FT = 23.75;
 export const THREE_POINT_RADIUS = THREE_POINT_RADIUS_FT / COURT_WIDTH_FT;
 
-/** Distance of corner three line from baseline in feet. */
-const CORNER_THREE_DEPTH_FT = 14;
+/** Distance of corner three line from baseline in feet.
+ *  Inset=4.5 → depth = 47 - (41.75 - sqrt(23.75²-20.5²)) ≈ 17.24ft (arc stays connected). */
+const CORNER_THREE_DEPTH_FT = 17.24;
 export const CORNER_THREE_Y = 1 - CORNER_THREE_DEPTH_FT / COURT_LENGTH_FT;
 
-/** Corner three x positions (3ft from each sideline). */
-const CORNER_THREE_INSET_FT = 3;
+/** Corner three x positions (4.5ft from each sideline — slightly wider than NBA 3ft for visual clarity). */
+const CORNER_THREE_INSET_FT = 4.5;
 export const CORNER_THREE_LEFT_X = CORNER_THREE_INSET_FT / COURT_WIDTH_FT;
 export const CORNER_THREE_RIGHT_X = 1 - CORNER_THREE_INSET_FT / COURT_WIDTH_FT;
 
