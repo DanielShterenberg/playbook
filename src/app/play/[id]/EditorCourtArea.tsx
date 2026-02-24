@@ -23,6 +23,7 @@ import { useStore, createDefaultPlay, selectEditorScene } from "@/lib/store";
 import CourtWithPlayers from "@/components/players/CourtWithPlayers";
 import type { CourtVariant } from "@/components/court/Court";
 import { COURT_ASPECT_RATIO } from "@/components/court/courtDimensions";
+import { OOB_SIDE_FRAC, OOB_BOTTOM_FRAC } from "@/components/court/Court";
 import { loadPlay } from "@/lib/db";
 import { useTeam } from "@/contexts/TeamContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -35,6 +36,11 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
   const scene = useStore(selectEditorScene);
   const selectedSceneId = useStore((s) => s.selectedSceneId);
   const courtType = useStore((s) => s.currentPlay?.courtType ?? "half");
+  const currentPlay = useStore((s) => s.currentPlay);
+  // Effective flip: scene override if set, otherwise play-level value
+  const sceneFlip = scene?.flipped;
+  const playFlipped = currentPlay?.flipped ?? false;
+  const effectiveFlipped = sceneFlip != null ? sceneFlip : playFlipped;
   const { role } = useTeam();
   const isReadOnly = role === "viewer";
   // Wait for Firebase Auth to restore the previous session before hitting
@@ -57,8 +63,11 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
       if (!el) return;
       // Full court canvas is 2× taller than half court, so cap width at half
       // the available height × aspect ratio to prevent vertical overflow.
+      // OOB margins make the canvas slightly wider relative to the inner court,
+      // so oobFactor adjusts for that.
       const heightFactor = courtType === "full" ? 0.5 : 1;
-      setMaxCourtWidth(Math.round(el.clientHeight * heightFactor * COURT_ASPECT_RATIO));
+      const oobFactor = (1 + 2 * OOB_SIDE_FRAC) / (1 + OOB_BOTTOM_FRAC);
+      setMaxCourtWidth(Math.round(el.clientHeight * heightFactor * COURT_ASPECT_RATIO * oobFactor));
     });
     obs.observe(el);
     return () => obs.disconnect();
@@ -178,6 +187,7 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
           variant={courtType as CourtVariant}
           className="w-full max-w-full md:max-w-xl lg:max-w-3xl"
           readOnly={isReadOnly}
+          flipped={effectiveFlipped}
         />
       </div>
     </div>

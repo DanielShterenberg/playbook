@@ -42,6 +42,7 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
   const updatePlayColors = useStore((s) => s.updatePlayColors);
   const isPresentationMode = useStore((s) => s.isPresentationMode);
   const enterPresentationMode = useStore((s) => s.enterPresentationMode);
+  const setPlayFlipped = useStore((s) => s.setPlayFlipped);
 
   const title = currentPlay?.title ?? null;
 
@@ -281,6 +282,25 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
             )}
             {shareMsg ?? (isSharing ? "Sharing…" : "Share")}
           </button>
+
+          {/* Flip court orientation button */}
+          {currentPlay && (
+            <button
+              onClick={() => setPlayFlipped(!(currentPlay.flipped ?? false))}
+              aria-label="Flip court orientation"
+              title="Flip court (basket north/south)"
+              aria-pressed={currentPlay.flipped ?? false}
+              className={`flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
+                currentPlay.flipped
+                  ? "bg-indigo-100 text-indigo-700 hover:bg-indigo-200"
+                  : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+              }`}
+            >
+              <svg width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M8 2v12M5 5L2 8l3 3M11 5l3 3-3 3" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          )}
 
           {/* Present button */}
           <button

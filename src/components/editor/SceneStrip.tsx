@@ -208,6 +208,11 @@ function ContextMenu({
   const duplicateScene = useStore((s) => s.duplicateScene);
   const removeScene = useStore((s) => s.removeScene);
   const reorderScene = useStore((s) => s.reorderScene);
+  const setSceneFlipped = useStore((s) => s.setSceneFlipped);
+  const currentPlay = useStore((s) => s.currentPlay);
+  const scene = currentPlay?.scenes.find((s) => s.id === sceneId) ?? null;
+  const playFlipped = currentPlay?.flipped ?? false;
+  const sceneEffectiveFlipped = scene?.flipped != null ? scene.flipped : playFlipped;
   const ref = useRef<HTMLDivElement>(null);
 
   // Close when clicking outside
@@ -259,6 +264,16 @@ function ContextMenu({
           label: "Move Right",
           disabled: sceneIndex === totalScenes - 1,
           action: () => handle(() => reorderScene(sceneId, sceneIndex + 1)),
+        },
+        {
+          label: sceneEffectiveFlipped ? "Unflip scene" : "Flip scene",
+          disabled: false,
+          action: () => handle(() => setSceneFlipped(sceneId, !sceneEffectiveFlipped)),
+        },
+        {
+          label: "Reset scene flip",
+          disabled: scene?.flipped == null,
+          action: () => handle(() => setSceneFlipped(sceneId, null)),
         },
         {
           label: "Delete",

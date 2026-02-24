@@ -77,16 +77,28 @@ interface RenderedAnnotationProps {
   step?: number;
   /** Whether to show the step badge. */
   showStepBadge?: boolean;
-  /** Court canvas pixel dimensions — used to convert stored normalized coords to pixels. */
+  /** Inner play-area pixel dimensions — used to convert stored normalized coords to pixels. */
   width: number;
   height: number;
+  /** X offset from SVG left edge to play area (OOB side margin). Default 0. */
+  offsetX?: number;
+  /** Y offset from SVG top to play area. Default 0. */
+  offsetY?: number;
+  /** Whether the court is flipped (basket at top). */
+  flipped?: boolean;
 }
 
-function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, width, height }: RenderedAnnotationProps) {
+function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, width, height, offsetX = 0, offsetY = 0, flipped = false }: RenderedAnnotationProps) {
   const { type } = ann;
   // Annotations are stored in normalised [0-1] coords. Convert to CSS pixels for rendering.
-  const from = { x: ann.from.x * width, y: ann.from.y * height };
-  const to   = { x: ann.to.x   * width, y: ann.to.y   * height };
+  // width/height here are the play area (inner court) dimensions; offsetX/offsetY position
+  // the play area within the SVG canvas.
+  const normToSvg = (nx: number, ny: number) => ({
+    x: nx * width + offsetX,
+    y: flipped ? (1 - ny) * height + offsetY : ny * height + offsetY,
+  });
+  const from = normToSvg(ann.from.x, ann.from.y);
+  const to   = normToSvg(ann.to.x,   ann.to.y);
   const hitStyle: React.CSSProperties = { cursor: "pointer", pointerEvents: "stroke" };
 
   // Step badge — small circle at the midpoint of the annotation
@@ -412,14 +424,24 @@ function findNearestPlayer(
 // ---------------------------------------------------------------------------
 
 export interface AnnotationLayerProps {
-  /** CSS pixel width of the court canvas. */
+  /** Total SVG/canvas CSS pixel width (including OOB margins). */
   width: number;
-  /** CSS pixel height of the court canvas. */
+  /** Total SVG/canvas CSS pixel height (including OOB margins). */
   height: number;
+  /** Inner play-area width in CSS pixels (excluding OOB side margins). Defaults to width. */
+  playAreaWidth?: number;
+  /** Inner play-area height in CSS pixels (excluding OOB bottom margin). Defaults to height. */
+  playAreaHeight?: number;
+  /** X offset from SVG left edge to the play area (OOB side margin). Default 0. */
+  offsetX?: number;
+  /** Y offset from SVG top to the play area (for full court). Default 0. */
+  offsetY?: number;
   /** The scene ID currently being edited. */
   sceneId: string | null;
   /** Player positions for snap detection. */
   players: SnapPlayer[];
+  /** Whether the court is flipped (basket at top). */
+  flipped?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -429,9 +451,17 @@ export interface AnnotationLayerProps {
 export default function AnnotationLayer({
   width,
   height,
+  playAreaWidth,
+  playAreaHeight,
+  offsetX = 0,
+  offsetY = 0,
   sceneId,
   players,
+  flipped = false,
 }: AnnotationLayerProps) {
+  // Inner court dimensions for coordinate conversion
+  const paWidth  = playAreaWidth  ?? width;
+  const paHeight = playAreaHeight ?? height;
   const selectedTool = useStore((s) => s.selectedTool);
   const selectedTimingStep = useStore((s) => s.selectedTimingStep);
   const selectedAnnotationId = useStore((s) => s.selectedAnnotationId);
@@ -565,13 +595,17 @@ export default function AnnotationLayer({
         // Guard: from-player must come from defense pool
         const fromSnapPool = selectedTool === "guard" ? defenseOnly : players;
         const fromNearest = findNearestPlayer(from.x, from.y, fromSnapPool);
+        // Convert SVG pixel coords to normalised [0-1] court coords.
+        // Accounts for OOB side margins (offsetX) and flip.
+        const svgToNorm = (svgX: number, svgY: number) => ({
+          x: (svgX - offsetX) / paWidth,
+          y: flipped ? 1 - (svgY - offsetY) / paHeight : (svgY - offsetY) / paHeight,
+        });
         const annotation: Annotation = {
           id: crypto.randomUUID(),
           type: selectedTool as Annotation["type"],
-          // Store in normalised [0-1] coords so the store is resolution-independent
-          // and addScene can use annotation endpoints directly as player positions.
-          from: { x: from.x / width, y: from.y / height },
-          to:   { x: to.x   / width, y: to.y   / height },
+          from: svgToNorm(from.x, from.y),
+          to:   svgToNorm(to.x,   to.y),
           fromPlayer: fromNearest
             ? { side: fromNearest.side, position: fromNearest.position }
             : null,
@@ -598,8 +632,11 @@ export default function AnnotationLayer({
       defenseOnly,
       addAnnotation,
       setSelectedAnnotationId,
-      width,
-      height,
+      paWidth,
+      paHeight,
+      offsetX,
+      offsetY,
+      flipped,
     ],
   );
 
@@ -647,8 +684,11 @@ export default function AnnotationLayer({
           onSelect={handleAnnotationSelect}
           step={annotationStepMap.get(ann.id)}
           showStepBadge={showStepBadges}
-          width={width}
-          height={height}
+          width={paWidth}
+          height={paHeight}
+          offsetX={offsetX}
+          offsetY={offsetY}
+          flipped={flipped}
         />
       ))}
 

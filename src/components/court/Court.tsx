@@ -49,21 +49,26 @@ export type CourtToCanvas = (normX: number, normY: number) => { x: number; y: nu
 export interface CourtReadyPayload {
   canvas: HTMLCanvasElement;
   courtToCanvas: CourtToCanvas;
-  /** Total canvas width in CSS pixels. */
+  /** Total canvas width in CSS pixels (inner court + OOB margins). */
   width: number;
-  /** Total canvas height in CSS pixels. */
+  /** Total canvas height in CSS pixels (inner court + OOB margin). */
   height: number;
   /**
-   * Height of the play area in CSS pixels.
-   * For half court this equals height; for full court it is height/2 (one end).
+   * Height of the play area (inner court) in CSS pixels.
+   * For half court this equals innerH; for full court it is innerH (one end).
    */
   playAreaHeight: number;
   /**
    * Y offset from the canvas top to the play area.
-   * For half court this is 0; for full court it is height/2 (players are in
-   * the near/bottom end of the full court canvas).
+   * For half court this is 0; for full court it is innerH + oobBot.
    */
   playAreaOffsetY: number;
+  /**
+   * X offset from the canvas left edge to the play area (OOB side margin).
+   */
+  playAreaOffsetX: number;
+  /** Inner court width in CSS pixels (canvas width minus 2× side OOB margin). */
+  playAreaWidth: number;
 }
 
 export interface CourtProps {
@@ -83,7 +88,22 @@ export interface CourtProps {
    * Defaults to "#E07B39" (orange).
    */
   paintColor?: string;
+  /**
+   * When true, flips the court so the basket is at the top (north).
+   * The flip is purely visual — normalised coords are unchanged.
+   */
+  flipped?: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Out-of-bounds margin fractions (relative to inner court dimensions)
+// ---------------------------------------------------------------------------
+
+/** Side OOB margin on each side, as a fraction of inner court width. */
+export const OOB_SIDE_FRAC = 0.06;
+/** Bottom (baseline) OOB margin, as a fraction of inner court height. */
+export const OOB_BOTTOM_FRAC = 0.07;
+// No top margin — the half-court line is the court boundary.
 
 // ---------------------------------------------------------------------------
 // Colours
@@ -325,7 +345,7 @@ export function drawCourt(
 // Component
 // ---------------------------------------------------------------------------
 
-export default function Court({ variant = "half", onReady, className, paintColor }: CourtProps) {
+export default function Court({ variant = "half", onReady, className, paintColor, flipped = false }: CourtProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -336,32 +356,85 @@ export default function Court({ variant = "half", onReady, className, paintColor
 
     const dpr = window.devicePixelRatio ?? 1;
     const cssWidth = container.clientWidth;
-    const halfH = Math.round(cssWidth / COURT_ASPECT_RATIO);
-    const cssHeight = variant === "full" ? halfH * 2 : halfH;
+
+    // Compute OOB margins and inner court dimensions
+    const oobLeft = Math.round(cssWidth * OOB_SIDE_FRAC / (1 + 2 * OOB_SIDE_FRAC));
+    const innerW  = cssWidth - 2 * oobLeft;
+    const innerH  = Math.round(innerW / COURT_ASPECT_RATIO);
+    const oobBot  = Math.round(innerH * OOB_BOTTOM_FRAC);
+    const cssHeight = variant === "full" ? innerH * 2 + oobBot : innerH + oobBot;
 
     // Set CSS size
     canvas.style.width = `${cssWidth}px`;
     canvas.style.height = `${cssHeight}px`;
 
-    // Set backing store size (high-DPI)
+    // Set backing store size (high-DPI) — also clears the canvas and resets the context
     canvas.width = Math.round(cssWidth * dpr);
     canvas.height = Math.round(cssHeight * dpr);
 
     const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.scale(dpr, dpr);
+    if (!ctx) return;
+
+    ctx.scale(dpr, dpr);
+
+    // Apply vertical flip if requested (purely visual — courtToCanvas compensates)
+    if (flipped) {
+      ctx.translate(0, cssHeight);
+      ctx.scale(1, -1);
     }
 
-    drawCourt(canvas, cssWidth, cssHeight, variant, paintColor);
+    // Fill entire canvas with floor colour (covers OOB margins)
+    ctx.fillStyle = COLOR_COURT;
+    ctx.fillRect(0, 0, cssWidth, cssHeight);
+
+    if (variant === "full") {
+      // Near basket end (bottom half) — normal orientation
+      ctx.save();
+      ctx.translate(oobLeft, innerH + oobBot);
+      drawHalfCourtInner(ctx, innerW, innerH, paintColor);
+      ctx.restore();
+
+      // Far basket end (top half) — mirrored vertically
+      ctx.save();
+      ctx.translate(oobLeft, innerH + oobBot);
+      ctx.scale(1, -1);
+      drawHalfCourtInner(ctx, innerW, innerH, paintColor);
+      ctx.restore();
+
+      // Centre line
+      ctx.strokeStyle = COLOR_LINE;
+      ctx.lineWidth = COLOR_LINE_WIDTH_PX;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(oobLeft, innerH + oobBot);
+      ctx.lineTo(oobLeft + innerW, innerH + oobBot);
+      ctx.stroke();
+
+      // Full centre circle
+      const scaleY = innerH / innerW;
+      ctx.save();
+      ctx.scale(1, scaleY);
+      ctx.beginPath();
+      ctx.arc(oobLeft + innerW * 0.5, (innerH + oobBot) / scaleY, innerW * CENTRE_CIRCLE_RADIUS, 0, Math.PI * 2);
+      ctx.restore();
+      ctx.stroke();
+    } else {
+      // Half court — translate right by OOB margin
+      ctx.save();
+      ctx.translate(oobLeft, 0);
+      drawHalfCourtInner(ctx, innerW, innerH, paintColor);
+      ctx.restore();
+    }
 
     // Notify parent with coordinate conversion helper and play-area metadata
     if (onReady) {
-      const playAreaHeight = variant === "full" ? halfH : cssHeight;
-      const playAreaOffsetY = variant === "full" ? halfH : 0;
+      const playAreaOffsetY = variant === "full" ? innerH + oobBot : 0;
 
       const courtToCanvas: CourtToCanvas = (normX, normY) => ({
-        x: normX * cssWidth,
-        y: normY * playAreaHeight + playAreaOffsetY,
+        x: normX * innerW + oobLeft,
+        y: flipped
+          ? (1 - normY) * innerH + playAreaOffsetY
+          : normY * innerH + playAreaOffsetY,
       });
 
       onReady({
@@ -369,11 +442,13 @@ export default function Court({ variant = "half", onReady, className, paintColor
         courtToCanvas,
         width: cssWidth,
         height: cssHeight,
-        playAreaHeight,
+        playAreaHeight: innerH,
         playAreaOffsetY,
+        playAreaOffsetX: oobLeft,
+        playAreaWidth: innerW,
       });
     }
-  }, [variant, onReady, paintColor]);
+  }, [variant, onReady, paintColor, flipped]);
 
   useEffect(() => {
     draw();

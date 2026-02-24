@@ -61,6 +61,8 @@ export interface Scene {
   };
   ball: BallState;
   timingGroups: TimingGroup[];
+  /** undefined/null = inherit play.flipped; boolean = override for this scene only */
+  flipped?: boolean | null;
 }
 
 export interface RosterPlayer {
@@ -108,6 +110,8 @@ export interface Play {
   scenes: Scene[];
   /** Optional custom colors for offensive and defensive player tokens. */
   colors?: PlayColors;
+  /** When true, basket is at the top (north) instead of the default south. */
+  flipped?: boolean;
 }
 
 export interface User {
