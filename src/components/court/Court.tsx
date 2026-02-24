@@ -100,7 +100,7 @@ export interface CourtProps {
 // ---------------------------------------------------------------------------
 
 /** Side OOB margin on each side, as a fraction of inner court width. */
-export const OOB_SIDE_FRAC = 0.06;
+export const OOB_SIDE_FRAC = 0.10;
 /** Bottom (baseline) OOB margin, as a fraction of inner court height. */
 export const OOB_BOTTOM_FRAC = 0.07;
 // No top margin — the half-court line is the court boundary.
