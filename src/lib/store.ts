@@ -66,6 +66,10 @@ export interface AppStore {
     patch: Partial<Pick<Play, "title" | "description" | "category" | "tags" | "courtType">>,
   ) => void;
   updatePlayColors: (colors: PlayColors) => void;
+  /** Toggle or set the play-level court orientation (basket north/south). */
+  setPlayFlipped: (flipped: boolean) => void;
+  /** Override the court orientation for a specific scene (null = inherit from play). */
+  setSceneFlipped: (sceneId: string, flipped: boolean | null) => void;
 
   // Undo / Redo (issue #83)
   undo: () => void;
@@ -343,6 +347,22 @@ export const useStore = create<AppStore>()(
         return { currentPlay: { ...state.currentPlay, colors, updatedAt: new Date() } };
       }),
 
+    setPlayFlipped: (flipped) =>
+      set((state) => {
+        if (!state.currentPlay) return state;
+        return { currentPlay: { ...state.currentPlay, flipped, updatedAt: new Date() } };
+      }),
+
+    setSceneFlipped: (sceneId, flipped) => {
+      const state = get();
+      const snapshot = captureSnapshot(state);
+      if (snapshot) useHistoryStore.getState().pushSnapshot(snapshot);
+      set((s) => {
+        if (!s.currentPlay) return s;
+        return { currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => ({ ...sc, flipped })) };
+      });
+    },
+
     // -----------------------------------------------------------------------
     // Scene management
     // -----------------------------------------------------------------------
@@ -515,6 +535,15 @@ export const useStore = create<AppStore>()(
                 p.position === player.position ? player : p,
               ),
             },
+            // Feature 1: keep annotation origins in sync with the moved player
+            timingGroups: sc.timingGroups.map((g) => ({
+              ...g,
+              annotations: g.annotations.map((ann) =>
+                ann.fromPlayer?.side === side && ann.fromPlayer.position === player.position
+                  ? { ...ann, from: { x: player.x, y: player.y } }
+                  : ann,
+              ),
+            })),
           })),
         };
       });
