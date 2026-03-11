@@ -29,6 +29,7 @@ import { useStore, selectEditorScene, selectAllAnnotations } from "@/lib/store";
 import type { DrawingTool } from "@/lib/store";
 import type { Annotation, Point } from "@/lib/types";
 import { TOOL_CURSOR } from "@/components/editor/DrawingToolsPanel";
+import { useHistoryStore } from "@/lib/history";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -69,6 +70,67 @@ function arrowHead(
   return `${tipX},${tipY} ${baseX + px * w},${baseY + py * w} ${baseX - px * w},${baseY - py * w}`;
 }
 
+/**
+ * Build an SVG quadratic bezier path string from pixel from/to/control points.
+ * Falls back to a straight line if no control point.
+ */
+function bezierPath(from: Point, to: Point, cp?: Point): string {
+  if (!cp) return `M ${from.x},${from.y} L ${to.x},${to.y}`;
+  return `M ${from.x},${from.y} Q ${cp.x},${cp.y} ${to.x},${to.y}`;
+}
+
+/**
+ * Compute a point on a quadratic bezier at parameter t.
+ * When cp is undefined, returns linear interpolation.
+ */
+function bezierPoint(from: Point, to: Point, t: number, cp?: Point): Point {
+  if (!cp) {
+    return { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t };
+  }
+  const mt = 1 - t;
+  return {
+    x: mt * mt * from.x + 2 * mt * t * cp.x + t * t * to.x,
+    y: mt * mt * from.y + 2 * mt * t * cp.y + t * t * to.y,
+  };
+}
+
+/**
+ * Compute the tangent direction at the end of a quadratic bezier (t=1).
+ * Returns a vector from the point just before the end toward the end —
+ * used to orient the arrowhead correctly on curved lines.
+ */
+function bezierEndTangent(from: Point, to: Point, cp?: Point): { ux: number; uy: number } {
+  // Tangent at t=1: direction from cp to to (or from to to for straight lines)
+  const tail = cp ?? from;
+  const dx = to.x - tail.x;
+  const dy = to.y - tail.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 0.001) return { ux: 1, uy: 0 };
+  return { ux: dx / len, uy: dy / len };
+}
+
+/**
+ * Arrowhead polygon string using bezier tangent direction at the endpoint.
+ */
+function arrowHeadBezier(to: Point, from: Point, cp: Point | undefined, size: number = 12): string {
+  const { ux, uy } = bezierEndTangent(from, to, cp);
+  // Perpendicular
+  const px = -uy;
+  const py = ux;
+  const baseX = to.x - ux * size;
+  const baseY = to.y - uy * size;
+  const w = size * 0.45;
+  return `${to.x},${to.y} ${baseX + px * w},${baseY + py * w} ${baseX - px * w},${baseY - py * w}`;
+}
+
+/**
+ * Default control point: offset perpendicular to the line midpoint by a small amount.
+ * Used when the user has not yet dragged the handle.
+ */
+function defaultControlPoint(from: Point, to: Point): Point {
+  return { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+}
+
 interface RenderedAnnotationProps {
   ann: Annotation;
   selected: boolean;
@@ -99,11 +161,18 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
   });
   const from = normToSvg(ann.from.x, ann.from.y);
   const to   = normToSvg(ann.to.x,   ann.to.y);
+
+  // Control point (bezier curve support)
+  const cp: Point | undefined = ann.controlPoints.length > 0
+    ? normToSvg(ann.controlPoints[0].x, ann.controlPoints[0].y)
+    : undefined;
+
   const hitStyle: React.CSSProperties = { cursor: "pointer", pointerEvents: "stroke" };
 
-  // Step badge — small circle at the midpoint of the annotation
-  const midX = (from.x + to.x) / 2;
-  const midY = (from.y + to.y) / 2;
+  // Step badge — small circle at the midpoint of the annotation (on the curve)
+  const mid = bezierPoint(from, to, 0.5, cp);
+  const midX = mid.x;
+  const midY = mid.y;
   const stepBadge = showStepBadge && step !== undefined ? (
     <g pointerEvents="none">
       <circle cx={midX} cy={midY} r={9} fill="#3B82F6" opacity={0.9} />
@@ -121,7 +190,11 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
     </g>
   ) : null;
 
-  const headPoints = arrowHead(to.x, to.y, from.x, from.y);
+  // For straight lines use legacy arrowHead; for bezier use bezier tangent
+  const headPoints = cp
+    ? arrowHeadBezier(to, from, cp)
+    : arrowHead(to.x, to.y, from.x, from.y);
+
   const selectRing = selected ? (
     <rect
       x={Math.min(from.x, to.x) - 6}
@@ -143,19 +216,18 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
   };
 
   if (type === "movement") {
+    const d = bezierPath(from, to, cp);
     return (
       <g onClick={handleClick} style={hitStyle}>
         {selectRing}
         {/* Invisible wide hit-area */}
-        <line
-          x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-          stroke="transparent" strokeWidth={14}
-        />
-        <line
-          x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+        <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
+        <path
+          d={d}
           stroke="#1E3A5F"
           strokeWidth={2.5}
           strokeLinecap="round"
+          fill="none"
         />
         {headPoints && (
           <polygon points={headPoints} fill="#1E3A5F" />
@@ -166,7 +238,28 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
   }
 
   if (type === "dribble") {
-    // Build zigzag path
+    if (cp) {
+      // Curved dribble: render as bezier path (smooth) + arrowhead
+      const d = bezierPath(from, to, cp);
+      return (
+        <g onClick={handleClick} style={hitStyle}>
+          {selectRing}
+          <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
+          <path
+            d={d}
+            stroke="#1E3A5F"
+            strokeWidth={2.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray="5 4"
+            fill="none"
+          />
+          {headPoints && <polygon points={headPoints} fill="#1E3A5F" />}
+          {stepBadge}
+        </g>
+      );
+    }
+    // Straight dribble: zigzag path
     const dx = to.x - from.x;
     const dy = to.y - from.y;
     const len = Math.sqrt(dx * dx + dy * dy);
@@ -202,19 +295,18 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
   }
 
   if (type === "pass") {
-    // Straight line with solid triangle tip — rendered slightly thinner / different colour
+    // Straight/curved line with solid triangle tip
+    const d = bezierPath(from, to, cp);
     return (
       <g onClick={handleClick} style={hitStyle}>
         {selectRing}
-        <line
-          x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-          stroke="transparent" strokeWidth={14}
-        />
-        <line
-          x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+        <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
+        <path
+          d={d}
           stroke="#059669"
           strokeWidth={2}
           strokeLinecap="round"
+          fill="none"
         />
         {headPoints && <polygon points={headPoints} fill="#059669" />}
         {stepBadge}
@@ -250,19 +342,18 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
   }
 
   if (type === "cut") {
+    const d = bezierPath(from, to, cp);
     return (
       <g onClick={handleClick} style={hitStyle}>
         {selectRing}
-        <line
-          x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-          stroke="transparent" strokeWidth={14}
-        />
-        <line
-          x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+        <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
+        <path
+          d={d}
           stroke="#DC2626"
           strokeWidth={2.5}
           strokeLinecap="round"
           strokeDasharray="7 5"
+          fill="none"
         />
         {headPoints && <polygon points={headPoints} fill="#DC2626" />}
         {stepBadge}
@@ -274,20 +365,19 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
     // Guard assignment: dashed line from defender to offensive player.
     // Rendered in amber/orange to be visually distinct from cut (red dashed)
     // and from movement (solid navy). No arrowhead — it is a static assignment link.
+    const d = bezierPath(from, to, cp);
     return (
       <g onClick={handleClick} style={hitStyle}>
         {selectRing}
-        <line
-          x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-          stroke="transparent" strokeWidth={14}
-        />
-        <line
-          x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+        <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
+        <path
+          d={d}
           stroke="#D97706"
           strokeWidth={2}
           strokeLinecap="round"
           strokeDasharray="4 4"
           opacity={0.85}
+          fill="none"
         />
         {stepBadge}
       </g>
@@ -298,47 +388,48 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
     // Dribble hand-off (DHO): dashed line from ball-handler to receiver with
     // two small perpendicular tick marks near the delivery point (to endpoint).
     // Standard DHO notation used in FastDraw / Synergy coaching diagrams.
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    const ux = len > 0 ? dx / len : 1;
-    const uy = len > 0 ? dy / len : 0;
-    // Perpendicular direction
-    const px2 = -uy;
-    const py2 = ux;
-    // Tick bar length
+    const d = bezierPath(from, to, cp);
     const tickLen = 9;
-    // First tick: at 85% along the line
-    const t1 = 0.85;
-    const t1x = from.x + dx * t1;
-    const t1y = from.y + dy * t1;
-    // Second tick: at 72% along the line
-    const t2 = 0.72;
-    const t2x = from.x + dx * t2;
-    const t2y = from.y + dy * t2;
+    // Tick positions along the path (bezier-aware)
+    const tick1 = bezierPoint(from, to, 0.85, cp);
+    const tick2 = bezierPoint(from, to, 0.72, cp);
+    // Tangent at t=0.85 and t=0.72 for perpendicular tick orientation
+    const tangent1Before = bezierPoint(from, to, 0.83, cp);
+    const tangent2Before = bezierPoint(from, to, 0.70, cp);
+    const getTick = (pt: Point, before: Point) => {
+      const ddx = pt.x - before.x;
+      const ddy = pt.y - before.y;
+      const dlen = Math.sqrt(ddx * ddx + ddy * ddy);
+      const pux = dlen > 0 ? -ddy / dlen : 0;
+      const puy = dlen > 0 ? ddx / dlen : 1;
+      return { pux, puy };
+    };
+    const { pux: pux1, puy: puy1 } = getTick(tick1, tangent1Before);
+    const { pux: pux2, puy: puy2 } = getTick(tick2, tangent2Before);
     return (
       <g onClick={handleClick} style={hitStyle}>
         {selectRing}
         {/* Invisible wide hit-area */}
-        <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="transparent" strokeWidth={14} />
+        <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
         {/* Dashed body line */}
-        <line
-          x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+        <path
+          d={d}
           stroke="#0369A1"
           strokeWidth={2.5}
           strokeLinecap="round"
           strokeDasharray="6 4"
+          fill="none"
         />
         {/* First perpendicular tick mark */}
         <line
-          x1={t1x + px2 * tickLen} y1={t1y + py2 * tickLen}
-          x2={t1x - px2 * tickLen} y2={t1y - py2 * tickLen}
+          x1={tick1.x + pux1 * tickLen} y1={tick1.y + puy1 * tickLen}
+          x2={tick1.x - pux1 * tickLen} y2={tick1.y - puy1 * tickLen}
           stroke="#0369A1" strokeWidth={2.5} strokeLinecap="round"
         />
         {/* Second perpendicular tick mark */}
         <line
-          x1={t2x + px2 * tickLen} y1={t2y + py2 * tickLen}
-          x2={t2x - px2 * tickLen} y2={t2y - py2 * tickLen}
+          x1={tick2.x + pux2 * tickLen} y1={tick2.y + puy2 * tickLen}
+          x2={tick2.x - pux2 * tickLen} y2={tick2.y - puy2 * tickLen}
           stroke="#0369A1" strokeWidth={2.5} strokeLinecap="round"
         />
         {/* Direction arrow at the receiver end */}
@@ -555,6 +646,7 @@ export default function AnnotationLayer({
   const setSelectedAnnotationId = useStore((s) => s.setSelectedAnnotationId);
   const addAnnotation = useStore((s) => s.addAnnotation);
   const removeAnnotation = useStore((s) => s.removeAnnotation);
+  const updateAnnotation = useStore((s) => s.updateAnnotation);
   const isPlaying = useStore((s) => s.isPlaying);
   const currentStep = useStore((s) => s.currentStep);
   const scene = useStore(selectEditorScene);
@@ -582,6 +674,13 @@ export default function AnnotationLayer({
   // In-progress stroke state
   const [drawing, setDrawing] = useState<{ from: Point; to: Point } | null>(null);
   const drawingRef = useRef<{ from: Point; to: Point } | null>(null);
+
+  // Control-point dragging state (for bending existing annotations)
+  const cpDragRef = useRef<{
+    annotationId: string;
+    annotation: Annotation;
+  } | null>(null);
+  const [cpDragging, setCpDragging] = useState(false);
 
   // Snap highlight — player near cursor
   const [snapTarget, setSnapTarget] = useState<SnapPlayer | null>(null);
@@ -639,10 +738,25 @@ export default function AnnotationLayer({
     [isDrawingTool, selectedTool, getSVGCoords, players, defenseOnly],
   );
 
-  // Mouse move — update preview
+  // Mouse move — update preview or drag control point
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
       const pt = getSVGCoords(e);
+
+      // If dragging a control point, update the annotation
+      if (cpDragRef.current && sceneId) {
+        const { annotation } = cpDragRef.current;
+        const cpNorm = {
+          x: (pt.x - offsetX) / paWidth,
+          y: flipped ? 1 - (pt.y - offsetY) / paHeight : (pt.y - offsetY) / paHeight,
+        };
+        const updated = { ...annotation, controlPoints: [cpNorm] };
+        // Keep the ref's annotation up-to-date so consecutive moves see the latest CP
+        cpDragRef.current.annotation = updated;
+        updateAnnotation(sceneId, updated);
+        return;
+      }
+
       // While dragging a guard annotation, snap the endpoint to offense only.
       const snapPool =
         selectedTool === "guard" && drawingRef.current
@@ -657,12 +771,19 @@ export default function AnnotationLayer({
       drawingRef.current = next;
       setDrawing(next);
     },
-    [getSVGCoords, players, offenseOnly, selectedTool],
+    [getSVGCoords, players, offenseOnly, selectedTool, sceneId, updateAnnotation, paWidth, paHeight, offsetX, offsetY, flipped],
   );
 
-  // Mouse up — commit annotation
+  // Mouse up — commit annotation or finish CP drag
   const handleMouseUp = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
+      // Finish control-point drag
+      if (cpDragRef.current) {
+        cpDragRef.current = null;
+        setCpDragging(false);
+        return;
+      }
+
       if (!drawingRef.current || !sceneId) {
         setDrawing(null);
         drawingRef.current = null;
@@ -727,6 +848,27 @@ export default function AnnotationLayer({
     ],
   );
 
+  // Mouse down on a control-point drag handle
+  const handleCpMouseDown = useCallback(
+    (e: React.MouseEvent, ann: Annotation) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (!sceneId) return;
+      // Push undo snapshot before the drag begins
+      const state = useStore.getState();
+      const { currentPlay, selectedSceneId: sid } = state;
+      if (currentPlay) {
+        useHistoryStore.getState().pushSnapshot({
+          play: JSON.parse(JSON.stringify(currentPlay)) as typeof currentPlay,
+          selectedSceneId: sid,
+        });
+      }
+      cpDragRef.current = { annotationId: ann.id, annotation: ann };
+      setCpDragging(true);
+    },
+    [sceneId],
+  );
+
   // Handle eraser click on annotation
   const handleAnnotationSelect = useCallback(
     (id: string) => {
@@ -739,7 +881,34 @@ export default function AnnotationLayer({
     [selectedTool, sceneId, removeAnnotation, setSelectedAnnotationId],
   );
 
-  const cursor = TOOL_CURSOR[selectedTool];
+  const cursor = cpDragging ? "grabbing" : TOOL_CURSOR[selectedTool];
+
+  // Find the selected annotation for control-point handle rendering
+  const selectedAnnotation = selectedAnnotationId
+    ? annotations.find((a) => a.id === selectedAnnotationId) ?? null
+    : null;
+
+  // Compute SVG-pixel coords for the selected annotation's control point handle.
+  // The handle is shown only in "select" mode and only when the screen is not animating.
+  const showCpHandle = !isPlaying && selectedTool === "select" && selectedAnnotation !== null;
+
+  const normToSvgForHandle = (nx: number, ny: number) => ({
+    x: nx * paWidth + offsetX,
+    y: flipped ? (1 - ny) * paHeight + offsetY : ny * paHeight + offsetY,
+  });
+
+  let cpHandlePx: Point | null = null;
+  if (showCpHandle && selectedAnnotation) {
+    const annFrom = normToSvgForHandle(selectedAnnotation.from.x, selectedAnnotation.from.y);
+    const annTo   = normToSvgForHandle(selectedAnnotation.to.x,   selectedAnnotation.to.y);
+    if (selectedAnnotation.controlPoints.length > 0) {
+      const cpNorm = selectedAnnotation.controlPoints[0];
+      cpHandlePx = normToSvgForHandle(cpNorm.x, cpNorm.y);
+    } else {
+      // Default handle position: midpoint of the straight line (user hasn't curved it yet)
+      cpHandlePx = defaultControlPoint(annFrom, annTo);
+    }
+  }
 
   return (
     <svg
@@ -752,8 +921,9 @@ export default function AnnotationLayer({
         height,
         overflow: "visible",
         cursor,
-        // Only capture events when a drawing tool is active
-        pointerEvents: isDrawingTool ? "all" : "none",
+        // Capture events when drawing, when dragging a control point, or when
+        // in select mode with an annotation selected (so the CP handle is clickable).
+        pointerEvents: (isDrawingTool || cpDragging || showCpHandle) ? "all" : "none",
       }}
       viewBox={`0 0 ${width} ${height}`}
       aria-label="Annotation drawing layer"
@@ -778,6 +948,48 @@ export default function AnnotationLayer({
           flipped={flipped}
         />
       ))}
+
+      {/* Control-point drag handle for selected annotation */}
+      {showCpHandle && cpHandlePx && selectedAnnotation && (
+        <g>
+          {/* Dotted guide line from annotation midpoint area to the handle */}
+          {selectedAnnotation.controlPoints.length > 0 && (() => {
+            const annFrom = normToSvgForHandle(selectedAnnotation.from.x, selectedAnnotation.from.y);
+            const annTo   = normToSvgForHandle(selectedAnnotation.to.x,   selectedAnnotation.to.y);
+            const mid = defaultControlPoint(annFrom, annTo);
+            return (
+              <line
+                x1={mid.x} y1={mid.y}
+                x2={cpHandlePx!.x} y2={cpHandlePx!.y}
+                stroke="#3B82F6"
+                strokeWidth={1}
+                strokeDasharray="3 3"
+                pointerEvents="none"
+                opacity={0.5}
+              />
+            );
+          })()}
+          {/* Outer ring */}
+          <circle
+            cx={cpHandlePx.x}
+            cy={cpHandlePx.y}
+            r={10}
+            fill="white"
+            stroke="#3B82F6"
+            strokeWidth={1.5}
+            style={{ cursor: "grab", pointerEvents: "all" }}
+            onMouseDown={(e) => handleCpMouseDown(e, selectedAnnotation)}
+          />
+          {/* Inner dot */}
+          <circle
+            cx={cpHandlePx.x}
+            cy={cpHandlePx.y}
+            r={4}
+            fill="#3B82F6"
+            pointerEvents="none"
+          />
+        </g>
+      )}
 
       {/* Snap target ring */}
       {snapTarget && isDrawingTool && (

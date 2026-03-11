@@ -166,6 +166,53 @@ function drawArrowHead(
   ctx.fill();
 }
 
+/** Quadratic bezier point at parameter t. */
+function bezierPt(
+  fx: number, fy: number,
+  tx: number, ty: number,
+  t: number,
+  cpx?: number, cpy?: number,
+): { x: number; y: number } {
+  if (cpx === undefined || cpy === undefined) {
+    return { x: fx + (tx - fx) * t, y: fy + (ty - fy) * t };
+  }
+  const mt = 1 - t;
+  return {
+    x: mt * mt * fx + 2 * mt * t * cpx + t * t * tx,
+    y: mt * mt * fy + 2 * mt * t * cpy + t * t * ty,
+  };
+}
+
+/** Draw quadratic bezier or straight-line body. */
+function strokeBezier(
+  ctx: CanvasRenderingContext2D,
+  fx: number, fy: number,
+  tx: number, ty: number,
+  cpx?: number, cpy?: number,
+): void {
+  ctx.beginPath();
+  ctx.moveTo(fx, fy);
+  if (cpx !== undefined && cpy !== undefined) {
+    ctx.quadraticCurveTo(cpx, cpy, tx, ty);
+  } else {
+    ctx.lineTo(tx, ty);
+  }
+  ctx.stroke();
+}
+
+/** Arrowhead at (tx, ty) using bezier tangent direction. */
+function arrowHeadBezierPdf(
+  ctx: CanvasRenderingContext2D,
+  fx: number, fy: number,
+  tx: number, ty: number,
+  size: number,
+  cpx?: number, cpy?: number,
+): void {
+  const tailX = cpx !== undefined ? cpx : fx;
+  const tailY = cpy !== undefined ? cpy : fy;
+  drawArrowHead(ctx, tx, ty, tailX, tailY, size);
+}
+
 function drawAnnotation(
   ctx: CanvasRenderingContext2D,
   ann: Annotation,
@@ -178,6 +225,14 @@ function drawAnnotation(
   const tx = ann.to.x * canvasW;
   const ty = ann.to.y * canvasH;
 
+  // Bezier control point (if any)
+  let cpx: number | undefined;
+  let cpy: number | undefined;
+  if (ann.controlPoints.length > 0) {
+    cpx = ann.controlPoints[0].x * canvasW;
+    cpy = ann.controlPoints[0].y * canvasH;
+  }
+
   const color = ANN_COLOR[ann.type] ?? "#1E3A5F";
 
   ctx.save();
@@ -189,38 +244,41 @@ function drawAnnotation(
 
   if (ann.type === "movement" || ann.type === "pass") {
     ctx.setLineDash([]);
-    ctx.beginPath();
-    ctx.moveTo(fx, fy);
-    ctx.lineTo(tx, ty);
-    ctx.stroke();
-    drawArrowHead(ctx, tx, ty, fx, fy, ANN_ARROW_SIZE);
+    strokeBezier(ctx, fx, fy, tx, ty, cpx, cpy);
+    arrowHeadBezierPdf(ctx, fx, fy, tx, ty, ANN_ARROW_SIZE, cpx, cpy);
 
   } else if (ann.type === "dribble") {
-    const dx = tx - fx;
-    const dy = ty - fy;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    const zigCount = Math.max(2, Math.round(len / DRIBBLE_SEGMENT));
-    ctx.setLineDash([]);
-    ctx.beginPath();
-    for (let i = 0; i <= zigCount; i++) {
-      const t = i / zigCount;
-      const mx = fx + dx * t;
-      const my = fy + dy * t;
-      const perp = i % 2 === 0 ? DRIBBLE_PERP : -DRIBBLE_PERP;
-      const px2 = len > 0 ? -dy / len * perp : 0;
-      const py2 = len > 0 ? dx / len * perp : 0;
-      if (i === 0) ctx.moveTo(mx + px2, my + py2);
-      else ctx.lineTo(mx + px2, my + py2);
+    if (cpx !== undefined && cpy !== undefined) {
+      // Curved dribble: dashed bezier
+      ctx.setLineDash([ANN_LINE_W * 3, ANN_LINE_W * 2]);
+      strokeBezier(ctx, fx, fy, tx, ty, cpx, cpy);
+      ctx.setLineDash([]);
+      arrowHeadBezierPdf(ctx, fx, fy, tx, ty, ANN_ARROW_SIZE, cpx, cpy);
+    } else {
+      // Straight zigzag
+      const dx = tx - fx;
+      const dy = ty - fy;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      const zigCount = Math.max(2, Math.round(len / DRIBBLE_SEGMENT));
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      for (let i = 0; i <= zigCount; i++) {
+        const t = i / zigCount;
+        const mx = fx + dx * t;
+        const my = fy + dy * t;
+        const perp = i % 2 === 0 ? DRIBBLE_PERP : -DRIBBLE_PERP;
+        const px2 = len > 0 ? -dy / len * perp : 0;
+        const py2 = len > 0 ? dx / len * perp : 0;
+        if (i === 0) ctx.moveTo(mx + px2, my + py2);
+        else ctx.lineTo(mx + px2, my + py2);
+      }
+      ctx.stroke();
+      drawArrowHead(ctx, tx, ty, fx, fy, ANN_ARROW_SIZE);
     }
-    ctx.stroke();
-    drawArrowHead(ctx, tx, ty, fx, fy, ANN_ARROW_SIZE);
 
   } else if (ann.type === "screen") {
     ctx.setLineDash([]);
-    ctx.beginPath();
-    ctx.moveTo(fx, fy);
-    ctx.lineTo(tx, ty);
-    ctx.stroke();
+    strokeBezier(ctx, fx, fy, tx, ty, cpx, cpy);
 
     // Perpendicular bar at the end
     const dx = tx - fx;
@@ -237,58 +295,48 @@ function drawAnnotation(
 
   } else if (ann.type === "cut") {
     ctx.setLineDash([ANN_LINE_W * 4, ANN_LINE_W * 3]);
-    ctx.beginPath();
-    ctx.moveTo(fx, fy);
-    ctx.lineTo(tx, ty);
-    ctx.stroke();
+    strokeBezier(ctx, fx, fy, tx, ty, cpx, cpy);
     ctx.setLineDash([]);
-    drawArrowHead(ctx, tx, ty, fx, fy, ANN_ARROW_SIZE);
+    arrowHeadBezierPdf(ctx, fx, fy, tx, ty, ANN_ARROW_SIZE, cpx, cpy);
 
   } else if (ann.type === "guard") {
     ctx.globalAlpha = 0.85;
     ctx.setLineDash([ANN_LINE_W * 4, ANN_LINE_W * 4]);
-    ctx.beginPath();
-    ctx.moveTo(fx, fy);
-    ctx.lineTo(tx, ty);
-    ctx.stroke();
+    strokeBezier(ctx, fx, fy, tx, ty, cpx, cpy);
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
 
   } else if (ann.type === "handoff") {
-    const dx = tx - fx;
-    const dy = ty - fy;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    const ux = len > 0 ? dx / len : 1;
-    const uy = len > 0 ? dy / len : 0;
-    const px2 = -uy;
-    const py2 = ux;
-    const tickLen = ANN_ARROW_SIZE * 0.75;
-    const t1 = 0.85;
-    const t1x = fx + dx * t1;
-    const t1y = fy + dy * t1;
-    const t2 = 0.72;
-    const t2x = fx + dx * t2;
-    const t2y = fy + dy * t2;
-
     ctx.setLineDash([ANN_LINE_W * 3, ANN_LINE_W * 2]);
-    ctx.beginPath();
-    ctx.moveTo(fx, fy);
-    ctx.lineTo(tx, ty);
-    ctx.stroke();
+    strokeBezier(ctx, fx, fy, tx, ty, cpx, cpy);
     ctx.setLineDash([]);
 
-    // Tick marks
+    // Tick marks at t=0.85 and t=0.72 (bezier-aware)
+    const tick1 = bezierPt(fx, fy, tx, ty, 0.85, cpx, cpy);
+    const tick2 = bezierPt(fx, fy, tx, ty, 0.72, cpx, cpy);
+    const tan1Before = bezierPt(fx, fy, tx, ty, 0.83, cpx, cpy);
+    const tan2Before = bezierPt(fx, fy, tx, ty, 0.70, cpx, cpy);
+    const getPerp = (pt: { x: number; y: number }, before: { x: number; y: number }) => {
+      const ddx = pt.x - before.x;
+      const ddy = pt.y - before.y;
+      const dlen = Math.sqrt(ddx * ddx + ddy * ddy);
+      return { px: dlen > 0 ? -ddy / dlen : 0, py: dlen > 0 ? ddx / dlen : 1 };
+    };
+    const tickLen = ANN_ARROW_SIZE * 0.75;
+    const { px: px1, py: py1 } = getPerp(tick1, tan1Before);
+    const { px: px2, py: py2 } = getPerp(tick2, tan2Before);
+
     ctx.beginPath();
-    ctx.moveTo(t1x + px2 * tickLen, t1y + py2 * tickLen);
-    ctx.lineTo(t1x - px2 * tickLen, t1y - py2 * tickLen);
+    ctx.moveTo(tick1.x + px1 * tickLen, tick1.y + py1 * tickLen);
+    ctx.lineTo(tick1.x - px1 * tickLen, tick1.y - py1 * tickLen);
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.moveTo(t2x + px2 * tickLen, t2y + py2 * tickLen);
-    ctx.lineTo(t2x - px2 * tickLen, t2y - py2 * tickLen);
+    ctx.moveTo(tick2.x + px2 * tickLen, tick2.y + py2 * tickLen);
+    ctx.lineTo(tick2.x - px2 * tickLen, tick2.y - py2 * tickLen);
     ctx.stroke();
 
-    drawArrowHead(ctx, tx, ty, fx, fy, ANN_ARROW_SIZE);
+    arrowHeadBezierPdf(ctx, fx, fy, tx, ty, ANN_ARROW_SIZE, cpx, cpy);
   }
 
   ctx.setLineDash([]);
