@@ -25,7 +25,7 @@
  */
 
 import { useState, useCallback, useRef } from "react";
-import { useStore, selectEditorScene, selectAllAnnotations } from "@/lib/store";
+import { useStore, selectEditorScene } from "@/lib/store";
 import type { DrawingTool } from "@/lib/store";
 import type { Annotation, Point } from "@/lib/types";
 import { TOOL_CURSOR } from "@/components/editor/DrawingToolsPanel";
@@ -726,13 +726,13 @@ export default function AnnotationLayer({
   const currentStep = useStore((s) => s.currentStep);
   const scene = useStore(selectEditorScene);
 
-  // During playback: progressive reveal — show only annotations from steps 1..currentStep.
-  // While editing: show all annotations (with step badges when there are multiple steps).
-  const annotations = isPlaying
-    ? (scene?.timingGroups ?? [])
-        .filter((g) => g.step <= currentStep)
-        .flatMap((g) => g.annotations)
-    : selectAllAnnotations(scene);
+  // Progressive reveal: only show annotations from steps 1..activeStep.
+  // During playback activeStep = currentStep; while editing = selectedTimingStep.
+  // This ensures step X never reveals arrows that belong to future steps.
+  const activeStep = isPlaying ? currentStep : selectedTimingStep;
+  const annotations = (scene?.timingGroups ?? [])
+    .filter((g) => g.step <= activeStep)
+    .flatMap((g) => g.annotations);
 
   // Build a map from annotation id → timing step for badge display
   const annotationStepMap = new Map<string, number>();
