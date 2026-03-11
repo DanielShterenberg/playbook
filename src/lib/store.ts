@@ -406,27 +406,42 @@ export const useStore = create<AppStore>()(
           // Collect every annotation in the current scene across all timing steps.
           const allAnnotations = currentScene.timingGroups.flatMap((g) => g.annotations);
 
-          // Project player positions: movement / cut / dribble arrows tell us
+          // Project player positions: movement / cut / dribble / screen arrows tell us
           // where each player ends up, so start the new scene there.
-          console.log("[addScene] allAnnotations:", allAnnotations.map(a => ({ type: a.type, fromPlayer: a.fromPlayer, toPlayer: a.toPlayer, to: a.to })));
           for (const ann of allAnnotations) {
-            if (!ann.fromPlayer) { console.log("[addScene] skipping (no fromPlayer):", ann.type, ann); continue; }
-            const { side, position } = ann.fromPlayer;
-            const validSide = side as "offense" | "defense";
+            // Resolve mover: prefer stored fromPlayer ref; fall back to nearest player
+            // to ann.from for annotations that weren't snapped to a token.
+            let moverSide: "offense" | "defense" | null = null;
+            let moverPosition: number | null = null;
+            if (ann.fromPlayer) {
+              moverSide = ann.fromPlayer.side as "offense" | "defense";
+              moverPosition = ann.fromPlayer.position;
+            } else if (ann.type === "movement" || ann.type === "cut" || ann.type === "dribble" || ann.type === "screen") {
+              let minDist = Infinity;
+              for (const side of ["offense", "defense"] as const) {
+                for (const p of newScene.players[side]) {
+                  const dx = p.x - ann.from.x;
+                  const dy = p.y - ann.from.y;
+                  const d = dx * dx + dy * dy;
+                  if (d < minDist) { minDist = d; moverSide = side; moverPosition = p.position; }
+                }
+              }
+            }
+            if (moverSide === null || moverPosition === null) continue;
+
             if (ann.type === "movement" || ann.type === "cut" || ann.type === "dribble" || ann.type === "screen") {
-              // ann.to is the final destination (after all waypoints) — use it directly.
-              // ann.to is stored in normalised [0-1] coords — same space as PlayerState.x/y.
-              newScene.players[validSide] = newScene.players[validSide].map((p) =>
-                p.position === position ? { ...p, x: ann.to.x, y: ann.to.y } : p,
+              // ann.to is the final destination — stored in normalised [0-1] coords.
+              newScene.players[moverSide] = newScene.players[moverSide].map((p) =>
+                p.position === moverPosition ? { ...p, x: ann.to.x, y: ann.to.y } : p,
               );
             } else if (ann.type === "handoff") {
               // fromPlayer (cutter) moves to the handoff spot (ann.to = toPlayer's position).
-              newScene.players[validSide] = newScene.players[validSide].map((p) =>
-                p.position === position ? { ...p, x: ann.to.x, y: ann.to.y } : p,
+              newScene.players[moverSide] = newScene.players[moverSide].map((p) =>
+                p.position === moverPosition ? { ...p, x: ann.to.x, y: ann.to.y } : p,
               );
               // toPlayer (ball-handler) slips slightly in the same direction the cutter ran.
               if (ann.toPlayer) {
-                const fromP = currentScene.players[validSide].find((p) => p.position === position);
+                const fromP = currentScene.players[moverSide].find((p) => p.position === moverPosition);
                 const toSide = ann.toPlayer.side as "offense" | "defense";
                 const toP = currentScene.players[toSide].find((p) => p.position === ann.toPlayer!.position);
                 if (fromP && toP) {
