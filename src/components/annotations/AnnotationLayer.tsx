@@ -341,8 +341,9 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
       const t = i / zigCount;
       const mx = from.x + dx * t;
       const my = from.y + dy * t;
-      // Perpendicular offset alternates
-      const perp = i % 2 === 0 ? 6 : -6;
+      // Perpendicular offset alternates; force 0 at endpoints so the path
+      // starts/ends exactly at from/to and the arrowhead aligns correctly.
+      const perp = (i === 0 || i === zigCount) ? 0 : (i % 2 === 0 ? 6 : -6);
       const px2 = -dy / len * perp;
       const py2 = dx / len * perp;
       pts.push(`${mx + px2},${my + py2}`);
