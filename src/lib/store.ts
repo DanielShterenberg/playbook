@@ -436,6 +436,7 @@ export const useStore = create<AppStore>()(
           }
 
           // Update ball if a pass or handoff annotation transferred it to another player.
+          console.log("[addScene] allAnnotations:", allAnnotations.map(a => ({ type: a.type, fromPlayer: a.fromPlayer, toPlayer: a.toPlayer, to: a.to })));
           for (const ann of allAnnotations) {
             if (ann.type === "pass" || ann.type === "handoff") {
               // Prefer the stored toPlayer reference; fall back to nearest player to ann.to.
@@ -458,6 +459,7 @@ export const useStore = create<AppStore>()(
                   }
                 }
               }
+              console.log("[addScene] handoff/pass receiver:", receiver, "ann.toPlayer:", ann.toPlayer);
               if (receiver) {
                 newScene.ball = { x: receiver.x, y: receiver.y, attachedTo: { side: receiver.side, position: receiver.position } };
               }
