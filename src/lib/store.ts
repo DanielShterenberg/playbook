@@ -419,6 +419,12 @@ export const useStore = create<AppStore>()(
                 p.position === position ? { ...p, x: ann.to.x, y: ann.to.y } : p,
               );
             }
+            if (ann.type === "handoff") {
+              // Ball-handler dribbles to the handoff point (ann.to) and stays as screener.
+              newScene.players[validSide] = newScene.players[validSide].map((p) =>
+                p.position === position ? { ...p, x: ann.to.x, y: ann.to.y } : p,
+              );
+            }
           }
 
           // Carry over ball state, then update if a pass annotation transferred it.
@@ -433,9 +439,9 @@ export const useStore = create<AppStore>()(
             if (mover) newScene.ball = { ...newScene.ball, x: mover.x, y: mover.y };
           }
 
-          // Update ball if a pass annotation transferred it to another player.
+          // Update ball if a pass or handoff annotation transferred it to another player.
           for (const ann of allAnnotations) {
-            if (ann.type === "pass" && ann.toPlayer) {
+            if ((ann.type === "pass" || ann.type === "handoff") && ann.toPlayer) {
               const { side, position } = ann.toPlayer;
               const validSide = side as "offense" | "defense";
               // Use the receiver's position AFTER applying movement projections above.

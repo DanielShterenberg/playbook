@@ -1010,29 +1010,6 @@ export default function AnnotationLayer({
           };
           addAnnotation(sceneId, selectedTimingStep, annotation);
           setSelectedAnnotationId(annotation.id);
-
-          // Hand-off side-effects: transfer ball to receiver + move giver to handoff point.
-          if (annotation.type === "handoff") {
-            const { updateBallState, updatePlayerState, currentPlay } = useStore.getState();
-            const scene = currentPlay?.scenes.find((s) => s.id === sceneId);
-            const toNorm = annotation.to;
-            // 1. Attach ball to the receiving player (or free it at the handoff position)
-            if (annotation.toPlayer) {
-              updateBallState(sceneId, {
-                x: toNorm.x,
-                y: toNorm.y,
-                attachedTo: { side: annotation.toPlayer.side as "offense" | "defense", position: annotation.toPlayer.position },
-              });
-            }
-            // 2. Move the ball-handler to the handoff point (they dribbled there → now the screener)
-            if (annotation.fromPlayer && scene) {
-              const side = annotation.fromPlayer.side as "offense" | "defense";
-              const existing = scene.players[side].find((p) => p.position === annotation.fromPlayer!.position);
-              if (existing) {
-                updatePlayerState(sceneId, side, { ...existing, x: toNorm.x, y: toNorm.y });
-              }
-            }
-          }
         }
       }
 
