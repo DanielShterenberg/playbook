@@ -408,8 +408,9 @@ export const useStore = create<AppStore>()(
 
           // Project player positions: movement / cut / dribble arrows tell us
           // where each player ends up, so start the new scene there.
+          console.log("[addScene] allAnnotations:", allAnnotations.map(a => ({ type: a.type, fromPlayer: a.fromPlayer, toPlayer: a.toPlayer, to: a.to })));
           for (const ann of allAnnotations) {
-            if (!ann.fromPlayer) continue;
+            if (!ann.fromPlayer) { console.log("[addScene] skipping (no fromPlayer):", ann.type, ann); continue; }
             const { side, position } = ann.fromPlayer;
             const validSide = side as "offense" | "defense";
             if (ann.type === "movement" || ann.type === "cut" || ann.type === "dribble" || ann.type === "screen") {
