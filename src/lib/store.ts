@@ -88,6 +88,7 @@ export interface AppStore {
   // Timing group / annotation mutations
   addAnnotation: (sceneId: string, timingStep: number, annotation: Annotation) => void;
   removeAnnotation: (sceneId: string, annotationId: string) => void;
+  updateAnnotation: (sceneId: string, annotation: Annotation) => void;
   moveAnnotationToStep: (sceneId: string, annotationId: string, newStep: number) => void;
   addTimingStep: (sceneId: string) => void;
   removeTimingStep: (sceneId: string, step: number) => void;
@@ -611,6 +612,26 @@ export const useStore = create<AppStore>()(
           })),
           selectedAnnotationId:
             currentSelectedAnnotation === annotationId ? null : currentSelectedAnnotation,
+        };
+      });
+    },
+
+    updateAnnotation: (sceneId, annotation) => {
+      // NOTE: Control point drag does not push to undo history to avoid flooding
+      // the history stack on every mouse-move event. History is captured on mousedown
+      // (before the drag) in AnnotationLayer.
+      set((s) => {
+        if (!s.currentPlay) return s;
+        return {
+          currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => ({
+            ...sc,
+            timingGroups: sc.timingGroups.map((g) => ({
+              ...g,
+              annotations: g.annotations.map((a) =>
+                a.id === annotation.id ? annotation : a,
+              ),
+            })),
+          })),
         };
       });
     },
