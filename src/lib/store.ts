@@ -419,12 +419,8 @@ export const useStore = create<AppStore>()(
                 p.position === position ? { ...p, x: ann.to.x, y: ann.to.y } : p,
               );
             }
-            if (ann.type === "handoff") {
-              // Ball-handler dribbles to the handoff point (ann.to) and stays as screener.
-              newScene.players[validSide] = newScene.players[validSide].map((p) =>
-                p.position === position ? { ...p, x: ann.to.x, y: ann.to.y } : p,
-              );
-            }
+            // handoff: ball-handler does NOT change position (ann.to = receiver's spot,
+            // moving there would overlap with toPlayer). Ball transfer is handled below.
           }
 
           // Carry over ball state, then update if a pass annotation transferred it.
