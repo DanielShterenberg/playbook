@@ -97,6 +97,7 @@ export default function TimingStripPanel() {
   const setSelectedTimingStep = useStore((s) => s.setSelectedTimingStep);
   const addTimingStep = useStore((s) => s.addTimingStep);
   const removeTimingStep = useStore((s) => s.removeTimingStep);
+  const mergeTimingSteps = useStore((s) => s.mergeTimingSteps);
   const stepCount = useStore((state) => selectTimingStepCount(selectEditorScene(state)));
   const isPlaying = useStore((s) => s.isPlaying);
   const currentStep = useStore((s) => s.currentStep);
@@ -148,60 +149,76 @@ export default function TimingStripPanel() {
       </span>
 
       {/* Step buttons */}
-      {sortedGroups.map((group) => {
+      {sortedGroups.map((group, idx) => {
         const isActive = group.step === activeStep;
         const annCount = group.annotations.length;
+        const hasNext = idx < sortedGroups.length - 1;
 
         return (
-          <div key={group.step} className="flex flex-col items-center gap-0.5">
-            <button
-              onClick={() => {
-                if (!isPlaying) setSelectedTimingStep(group.step);
-              }}
-              aria-label={`Step ${group.step}`}
-              aria-pressed={isActive}
-              disabled={isPlaying}
-              title={`Step ${group.step} — ${group.duration}ms`}
-              className={[
-                "relative flex h-7 min-w-[36px] items-center justify-center rounded-md px-2 text-xs font-semibold transition-colors",
-                isActive
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-100",
-                isPlaying ? "cursor-default" : "",
-              ].join(" ")}
-            >
-              {group.step}
-              {/* Annotation count badge */}
-              {annCount > 0 && (
-                <span
-                  className={[
-                    "absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold",
-                    isActive ? "bg-white text-blue-600" : "bg-blue-600 text-white",
-                  ].join(" ")}
-                  aria-label={`${annCount} annotation${annCount !== 1 ? "s" : ""}`}
-                >
-                  {annCount}
-                </span>
-              )}
-            </button>
-
-            {/* Duration editor (hidden while playing) */}
-            {!isPlaying && (
-              <DurationEditor
-                stepDuration={group.duration}
-                onChange={(ms) => handleDurationChange(group.step, ms)}
-              />
-            )}
-
-            {/* Remove step button (only if multiple steps, not while playing) */}
-            {!isPlaying && stepCount > 1 && (
+          <div key={group.step} className="flex items-start gap-1">
+            {/* Step pill + controls */}
+            <div className="flex flex-col items-center gap-0.5">
               <button
-                onClick={() => removeTimingStep(sceneId, group.step)}
-                aria-label={`Remove step ${group.step}`}
-                title={`Remove step ${group.step}`}
-                className="text-[10px] text-gray-300 hover:text-red-500"
+                onClick={() => {
+                  if (!isPlaying) setSelectedTimingStep(group.step);
+                }}
+                aria-label={`Step ${group.step}`}
+                aria-pressed={isActive}
+                disabled={isPlaying}
+                title={`Step ${group.step} — ${group.duration}ms`}
+                className={[
+                  "relative flex h-7 min-w-[36px] items-center justify-center rounded-md px-2 text-xs font-semibold transition-colors",
+                  isActive
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-100",
+                  isPlaying ? "cursor-default" : "",
+                ].join(" ")}
               >
-                ×
+                {group.step}
+                {/* Annotation count badge */}
+                {annCount > 0 && (
+                  <span
+                    className={[
+                      "absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold",
+                      isActive ? "bg-white text-blue-600" : "bg-blue-600 text-white",
+                    ].join(" ")}
+                    aria-label={`${annCount} annotation${annCount !== 1 ? "s" : ""}`}
+                  >
+                    {annCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Duration editor (hidden while playing) */}
+              {!isPlaying && (
+                <DurationEditor
+                  stepDuration={group.duration}
+                  onChange={(ms) => handleDurationChange(group.step, ms)}
+                />
+              )}
+
+              {/* Delete step button */}
+              {!isPlaying && stepCount > 1 && (
+                <button
+                  onClick={() => removeTimingStep(sceneId, group.step)}
+                  aria-label={`Remove step ${group.step}`}
+                  title={`Delete step ${group.step}`}
+                  className="text-[10px] leading-none text-gray-400 hover:text-red-500"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Merge button between this step and the next */}
+            {!isPlaying && hasNext && (
+              <button
+                onClick={() => mergeTimingSteps(sceneId, group.step)}
+                aria-label={`Merge step ${group.step} and ${group.step + 1}`}
+                title={`Merge step ${group.step} + ${group.step + 1}`}
+                className="mt-1 flex h-5 w-5 items-center justify-center rounded text-[11px] text-gray-300 hover:bg-gray-100 hover:text-gray-600"
+              >
+                ⊕
               </button>
             )}
           </div>

@@ -92,6 +92,8 @@ export interface AppStore {
   moveAnnotationToStep: (sceneId: string, annotationId: string, newStep: number) => void;
   addTimingStep: (sceneId: string) => void;
   removeTimingStep: (sceneId: string, step: number) => void;
+  /** Merge step N and step N+1 into one step (combined annotations, summed duration). */
+  mergeTimingSteps: (sceneId: string, step: number) => void;
   /**
    * Extend an existing movement/cut/dribble annotation with an additional leg.
    * The current `to` endpoint becomes the last waypoint, and `newTo` becomes
@@ -753,6 +755,29 @@ export const useStore = create<AppStore>()(
             return { ...sc, timingGroups: normalizeSteps(filtered) };
           }),
           selectedTimingStep: currentSelectedStep === step ? 1 : currentSelectedStep,
+        };
+      });
+    },
+
+    mergeTimingSteps: (sceneId, step) => {
+      const state = get();
+      const snapshot = captureSnapshot(state);
+      if (snapshot) useHistoryStore.getState().pushSnapshot(snapshot);
+      set((s) => {
+        if (!s.currentPlay) return s;
+        return {
+          currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => {
+            const a = sc.timingGroups.find((g) => g.step === step);
+            const b = sc.timingGroups.find((g) => g.step === step + 1);
+            if (!a || !b) return sc;
+            const merged = {
+              ...a,
+              duration: a.duration + b.duration,
+              annotations: [...a.annotations, ...b.annotations],
+            };
+            const rest = sc.timingGroups.filter((g) => g.step !== step && g.step !== step + 1);
+            return { ...sc, timingGroups: normalizeSteps([...rest, merged]) };
+          }),
         };
       });
     },
