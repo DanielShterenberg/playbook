@@ -437,13 +437,29 @@ export const useStore = create<AppStore>()(
 
           // Update ball if a pass or handoff annotation transferred it to another player.
           for (const ann of allAnnotations) {
-            if ((ann.type === "pass" || ann.type === "handoff") && ann.toPlayer) {
-              const { side, position } = ann.toPlayer;
-              const validSide = side as "offense" | "defense";
-              // Use the receiver's position AFTER applying movement projections above.
-              const player = newScene.players[validSide].find((p) => p.position === position);
-              if (player) {
-                newScene.ball = { x: player.x, y: player.y, attachedTo: { side: validSide, position } };
+            if (ann.type === "pass" || ann.type === "handoff") {
+              // Prefer the stored toPlayer reference; fall back to nearest player to ann.to.
+              let receiver: { side: "offense" | "defense"; position: number; x: number; y: number } | null = null;
+              if (ann.toPlayer) {
+                const validSide = ann.toPlayer.side as "offense" | "defense";
+                const p = newScene.players[validSide].find((pl) => pl.position === ann.toPlayer!.position);
+                if (p) receiver = { side: validSide, position: p.position, x: p.x, y: p.y };
+              }
+              if (!receiver) {
+                // Fallback: find the closest player to ann.to (excluding the passer)
+                let minDist = Infinity;
+                for (const side of ["offense", "defense"] as const) {
+                  for (const p of newScene.players[side]) {
+                    if (ann.fromPlayer && side === ann.fromPlayer.side && p.position === ann.fromPlayer.position) continue;
+                    const dx = p.x - ann.to.x;
+                    const dy = p.y - ann.to.y;
+                    const d = dx * dx + dy * dy;
+                    if (d < minDist) { minDist = d; receiver = { side, position: p.position, x: p.x, y: p.y }; }
+                  }
+                }
+              }
+              if (receiver) {
+                newScene.ball = { x: receiver.x, y: receiver.y, attachedTo: { side: receiver.side, position: receiver.position } };
               }
             }
           }
