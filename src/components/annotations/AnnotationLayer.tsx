@@ -766,6 +766,13 @@ export default function AnnotationLayer({
   } | null>(null);
   const [cpDragging, setCpDragging] = useState(false);
 
+  // To-endpoint dragging state (move/re-attach the arrowhead of a selected annotation)
+  const toDragRef = useRef<{
+    annotationId: string;
+    annotation: Annotation;
+  } | null>(null);
+  const [toDragging, setToDragging] = useState(false);
+
   // Snap highlight — player near cursor
   const [snapTarget, setSnapTarget] = useState<SnapPlayer | null>(null);
 
@@ -877,6 +884,23 @@ export default function AnnotationLayer({
         return;
       }
 
+      // If dragging the to-endpoint, update position + player snap
+      if (toDragRef.current && sceneId) {
+        const { annotation } = toDragRef.current;
+        const nearest = findNearestPlayer(pt.x, pt.y, players);
+        const snap = nearest ? { x: nearest.px, y: nearest.py } : pt;
+        const toNorm = {
+          x: (snap.x - offsetX) / paWidth,
+          y: flipped ? 1 - (snap.y - offsetY) / paHeight : (snap.y - offsetY) / paHeight,
+        };
+        const toPlayer = nearest ? { side: nearest.side, position: nearest.position } : null;
+        const updated = { ...annotation, to: toNorm, toPlayer };
+        toDragRef.current.annotation = updated;
+        updateAnnotation(sceneId, updated);
+        setSnapTarget(nearest);
+        return;
+      }
+
       // While dragging a guard annotation, snap the endpoint to offense only.
       const snapPool =
         selectedTool === "guard" && drawingRef.current
@@ -923,6 +947,14 @@ export default function AnnotationLayer({
       if (cpDragRef.current) {
         cpDragRef.current = null;
         setCpDragging(false);
+        return;
+      }
+
+      // Finish to-endpoint drag
+      if (toDragRef.current) {
+        toDragRef.current = null;
+        setToDragging(false);
+        setSnapTarget(null);
         return;
       }
 
@@ -1026,6 +1058,26 @@ export default function AnnotationLayer({
     [sceneId],
   );
 
+  // Mouse down on the to-endpoint drag handle
+  const handleToMouseDown = useCallback(
+    (e: React.MouseEvent, ann: Annotation) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (!sceneId) return;
+      const state = useStore.getState();
+      const { currentPlay, selectedSceneId: sid } = state;
+      if (currentPlay) {
+        useHistoryStore.getState().pushSnapshot({
+          play: JSON.parse(JSON.stringify(currentPlay)) as typeof currentPlay,
+          selectedSceneId: sid,
+        });
+      }
+      toDragRef.current = { annotationId: ann.id, annotation: ann };
+      setToDragging(true);
+    },
+    [sceneId],
+  );
+
   // Handle eraser click on annotation
   const handleAnnotationSelect = useCallback(
     (id: string) => {
@@ -1038,7 +1090,7 @@ export default function AnnotationLayer({
     [selectedTool, sceneId, removeAnnotation, setSelectedAnnotationId],
   );
 
-  const cursor = cpDragging ? "grabbing" : TOOL_CURSOR[selectedTool];
+  const cursor = (cpDragging || toDragging) ? "grabbing" : TOOL_CURSOR[selectedTool];
 
   // Find the selected annotation for control-point handle rendering
   const selectedAnnotation = selectedAnnotationId
@@ -1067,6 +1119,11 @@ export default function AnnotationLayer({
     }
   }
 
+  // To-endpoint drag handle (arrowhead position — drag to move/re-attach the endpoint)
+  const toHandlePx: Point | null = showCpHandle && selectedAnnotation
+    ? normToSvgForHandle(selectedAnnotation.to.x, selectedAnnotation.to.y)
+    : null;
+
   return (
     <svg
       ref={svgRef}
@@ -1080,7 +1137,7 @@ export default function AnnotationLayer({
         cursor,
         // Capture events when drawing, when dragging a control point, or when
         // in select mode with an annotation selected (so the CP handle is clickable).
-        pointerEvents: (isDrawingTool || cpDragging || showCpHandle) ? "all" : "none",
+        pointerEvents: (isDrawingTool || cpDragging || toDragging || showCpHandle) ? "all" : "none",
       }}
       viewBox={`0 0 ${width} ${height}`}
       aria-label="Annotation drawing layer"
@@ -1148,8 +1205,22 @@ export default function AnnotationLayer({
         </g>
       )}
 
+      {/* To-endpoint drag handle — drag the arrowhead to move/re-attach the endpoint */}
+      {toHandlePx && selectedAnnotation && (
+        <circle
+          cx={toHandlePx.x}
+          cy={toHandlePx.y}
+          r={8}
+          fill="white"
+          stroke="#6B7280"
+          strokeWidth={1.5}
+          style={{ cursor: "grab", pointerEvents: "all" }}
+          onMouseDown={(e) => handleToMouseDown(e, selectedAnnotation)}
+        />
+      )}
+
       {/* Snap target ring */}
-      {snapTarget && isDrawingTool && (
+      {snapTarget && (
         <circle
           cx={snapTarget.px}
           cy={snapTarget.py}
