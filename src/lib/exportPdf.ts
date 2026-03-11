@@ -213,6 +213,18 @@ function arrowHeadBezierPdf(
   drawArrowHead(ctx, tx, ty, tailX, tailY, size);
 }
 
+/** Draw a multi-leg polyline through pixel-space waypoints. */
+function strokePolyline(
+  ctx: CanvasRenderingContext2D,
+  pts: { x: number; y: number }[],
+): void {
+  if (pts.length < 2) return;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.stroke();
+}
+
 function drawAnnotation(
   ctx: CanvasRenderingContext2D,
   ann: Annotation,
@@ -225,10 +237,16 @@ function drawAnnotation(
   const tx = ann.to.x * canvasW;
   const ty = ann.to.y * canvasH;
 
-  // Bezier control point (if any)
+  // Multi-leg waypoints
+  const hasWaypoints = ann.waypoints && ann.waypoints.length > 0;
+  const allPts: { x: number; y: number }[] = hasWaypoints
+    ? [{ x: fx, y: fy }, ...(ann.waypoints ?? []).map((p) => ({ x: p.x * canvasW, y: p.y * canvasH })), { x: tx, y: ty }]
+    : [];
+
+  // Bezier control point (if any — single-leg only)
   let cpx: number | undefined;
   let cpy: number | undefined;
-  if (ann.controlPoints.length > 0) {
+  if (!hasWaypoints && ann.controlPoints.length > 0) {
     cpx = ann.controlPoints[0].x * canvasW;
     cpy = ann.controlPoints[0].y * canvasH;
   }
@@ -242,13 +260,31 @@ function drawAnnotation(
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
-  if (ann.type === "movement" || ann.type === "pass") {
+  if (ann.type === "movement") {
+    ctx.setLineDash([]);
+    if (hasWaypoints) {
+      strokePolyline(ctx, allPts);
+      const n = allPts.length;
+      drawArrowHead(ctx, allPts[n - 1].x, allPts[n - 1].y, allPts[n - 2].x, allPts[n - 2].y, ANN_ARROW_SIZE);
+    } else {
+      strokeBezier(ctx, fx, fy, tx, ty, cpx, cpy);
+      arrowHeadBezierPdf(ctx, fx, fy, tx, ty, ANN_ARROW_SIZE, cpx, cpy);
+    }
+
+  } else if (ann.type === "pass") {
     ctx.setLineDash([]);
     strokeBezier(ctx, fx, fy, tx, ty, cpx, cpy);
     arrowHeadBezierPdf(ctx, fx, fy, tx, ty, ANN_ARROW_SIZE, cpx, cpy);
 
   } else if (ann.type === "dribble") {
-    if (cpx !== undefined && cpy !== undefined) {
+    if (hasWaypoints) {
+      // Multi-leg dribble: dashed polyline
+      ctx.setLineDash([ANN_LINE_W * 3, ANN_LINE_W * 2]);
+      strokePolyline(ctx, allPts);
+      ctx.setLineDash([]);
+      const n = allPts.length;
+      drawArrowHead(ctx, allPts[n - 1].x, allPts[n - 1].y, allPts[n - 2].x, allPts[n - 2].y, ANN_ARROW_SIZE);
+    } else if (cpx !== undefined && cpy !== undefined) {
       // Curved dribble: dashed bezier
       ctx.setLineDash([ANN_LINE_W * 3, ANN_LINE_W * 2]);
       strokeBezier(ctx, fx, fy, tx, ty, cpx, cpy);
@@ -295,9 +331,16 @@ function drawAnnotation(
 
   } else if (ann.type === "cut") {
     ctx.setLineDash([ANN_LINE_W * 4, ANN_LINE_W * 3]);
-    strokeBezier(ctx, fx, fy, tx, ty, cpx, cpy);
-    ctx.setLineDash([]);
-    arrowHeadBezierPdf(ctx, fx, fy, tx, ty, ANN_ARROW_SIZE, cpx, cpy);
+    if (hasWaypoints) {
+      strokePolyline(ctx, allPts);
+      ctx.setLineDash([]);
+      const n = allPts.length;
+      drawArrowHead(ctx, allPts[n - 1].x, allPts[n - 1].y, allPts[n - 2].x, allPts[n - 2].y, ANN_ARROW_SIZE);
+    } else {
+      strokeBezier(ctx, fx, fy, tx, ty, cpx, cpy);
+      ctx.setLineDash([]);
+      arrowHeadBezierPdf(ctx, fx, fy, tx, ty, ANN_ARROW_SIZE, cpx, cpy);
+    }
 
   } else if (ann.type === "guard") {
     ctx.globalAlpha = 0.85;

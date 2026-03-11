@@ -32,6 +32,27 @@ import { TOOL_CURSOR } from "@/components/editor/DrawingToolsPanel";
 import { useHistoryStore } from "@/lib/history";
 
 // ---------------------------------------------------------------------------
+// Multi-leg path helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Return all points in a (possibly multi-leg) annotation's path:
+ *   from → waypoints[0] → ... → waypoints[n-1] → to
+ * All points are in normalised [0-1] coords.
+ */
+function annPathPoints(ann: Annotation): Point[] {
+  return [ann.from, ...(ann.waypoints ?? []), ann.to];
+}
+
+/**
+ * Return true when the annotation type supports multi-leg extension.
+ * Guard / handoff are assignment-style and do not get extra legs.
+ */
+function isExtendable(type: Annotation["type"]): boolean {
+  return type === "movement" || type === "cut" || type === "dribble";
+}
+
+// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
@@ -44,6 +65,15 @@ const SNAP_RING_RADIUS = 24;
 // ---------------------------------------------------------------------------
 // Rendering helpers per annotation type
 // ---------------------------------------------------------------------------
+
+/**
+ * Build an SVG polyline `d` string through a sequence of pixel points.
+ * Used for multi-leg paths (when waypoints are present).
+ */
+function polylinePath(pts: { x: number; y: number }[]): string {
+  if (pts.length < 2) return "";
+  return `M ${pts.map((p) => `${p.x},${p.y}`).join(" L ")}`;
+}
 
 /** Compute an arrowhead polygon points string given a line endpoint and direction. */
 function arrowHead(
@@ -162,15 +192,23 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
   const from = normToSvg(ann.from.x, ann.from.y);
   const to   = normToSvg(ann.to.x,   ann.to.y);
 
-  // Control point (bezier curve support)
-  const cp: Point | undefined = ann.controlPoints.length > 0
+  // Multi-leg path support: convert all waypoints to pixel space
+  const hasWaypoints = ann.waypoints && ann.waypoints.length > 0;
+  const allPxPoints: { x: number; y: number }[] = hasWaypoints
+    ? annPathPoints(ann).map((p) => normToSvg(p.x, p.y))
+    : [];
+
+  // Control point (bezier curve support — only for single-leg annotations)
+  const cp: Point | undefined = !hasWaypoints && ann.controlPoints.length > 0
     ? normToSvg(ann.controlPoints[0].x, ann.controlPoints[0].y)
     : undefined;
 
   const hitStyle: React.CSSProperties = { cursor: "pointer", pointerEvents: "stroke" };
 
-  // Step badge — small circle at the midpoint of the annotation (on the curve)
-  const mid = bezierPoint(from, to, 0.5, cp);
+  // Step badge — small circle at the midpoint of the path
+  const mid = hasWaypoints && allPxPoints.length >= 2
+    ? allPxPoints[Math.floor(allPxPoints.length / 2)]
+    : bezierPoint(from, to, 0.5, cp);
   const midX = mid.x;
   const midY = mid.y;
   const stepBadge = showStepBadge && step !== undefined ? (
@@ -190,17 +228,29 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
     </g>
   ) : null;
 
+  // For multi-leg: arrowhead from second-to-last to last point
   // For straight lines use legacy arrowHead; for bezier use bezier tangent
-  const headPoints = cp
+  const headPoints = hasWaypoints && allPxPoints.length >= 2
+    ? arrowHead(allPxPoints[allPxPoints.length - 1].x, allPxPoints[allPxPoints.length - 1].y,
+                allPxPoints[allPxPoints.length - 2].x, allPxPoints[allPxPoints.length - 2].y)
+    : cp
     ? arrowHeadBezier(to, from, cp)
     : arrowHead(to.x, to.y, from.x, from.y);
 
+  // Selection ring bounding box over all path points
+  const allXs = hasWaypoints ? allPxPoints.map((p) => p.x) : [from.x, to.x];
+  const allYs = hasWaypoints ? allPxPoints.map((p) => p.y) : [from.y, to.y];
+  const minX = Math.min(...allXs);
+  const minY = Math.min(...allYs);
+  const maxX = Math.max(...allXs);
+  const maxY = Math.max(...allYs);
+
   const selectRing = selected ? (
     <rect
-      x={Math.min(from.x, to.x) - 6}
-      y={Math.min(from.y, to.y) - 6}
-      width={Math.abs(to.x - from.x) + 12}
-      height={Math.abs(to.y - from.y) + 12}
+      x={minX - 6}
+      y={minY - 6}
+      width={maxX - minX + 12}
+      height={maxY - minY + 12}
       rx={4}
       fill="none"
       stroke="#3B82F6"
@@ -216,7 +266,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
   };
 
   if (type === "movement") {
-    const d = bezierPath(from, to, cp);
+    const d = hasWaypoints ? polylinePath(allPxPoints) : bezierPath(from, to, cp);
     return (
       <g onClick={handleClick} style={hitStyle}>
         {selectRing}
@@ -227,6 +277,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
           stroke="#1E3A5F"
           strokeWidth={2.5}
           strokeLinecap="round"
+          strokeLinejoin="round"
           fill="none"
         />
         {headPoints && (
@@ -238,6 +289,27 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
   }
 
   if (type === "dribble") {
+    if (hasWaypoints) {
+      // Multi-leg dribble: render as dashed polyline (no zigzag for multi-leg)
+      const d = polylinePath(allPxPoints);
+      return (
+        <g onClick={handleClick} style={hitStyle}>
+          {selectRing}
+          <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
+          <path
+            d={d}
+            stroke="#1E3A5F"
+            strokeWidth={2.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray="5 4"
+            fill="none"
+          />
+          {headPoints && <polygon points={headPoints} fill="#1E3A5F" />}
+          {stepBadge}
+        </g>
+      );
+    }
     if (cp) {
       // Curved dribble: render as bezier path (smooth) + arrowhead
       const d = bezierPath(from, to, cp);
@@ -342,7 +414,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
   }
 
   if (type === "cut") {
-    const d = bezierPath(from, to, cp);
+    const d = hasWaypoints ? polylinePath(allPxPoints) : bezierPath(from, to, cp);
     return (
       <g onClick={handleClick} style={hitStyle}>
         {selectRing}
@@ -352,6 +424,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
           stroke="#DC2626"
           strokeWidth={2.5}
           strokeLinecap="round"
+          strokeLinejoin="round"
           strokeDasharray="7 5"
           fill="none"
         />
@@ -647,6 +720,7 @@ export default function AnnotationLayer({
   const addAnnotation = useStore((s) => s.addAnnotation);
   const removeAnnotation = useStore((s) => s.removeAnnotation);
   const updateAnnotation = useStore((s) => s.updateAnnotation);
+  const appendAnnotationLeg = useStore((s) => s.appendAnnotationLeg);
   const isPlaying = useStore((s) => s.isPlaying);
   const currentStep = useStore((s) => s.currentStep);
   const scene = useStore(selectEditorScene);
@@ -675,6 +749,15 @@ export default function AnnotationLayer({
   const [drawing, setDrawing] = useState<{ from: Point; to: Point } | null>(null);
   const drawingRef = useRef<{ from: Point; to: Point } | null>(null);
 
+  // Leg-extension state: when the user starts drawing from the endpoint of an
+  // existing extendable annotation, record the annotation to extend instead of
+  // creating a new one. Cleared on mouse-up.
+  const legExtensionRef = useRef<{
+    annotationId: string;
+    /** The timing step the annotation lives in (so we don't need to look it up again). */
+    timingStep: number;
+  } | null>(null);
+
   // Control-point dragging state (for bending existing annotations)
   const cpDragRef = useRef<{
     annotationId: string;
@@ -684,6 +767,9 @@ export default function AnnotationLayer({
 
   // Snap highlight — player near cursor
   const [snapTarget, setSnapTarget] = useState<SnapPlayer | null>(null);
+
+  // Leg-extension snap highlight — annotation endpoint near cursor (when tool is extendable)
+  const [legSnapTarget, setLegSnapTarget] = useState<{ x: number; y: number } | null>(null);
 
   const isDrawingTool = selectedTool !== "select";
 
@@ -726,16 +812,49 @@ export default function AnnotationLayer({
     (e: React.MouseEvent<SVGSVGElement>) => {
       if (!isDrawingTool || selectedTool === "eraser") return;
       e.preventDefault();
+
+      legExtensionRef.current = null;
+
       const pt = getSVGCoords(e);
       const snapPool = selectedTool === "guard" ? defenseOnly : players;
       const nearest = findNearestPlayer(pt.x, pt.y, snapPool);
       const from: Point = nearest ? { x: nearest.px, y: nearest.py } : pt;
+
+      // Leg-extension detection: check if we're starting near an existing
+      // annotation's final endpoint that belongs to the same fromPlayer,
+      // and the tool matches the annotation's type.
+      if (isExtendable(selectedTool as Annotation["type"]) && scene) {
+        for (const group of scene.timingGroups) {
+          for (const ann of group.annotations) {
+            if (ann.type !== selectedTool) continue;
+            if (!isExtendable(ann.type)) continue;
+            if (!ann.fromPlayer) continue;
+            // Convert the annotation's `to` to SVG pixel space for distance check
+            const toSvgX = ann.to.x * paWidth + offsetX;
+            const toSvgY = flipped
+              ? (1 - ann.to.y) * paHeight + offsetY
+              : ann.to.y * paHeight + offsetY;
+            const dist = Math.sqrt((pt.x - toSvgX) ** 2 + (pt.y - toSvgY) ** 2);
+            if (dist <= SNAP_RADIUS) {
+              // Snap the starting point exactly to the annotation's endpoint
+              const snapFrom: Point = { x: toSvgX, y: toSvgY };
+              const stroke = { from: snapFrom, to: snapFrom };
+              setDrawing(stroke);
+              drawingRef.current = stroke;
+              setSnapTarget(null);
+              legExtensionRef.current = { annotationId: ann.id, timingStep: group.step };
+              return;
+            }
+          }
+        }
+      }
+
       const stroke = { from, to: from };
       setDrawing(stroke);
       drawingRef.current = stroke;
       setSnapTarget(null);
     },
-    [isDrawingTool, selectedTool, getSVGCoords, players, defenseOnly],
+    [isDrawingTool, selectedTool, getSVGCoords, players, defenseOnly, scene, paWidth, paHeight, offsetX, offsetY, flipped],
   );
 
   // Mouse move — update preview or drag control point
@@ -765,13 +884,35 @@ export default function AnnotationLayer({
       const nearest = findNearestPlayer(pt.x, pt.y, snapPool);
       setSnapTarget(nearest);
 
+      // Leg-extension hover: highlight annotation endpoints when not already drawing
+      if (!drawingRef.current && isExtendable(selectedTool as Annotation["type"]) && scene) {
+        let found: { x: number; y: number } | null = null;
+        outer: for (const group of scene.timingGroups) {
+          for (const ann of group.annotations) {
+            if (ann.type !== selectedTool) continue;
+            const toSvgX = ann.to.x * paWidth + offsetX;
+            const toSvgY = flipped
+              ? (1 - ann.to.y) * paHeight + offsetY
+              : ann.to.y * paHeight + offsetY;
+            const dist = Math.sqrt((pt.x - toSvgX) ** 2 + (pt.y - toSvgY) ** 2);
+            if (dist <= SNAP_RADIUS) {
+              found = { x: toSvgX, y: toSvgY };
+              break outer;
+            }
+          }
+        }
+        setLegSnapTarget(found);
+      } else {
+        setLegSnapTarget(null);
+      }
+
       if (!drawingRef.current) return;
       const to: Point = nearest ? { x: nearest.px, y: nearest.py } : pt;
       const next = { ...drawingRef.current, to };
       drawingRef.current = next;
       setDrawing(next);
     },
-    [getSVGCoords, players, offenseOnly, selectedTool, sceneId, updateAnnotation, paWidth, paHeight, offsetX, offsetY, flipped],
+    [getSVGCoords, players, offenseOnly, selectedTool, sceneId, updateAnnotation, paWidth, paHeight, offsetX, offsetY, flipped, scene],
   );
 
   // Mouse up — commit annotation or finish CP drag
@@ -787,6 +928,7 @@ export default function AnnotationLayer({
       if (!drawingRef.current || !sceneId) {
         setDrawing(null);
         drawingRef.current = null;
+        legExtensionRef.current = null;
         return;
       }
       const { from } = drawingRef.current;
@@ -800,34 +942,47 @@ export default function AnnotationLayer({
       const dx = to.x - from.x;
       const dy = to.y - from.y;
       if (Math.sqrt(dx * dx + dy * dy) > 8) {
-        // Guard: from-player must come from defense pool
-        const fromSnapPool = selectedTool === "guard" ? defenseOnly : players;
-        const fromNearest = findNearestPlayer(from.x, from.y, fromSnapPool);
         // Convert SVG pixel coords to normalised [0-1] court coords.
         // Accounts for OOB side margins (offsetX) and flip.
         const svgToNorm = (svgX: number, svgY: number) => ({
           x: (svgX - offsetX) / paWidth,
           y: flipped ? 1 - (svgY - offsetY) / paHeight : (svgY - offsetY) / paHeight,
         });
-        const annotation: Annotation = {
-          id: crypto.randomUUID(),
-          type: selectedTool as Annotation["type"],
-          from: svgToNorm(from.x, from.y),
-          to:   svgToNorm(to.x,   to.y),
-          fromPlayer: fromNearest
-            ? { side: fromNearest.side, position: fromNearest.position }
-            : null,
-          toPlayer: nearest
+
+        if (legExtensionRef.current) {
+          // Extend an existing annotation with a new leg instead of creating a new one.
+          const { annotationId } = legExtensionRef.current;
+          const newToNorm = svgToNorm(to.x, to.y);
+          const newToPlayer: Annotation["toPlayer"] = nearest
             ? { side: nearest.side, position: nearest.position }
-            : null,
-          controlPoints: [],
-        };
-        addAnnotation(sceneId, selectedTimingStep, annotation);
-        setSelectedAnnotationId(annotation.id);
+            : null;
+          appendAnnotationLeg(sceneId, annotationId, newToNorm, newToPlayer);
+          setSelectedAnnotationId(annotationId);
+        } else {
+          // Guard: from-player must come from defense pool
+          const fromSnapPool = selectedTool === "guard" ? defenseOnly : players;
+          const fromNearest = findNearestPlayer(from.x, from.y, fromSnapPool);
+          const annotation: Annotation = {
+            id: crypto.randomUUID(),
+            type: selectedTool as Annotation["type"],
+            from: svgToNorm(from.x, from.y),
+            to:   svgToNorm(to.x,   to.y),
+            fromPlayer: fromNearest
+              ? { side: fromNearest.side, position: fromNearest.position }
+              : null,
+            toPlayer: nearest
+              ? { side: nearest.side, position: nearest.position }
+              : null,
+            controlPoints: [],
+          };
+          addAnnotation(sceneId, selectedTimingStep, annotation);
+          setSelectedAnnotationId(annotation.id);
+        }
       }
 
       setDrawing(null);
       drawingRef.current = null;
+      legExtensionRef.current = null;
       setSnapTarget(null);
     },
     [
@@ -839,6 +994,7 @@ export default function AnnotationLayer({
       offenseOnly,
       defenseOnly,
       addAnnotation,
+      appendAnnotationLeg,
       setSelectedAnnotationId,
       paWidth,
       paHeight,
@@ -1004,6 +1160,26 @@ export default function AnnotationLayer({
           pointerEvents="none"
           opacity={0.7}
         />
+      )}
+
+      {/* Leg-extension snap ring — shown when hovering over an annotation endpoint
+          to indicate a new leg can be drawn from this point */}
+      {legSnapTarget && isDrawingTool && !drawing && (
+        <g pointerEvents="none">
+          <circle
+            cx={legSnapTarget.x}
+            cy={legSnapTarget.y}
+            r={SNAP_RING_RADIUS}
+            fill="none"
+            stroke="#F97316"
+            strokeWidth={2}
+            strokeDasharray="4 3"
+            opacity={0.85}
+          />
+          {/* Small "+" indicator */}
+          <line x1={legSnapTarget.x - 5} y1={legSnapTarget.y} x2={legSnapTarget.x + 5} y2={legSnapTarget.y} stroke="#F97316" strokeWidth={2} strokeLinecap="round" />
+          <line x1={legSnapTarget.x} y1={legSnapTarget.y - 5} x2={legSnapTarget.x} y2={legSnapTarget.y + 5} stroke="#F97316" strokeWidth={2} strokeLinecap="round" />
+        </g>
       )}
 
       {/* In-progress preview */}
