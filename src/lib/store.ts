@@ -92,6 +92,18 @@ export interface AppStore {
   moveAnnotationToStep: (sceneId: string, annotationId: string, newStep: number) => void;
   addTimingStep: (sceneId: string) => void;
   removeTimingStep: (sceneId: string, step: number) => void;
+  /**
+   * Extend an existing movement/cut/dribble annotation with an additional leg.
+   * The current `to` endpoint becomes the last waypoint, and `newTo` becomes
+   * the new `to`. Also updates `toPlayer` to the new endpoint's player.
+   * Issue #129: multi-leg player paths.
+   */
+  appendAnnotationLeg: (
+    sceneId: string,
+    annotationId: string,
+    newTo: import("./types").Point,
+    newToPlayer: Annotation["toPlayer"],
+  ) => void;
 
   // ------- Editor state -------
   selectedSceneId: string | null;
@@ -399,6 +411,7 @@ export const useStore = create<AppStore>()(
             const { side, position } = ann.fromPlayer;
             const validSide = side as "offense" | "defense";
             if (ann.type === "movement" || ann.type === "cut" || ann.type === "dribble" || ann.type === "screen") {
+              // ann.to is the final destination (after all waypoints) — use it directly.
               // ann.to is stored in normalised [0-1] coords — same space as PlayerState.x/y.
               newScene.players[validSide] = newScene.players[validSide].map((p) =>
                 p.position === position ? { ...p, x: ann.to.x, y: ann.to.y } : p,
@@ -671,6 +684,36 @@ export const useStore = create<AppStore>()(
               ),
             };
           }),
+        };
+      });
+    },
+
+    appendAnnotationLeg: (sceneId, annotationId, newTo, newToPlayer) => {
+      const state = get();
+      const snapshot = captureSnapshot(state);
+      if (snapshot) useHistoryStore.getState().pushSnapshot(snapshot);
+      set((s) => {
+        if (!s.currentPlay) return s;
+        return {
+          currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => ({
+            ...sc,
+            timingGroups: sc.timingGroups.map((g) => ({
+              ...g,
+              annotations: g.annotations.map((ann) => {
+                if (ann.id !== annotationId) return ann;
+                // Push the current `to` into waypoints, then set newTo as the new `to`.
+                const existingWaypoints = ann.waypoints ?? [];
+                return {
+                  ...ann,
+                  waypoints: [...existingWaypoints, ann.to],
+                  to: newTo,
+                  toPlayer: newToPlayer,
+                  // Clear control points — bezier only applies to single-leg paths
+                  controlPoints: [],
+                };
+              }),
+            })),
+          })),
         };
       });
     },

@@ -53,6 +53,7 @@ const SECTIONS: ShortcutSection[] = [
       { keys: ["Ctrl", "Shift", "Z"], description: "Redo" },
       { keys: ["Del", "⌫"], description: "Delete selected annotation or scene" },
       { keys: ["Ctrl", "S"], description: "Force save" },
+      { keys: ["drag from endpoint"], description: "Add a leg to an existing movement / cut / dribble arrow" },
     ],
   },
   {

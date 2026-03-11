@@ -42,6 +42,12 @@ export interface Annotation {
   fromPlayer: { side: string; position: number } | null;
   toPlayer: { side: string; position: number } | null;
   controlPoints: Point[];
+  /**
+   * Optional intermediate waypoints for multi-leg paths (issue #129).
+   * When present, the path is: from → waypoints[0] → ... → waypoints[n-1] → to.
+   * Each element is a normalised [0-1] court coordinate.
+   */
+  waypoints?: Point[];
 }
 
 export interface TimingGroup {
