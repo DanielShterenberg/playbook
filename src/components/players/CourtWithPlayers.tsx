@@ -157,9 +157,14 @@ export interface CourtWithPlayersProps {
   readOnly?: boolean;
   /** When true, flips the court so the basket is at the top. */
   flipped?: boolean;
+  /**
+   * When provided, filter annotations to steps ≤ activeStep.
+   * Pass this to enable step-by-step display in viewers with their own step state.
+   */
+  activeStep?: number;
 }
 
-export default function CourtWithPlayers({ sceneId, scene, variant = "half", className, readOnly = false, flipped = false }: CourtWithPlayersProps) {
+export default function CourtWithPlayers({ sceneId, scene, variant = "half", className, readOnly = false, flipped = false, activeStep }: CourtWithPlayersProps) {
   const updatePlayerState  = useStore((s) => s.updatePlayerState);
   const updateBallState    = useStore((s) => s.updateBallState);
   const displayMode        = useStore((s) => s.playerDisplayMode);
@@ -647,6 +652,8 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
           players={allPlayers}
           flipped={flipped}
           readOnly={readOnly}
+          sceneOverride={readOnly ? scene ?? undefined : undefined}
+          activeStep={activeStep}
         />
       )}
     </div>
