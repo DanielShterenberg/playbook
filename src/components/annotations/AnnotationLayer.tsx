@@ -27,7 +27,7 @@
 import { useState, useCallback, useRef } from "react";
 import { useStore, selectEditorScene } from "@/lib/store";
 import type { DrawingTool } from "@/lib/store";
-import type { Annotation, Point } from "@/lib/types";
+import type { Annotation, Point, Scene } from "@/lib/types";
 import { TOOL_CURSOR } from "@/components/editor/DrawingToolsPanel";
 import { useHistoryStore } from "@/lib/history";
 
@@ -696,6 +696,17 @@ export interface AnnotationLayerProps {
   flipped?: boolean;
   /** When true, renders annotations without any drawing/editing interaction. */
   readOnly?: boolean;
+  /**
+   * External scene data to use instead of reading from the Zustand store.
+   * Intended for read-only viewers (share view) that load a play outside the store.
+   */
+  sceneOverride?: Scene;
+  /**
+   * When provided, filter annotations to steps ≤ activeStep.
+   * Overrides the default readOnly "show all" behaviour, enabling step-by-step
+   * playback in viewers that manage their own step state.
+   */
+  activeStep?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -713,6 +724,8 @@ export default function AnnotationLayer({
   players,
   flipped = false,
   readOnly = false,
+  sceneOverride,
+  activeStep: activeStepProp,
 }: AnnotationLayerProps) {
   // Inner court dimensions for coordinate conversion
   const paWidth  = playAreaWidth  ?? width;
@@ -727,14 +740,23 @@ export default function AnnotationLayer({
   const appendAnnotationLeg = useStore((s) => s.appendAnnotationLeg);
   const isPlaying = useStore((s) => s.isPlaying);
   const currentStep = useStore((s) => s.currentStep);
-  const scene = useStore(selectEditorScene);
+  const storeScene = useStore(selectEditorScene);
+
+  // When an external scene is provided (share view / read-only viewers that
+  // don't load the play into the Zustand store), use it instead of the store.
+  const scene = sceneOverride ?? storeScene;
 
   // Progressive reveal: only show annotations from steps 1..activeStep.
-  // During playback activeStep = currentStep; while editing = selectedTimingStep.
-  // In readOnly (presentation) mode show all annotations regardless of step.
-  const activeStep = isPlaying ? currentStep : selectedTimingStep;
+  // - External activeStep prop: explicit control (share view step navigation)
+  // - readOnly without activeStep prop: show all (presentation mode)
+  // - Otherwise: filter by current editor/playback step
+  const storeStep = isPlaying ? currentStep : selectedTimingStep;
   const annotations = (scene?.timingGroups ?? [])
-    .filter((g) => readOnly || g.step <= activeStep)
+    .filter((g) => {
+      if (activeStepProp !== undefined) return g.step <= activeStepProp;
+      if (readOnly) return true;
+      return g.step <= storeStep;
+    })
     .flatMap((g) => g.annotations);
 
   // Build a map from annotation id → timing step for badge display
