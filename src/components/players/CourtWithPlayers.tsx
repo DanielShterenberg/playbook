@@ -207,6 +207,12 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
   const flippedRef = useRef(flipped);
   flippedRef.current = flipped;
 
+  // Always-current ref for scene prop — lets handleCourtReady (stable, no deps)
+  // fall back to prop-based scene data when the Zustand store is empty
+  // (e.g. read-only viewers that load a play outside the store).
+  const scenePropRef = useRef(scene);
+  scenePropRef.current = scene;
+
   // Track the last scene ID so we can reinitialise pixel positions on scene switch
   const prevSceneIdRef = useRef<string | null>(null);
 
@@ -290,6 +296,8 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
       // First render — read from the Zustand store directly so this callback
       // does not need `scene` in its dep array (which would recreate it on every
       // visibility toggle, causing Court to redraw unnecessarily).
+      // Fall back to the scene prop ref for read-only viewers (share view) where
+      // the play is not loaded into the store.
       if (!prevSize) {
         const storeState = useStore.getState();
         const currentScene =
@@ -297,6 +305,7 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
             (sc) => sc.id === storeState.selectedSceneId,
           ) ??
           storeState.currentPlay?.scenes[0] ??
+          scenePropRef.current ??
           null;
 
         const offenseStoreState = currentScene?.players.offense ?? defaultPlayers(OFFENSE_DEFAULTS);

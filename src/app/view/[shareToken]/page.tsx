@@ -167,6 +167,11 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
         e.preventDefault();
         setIsPlaying(false);
         setStepIndex((si) => Math.max(si - 1, 0));
+      } else if (e.code === "Home") {
+        e.preventDefault();
+        setIsPlaying(false);
+        setSceneIndex(0);
+        setStepIndex(0);
       } else if (e.code === "BracketLeft") {
         e.preventDefault();
         setIsPlaying(false);
@@ -302,6 +307,17 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
         {/* Scene navigation */}
         {hasMultipleScenes && (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {/* Go to beginning */}
+            <button
+              onClick={() => { setIsPlaying(false); setSceneIndex(0); setStepIndex(0); }}
+              disabled={sceneIndex === 0 && stepIndex === 0}
+              aria-label="Go to beginning"
+              title="Go to beginning"
+              style={{ padding: "6px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", background: "#fff", fontSize: 13, fontWeight: 500, color: sceneIndex === 0 && stepIndex === 0 ? "#D1D5DB" : "#374151", cursor: sceneIndex === 0 && stepIndex === 0 ? "default" : "pointer" }}
+            >
+              ⏮
+            </button>
+
             <button
               onClick={() => { setIsPlaying(false); setSceneIndex((i) => Math.max(0, i - 1)); }}
               disabled={sceneIndex === 0}
@@ -336,7 +352,7 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
 
         {/* Keyboard hint */}
         <p style={{ margin: 0, fontSize: 11, color: "#C4C4C4" }}>
-          Space: play/pause · ← →: step · [ ]: scene
+          Space: play/pause · ← →: step · [ ]: scene · Home: restart
         </p>
       </div>
     </main>
