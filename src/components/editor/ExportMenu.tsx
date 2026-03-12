@@ -15,7 +15,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useStore, selectEditorScene } from "@/lib/store";
 import { exportSceneAsPNG, type ExportResolution } from "@/lib/exportPNG";
 import { exportPlayAsGIF, type GifResolution } from "@/lib/exportGIF";
-import { exportPlayToPdf } from "@/lib/exportPdf";
+import { exportPlayToPdf, type PdfLayout } from "@/lib/exportPdf";
 
 // ---------------------------------------------------------------------------
 // Resolution options (PNG)
@@ -131,6 +131,7 @@ export default function ExportMenu() {
 
   // PDF settings
   const [pdfExportSteps, setPdfExportSteps] = useState(false);
+  const [pdfLayout, setPdfLayout] = useState<PdfLayout>("1x1");
 
   const menuRef = useRef<HTMLDivElement>(null);
   const isExporting = exportMode !== "idle";
@@ -177,11 +178,11 @@ export default function ExportMenu() {
     setExportMode("pdf");
     setOpen(false);
     try {
-      await exportPlayToPdf(currentPlay, { exportSteps: pdfExportSteps });
+      await exportPlayToPdf(currentPlay, { exportSteps: pdfExportSteps, layout: pdfLayout });
     } finally {
       setExportMode("idle");
     }
-  }, [currentPlay, pdfExportSteps]);
+  }, [currentPlay, pdfExportSteps, pdfLayout]);
 
   const handleExportGIF = useCallback(async () => {
     if (!currentPlay) return;
@@ -372,7 +373,27 @@ export default function ExportMenu() {
               Export Play Document
             </p>
           </div>
-          <div className="px-4 py-3">
+          <div className="px-4 py-3 flex flex-col gap-3">
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-gray-600">Layout</p>
+              <div className="flex gap-1.5 flex-wrap">
+                {(["1x1", "2x1", "2x2", "3x2"] as PdfLayout[]).map((l) => (
+                  <button
+                    key={l}
+                    onClick={() => setPdfLayout(l)}
+                    aria-pressed={pdfLayout === l}
+                    className={[
+                      "rounded px-2.5 py-1 text-xs font-medium transition-colors",
+                      pdfLayout === l
+                        ? "bg-orange-100 text-orange-700"
+                        : "bg-gray-100 text-gray-600 hover:bg-gray-200",
+                    ].join(" ")}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
             <label className="flex cursor-pointer items-center gap-2.5">
               <input
                 type="checkbox"
@@ -380,7 +401,7 @@ export default function ExportMenu() {
                 onChange={(e) => setPdfExportSteps(e.target.checked)}
                 className="accent-orange-600"
               />
-              <span className="text-sm text-gray-700">One page per step</span>
+              <span className="text-sm text-gray-700">Export steps</span>
               <span className="text-xs text-gray-400">(cumulative reveal)</span>
             </label>
           </div>
@@ -399,7 +420,7 @@ export default function ExportMenu() {
                 <span className="block text-xs text-gray-500">
                   All {currentPlay?.scenes.length ?? 0} scene
                   {(currentPlay?.scenes.length ?? 0) !== 1 ? "s" : ""}
-                  {pdfExportSteps ? " · one page per step" : " · one page per scene"}
+                  {pdfExportSteps ? " · per step" : " · per scene"} · {pdfLayout} layout
                 </span>
               </span>
             </button>
