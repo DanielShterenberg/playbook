@@ -15,6 +15,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useStore, selectEditorScene } from "@/lib/store";
 import { exportSceneAsPNG, type ExportResolution } from "@/lib/exportPNG";
 import { exportPlayAsGIF, type GifResolution } from "@/lib/exportGIF";
+import { exportPlayToPdf, type ExportPdfOptions } from "@/lib/exportPdf";
 
 // ---------------------------------------------------------------------------
 // Resolution options (PNG)
@@ -60,6 +61,16 @@ function DownloadIcon() {
   );
 }
 
+function PdfIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="2" y="1" width="10" height="13" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M5 5h4M5 8h4M5 11h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M10 1v3.5H13.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function GifIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -101,7 +112,7 @@ function ProgressBar({ fraction }: { fraction: number }) {
 // Component
 // ---------------------------------------------------------------------------
 
-type ExportMode = "idle" | "png" | "gif";
+type ExportMode = "idle" | "png" | "gif" | "pdf";
 
 export default function ExportMenu() {
   const scene = useStore(selectEditorScene);
@@ -117,6 +128,9 @@ export default function ExportMenu() {
   // GIF settings
   const [gifSpeed, setGifSpeed] = useState<number>(1);
   const [gifResolution, setGifResolution] = useState<GifResolution>("sd");
+
+  // PDF settings
+  const [pdfExportSteps, setPdfExportSteps] = useState(false);
 
   const menuRef = useRef<HTMLDivElement>(null);
   const isExporting = exportMode !== "idle";
@@ -158,6 +172,17 @@ export default function ExportMenu() {
     }
   }, [scene, currentPlay, pngResolution]);
 
+  const handleExportPDF = useCallback(async () => {
+    if (!currentPlay) return;
+    setExportMode("pdf");
+    setOpen(false);
+    try {
+      await exportPlayToPdf(currentPlay, { exportSteps: pdfExportSteps });
+    } finally {
+      setExportMode("idle");
+    }
+  }, [currentPlay, pdfExportSteps]);
+
   const handleExportGIF = useCallback(async () => {
     if (!currentPlay) return;
     setExportMode("gif");
@@ -186,7 +211,7 @@ export default function ExportMenu() {
         aria-haspopup="true"
         aria-expanded={open}
       >
-        {exportMode === "png"
+        {exportMode === "png" || exportMode === "pdf"
           ? "Exporting…"
           : exportMode === "gif"
             ? `GIF ${Math.round(gifProgress * 100)}%`
@@ -334,6 +359,47 @@ export default function ExportMenu() {
                   All {currentPlay?.scenes.length ?? 0} scene
                   {(currentPlay?.scenes.length ?? 0) !== 1 ? "s" : ""} · {gifSpeed}× speed ·{" "}
                   {gifResolution.toUpperCase()}
+                </span>
+              </span>
+            </button>
+          </div>
+
+          {/* ---------------------------------------------------------------- */}
+          {/* PDF section                                                       */}
+          {/* ---------------------------------------------------------------- */}
+          <div className="border-t border-gray-200 px-4 py-2.5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Export Play Document
+            </p>
+          </div>
+          <div className="px-4 py-3">
+            <label className="flex cursor-pointer items-center gap-2.5">
+              <input
+                type="checkbox"
+                checked={pdfExportSteps}
+                onChange={(e) => setPdfExportSteps(e.target.checked)}
+                className="accent-orange-600"
+              />
+              <span className="text-sm text-gray-700">One page per step</span>
+              <span className="text-xs text-gray-400">(cumulative reveal)</span>
+            </label>
+          </div>
+          <div className="border-t border-gray-100 p-2">
+            <button
+              className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-700"
+              role="menuitem"
+              onClick={handleExportPDF}
+              disabled={!currentPlay}
+            >
+              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-orange-100 text-orange-600">
+                <PdfIcon />
+              </span>
+              <span>
+                <span className="block font-medium">Export as PDF</span>
+                <span className="block text-xs text-gray-500">
+                  All {currentPlay?.scenes.length ?? 0} scene
+                  {(currentPlay?.scenes.length ?? 0) !== 1 ? "s" : ""}
+                  {pdfExportSteps ? " · one page per step" : " · one page per scene"}
                 </span>
               </span>
             </button>

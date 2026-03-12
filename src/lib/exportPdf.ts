@@ -230,17 +230,19 @@ function drawAnnotation(
   ann: Annotation,
   canvasW: number,
   canvasH: number,
+  flipped = false,
 ): void {
   // Annotations stored in normalised [0-1] coords relative to full canvas.
+  const ny = (n: number) => flipped ? (1 - n) * canvasH : n * canvasH;
   const fx = ann.from.x * canvasW;
-  const fy = ann.from.y * canvasH;
+  const fy = ny(ann.from.y);
   const tx = ann.to.x * canvasW;
-  const ty = ann.to.y * canvasH;
+  const ty = ny(ann.to.y);
 
   // Multi-leg waypoints
   const hasWaypoints = ann.waypoints && ann.waypoints.length > 0;
   const allPts: { x: number; y: number }[] = hasWaypoints
-    ? [{ x: fx, y: fy }, ...(ann.waypoints ?? []).map((p) => ({ x: p.x * canvasW, y: p.y * canvasH })), { x: tx, y: ty }]
+    ? [{ x: fx, y: fy }, ...(ann.waypoints ?? []).map((p) => ({ x: p.x * canvasW, y: ny(p.y) })), { x: tx, y: ty }]
     : [];
 
   // Bezier control point (if any — single-leg only)
@@ -248,7 +250,7 @@ function drawAnnotation(
   let cpy: number | undefined;
   if (!hasWaypoints && ann.controlPoints.length > 0) {
     cpx = ann.controlPoints[0].x * canvasW;
-    cpy = ann.controlPoints[0].y * canvasH;
+    cpy = ny(ann.controlPoints[0].y);
   }
 
   const color = ANN_COLOR[ann.type] ?? "#1E3A5F";
@@ -390,7 +392,12 @@ function drawAnnotation(
 // Scene → canvas
 // ---------------------------------------------------------------------------
 
-function renderScene(scene: Scene, courtType: "half" | "full"): HTMLCanvasElement {
+function renderScene(
+  scene: Scene,
+  courtType: "half" | "full",
+  flipped = false,
+  maxStep = Infinity,
+): HTMLCanvasElement {
   const halfH = Math.round(EXPORT_W / HALF_COURT_ASPECT);
   const H = courtType === "full" ? halfH * 2 : halfH;
 
@@ -402,29 +409,38 @@ function renderScene(scene: Scene, courtType: "half" | "full"): HTMLCanvasElemen
   canvas.width = EXPORT_W;
   canvas.height = H;
 
-  // Draw court markings
-  drawCourt(canvas, EXPORT_W, H, courtType as CourtVariant);
-
   const ctx = canvas.getContext("2d");
   if (!ctx) return canvas;
+
+  // Draw court markings — apply flip transform if needed
+  if (flipped) {
+    ctx.save();
+    ctx.translate(0, H);
+    ctx.scale(1, -1);
+  }
+  drawCourt(canvas, EXPORT_W, H, courtType as CourtVariant);
+  if (flipped) ctx.restore();
+
+  // Normalised y → canvas y helper
+  const cy = (normY: number) => flipped ? (1 - normY) * paH + paOffY : normY * paH + paOffY;
 
   // Defense (underneath offense)
   for (const p of scene.players.defense) {
     if (!p.visible) continue;
-    drawPlayer(ctx, "defense", p.position, p.x * EXPORT_W, p.y * paH + paOffY, PLAYER_R);
+    drawPlayer(ctx, "defense", p.position, p.x * EXPORT_W, cy(p.y), PLAYER_R);
   }
 
   // Offense
   for (const p of scene.players.offense) {
     if (!p.visible) continue;
-    drawPlayer(ctx, "offense", p.position, p.x * EXPORT_W, p.y * paH + paOffY, PLAYER_R);
+    drawPlayer(ctx, "offense", p.position, p.x * EXPORT_W, cy(p.y), PLAYER_R);
   }
 
   // Ball
   const ball = scene.ball;
   if (ball) {
     let bx = ball.x * EXPORT_W;
-    let by = ball.y * paH + paOffY;
+    let by = cy(ball.y);
 
     // If attached to a player, float it above them
     if (ball.attachedTo) {
@@ -432,16 +448,19 @@ function renderScene(scene: Scene, courtType: "half" | "full"): HTMLCanvasElemen
       const attached = pool.find((p) => p.position === ball.attachedTo!.position);
       if (attached) {
         bx = attached.x * EXPORT_W;
-        by = attached.y * paH + paOffY - PLAYER_R * 1.2;
+        // "above" means toward half-court regardless of flip direction
+        by = flipped ? cy(attached.y) + PLAYER_R * 1.2 : cy(attached.y) - PLAYER_R * 1.2;
       }
     }
     drawBall(ctx, bx, by, BALL_R);
   }
 
-  // Annotations — stored in full-canvas-normalised coords
-  for (const group of scene.timingGroups) {
+  // Annotations — cumulative reveal up to maxStep
+  const sortedGroups = [...scene.timingGroups].sort((a, b) => a.step - b.step);
+  for (const group of sortedGroups) {
+    if (group.step > maxStep) break;
     for (const ann of group.annotations) {
-      drawAnnotation(ctx, ann, EXPORT_W, H);
+      drawAnnotation(ctx, ann, EXPORT_W, H, flipped);
     }
   }
 
@@ -452,11 +471,18 @@ function renderScene(scene: Scene, courtType: "half" | "full"): HTMLCanvasElemen
 // PDF assembly
 // ---------------------------------------------------------------------------
 
+export interface ExportPdfOptions {
+  /** When true, renders one page per timing step (cumulative reveal). Default: false. */
+  exportSteps?: boolean;
+}
+
 /**
  * Generates and downloads a PDF of the given play.
- * One page per scene, with the court rendered on each page.
+ * Default: one page per scene. With exportSteps: one page per timing step.
  */
-export async function exportPlayToPdf(play: Play): Promise<void> {
+export async function exportPlayToPdf(play: Play, options: ExportPdfOptions = {}): Promise<void> {
+  const { exportSteps = false } = options;
+
   // Dynamic import keeps jsPDF out of the SSR bundle
   const { jsPDF } = await import("jspdf");
 
@@ -471,59 +497,65 @@ export async function exportPlayToPdf(play: Play): Promise<void> {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
   const scenes = [...play.scenes].sort((a, b) => a.order - b.order);
+  let pageIndex = 0;
 
-  for (let i = 0; i < scenes.length; i++) {
-    const scene = scenes[i];
+  for (const scene of scenes) {
+    const sceneFlipped = (scene.flipped ?? play.flipped) === true;
+    const sortedGroups = [...scene.timingGroups].sort((a, b) => a.step - b.step);
+    const steps = exportSteps ? sortedGroups.map((g) => g.step) : [Infinity];
 
-    if (i > 0) pdf.addPage();
+    for (const maxStep of steps) {
+      if (pageIndex > 0) pdf.addPage();
+      pageIndex++;
 
-    // Render court + players + ball + annotations
-    const canvas = renderScene(scene, play.courtType);
-    const imgData = canvas.toDataURL("image/jpeg", 0.92);
+      const canvas = renderScene(scene, play.courtType, sceneFlipped, maxStep);
+      const imgData = canvas.toDataURL("image/jpeg", 0.92);
 
-    // Scale to fit usable area while preserving aspect ratio
-    const imgAspect = canvas.width / canvas.height;
-    let imgW: number;
-    let imgH: number;
-    if (imgAspect >= usableW / usableH) {
-      imgW = usableW;
-      imgH = usableW / imgAspect;
-    } else {
-      imgH = usableH;
-      imgW = usableH * imgAspect;
-    }
-    const imgX = MARGIN + (usableW - imgW) / 2;
-    const imgY = MARGIN + HEADER_H;
+      // Scale to fit usable area while preserving aspect ratio
+      const imgAspect = canvas.width / canvas.height;
+      let imgW: number;
+      let imgH: number;
+      if (imgAspect >= usableW / usableH) {
+        imgW = usableW;
+        imgH = usableW / imgAspect;
+      } else {
+        imgH = usableH;
+        imgW = usableH * imgAspect;
+      }
+      const imgX = MARGIN + (usableW - imgW) / 2;
+      const imgY = MARGIN + HEADER_H;
 
-    // --- Header row ---
-    const sceneLabel = `Scene ${scene.order}`;
+      // --- Header row ---
+      const stepLabel = exportSteps && maxStep !== Infinity ? ` · Step ${maxStep}` : "";
+      const sceneLabel = `Scene ${scene.order}${stepLabel}`;
 
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(11);
-    pdf.setTextColor(31, 41, 55);
-    pdf.text(sceneLabel, MARGIN, MARGIN + 8);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(11);
+      pdf.setTextColor(31, 41, 55);
+      pdf.text(sceneLabel, MARGIN, MARGIN + 8);
 
-    if (scene.note) {
-      const labelW = pdf.getTextWidth(sceneLabel);
+      if (scene.note) {
+        const labelW = pdf.getTextWidth(sceneLabel);
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(9);
+        pdf.setTextColor(107, 114, 128);
+        pdf.text(scene.note, MARGIN + labelW + 3, MARGIN + 8);
+      }
+
+      // Play title — right-aligned
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(9);
-      pdf.setTextColor(107, 114, 128);
-      pdf.text(scene.note, MARGIN + labelW + 3, MARGIN + 8);
+      pdf.setTextColor(156, 163, 175);
+      pdf.text(play.title, PAGE_W - MARGIN, MARGIN + 8, { align: "right" });
+
+      // Thin divider under header
+      pdf.setDrawColor(229, 231, 235);
+      pdf.setLineWidth(0.3);
+      pdf.line(MARGIN, MARGIN + HEADER_H - 2, PAGE_W - MARGIN, MARGIN + HEADER_H - 2);
+
+      // --- Court image ---
+      pdf.addImage(imgData, "JPEG", imgX, imgY, imgW, imgH);
     }
-
-    // Play title — right-aligned
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(9);
-    pdf.setTextColor(156, 163, 175);
-    pdf.text(play.title, PAGE_W - MARGIN, MARGIN + 8, { align: "right" });
-
-    // Thin divider under header
-    pdf.setDrawColor(229, 231, 235);
-    pdf.setLineWidth(0.3);
-    pdf.line(MARGIN, MARGIN + HEADER_H - 2, PAGE_W - MARGIN, MARGIN + HEADER_H - 2);
-
-    // --- Court image ---
-    pdf.addImage(imgData, "JPEG", imgX, imgY, imgW, imgH);
   }
 
   const safe = play.title.replace(/[^\w\s-]/g, "").trim() || "play";

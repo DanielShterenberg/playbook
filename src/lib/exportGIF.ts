@@ -385,8 +385,15 @@ function drawAnnotation(
   ctx: CanvasRenderingContext2D,
   ann: Annotation,
   scale: number,
+  width: number,
+  height: number,
 ): void {
   const { from, to, type } = ann;
+  // Convert normalised [0-1] coords to canvas pixels
+  const fx = from.x * width;
+  const fy = from.y * height;
+  const tx = to.x * width;
+  const ty = to.y * height;
   const arrowSize = 12 * scale;
 
   ctx.lineCap = "round";
@@ -394,25 +401,25 @@ function drawAnnotation(
 
   if (type === "movement") {
     ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
+    ctx.moveTo(fx, fy);
+    ctx.lineTo(tx, ty);
     ctx.strokeStyle = "#1E3A5F";
     ctx.lineWidth = 2.5 * scale;
     ctx.stroke();
-    drawArrowHead(ctx, from.x, from.y, to.x, to.y, arrowSize, "#1E3A5F");
+    drawArrowHead(ctx, fx, fy, tx, ty, arrowSize, "#1E3A5F");
     return;
   }
 
   if (type === "dribble") {
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
+    const dx = tx - fx;
+    const dy = ty - fy;
     const len = Math.sqrt(dx * dx + dy * dy);
     const zigCount = Math.max(2, Math.round(len / (18 * scale)));
     ctx.beginPath();
     for (let i = 0; i <= zigCount; i++) {
       const t = i / zigCount;
-      const mx = from.x + dx * t;
-      const my = from.y + dy * t;
+      const mx = fx + dx * t;
+      const my = fy + dy * t;
       const perp = i % 2 === 0 ? 6 * scale : -6 * scale;
       const px2 = len > 0 ? (-dy / len) * perp : 0;
       const py2 = len > 0 ? (dx / len) * perp : 0;
@@ -422,36 +429,36 @@ function drawAnnotation(
     ctx.strokeStyle = "#1E3A5F";
     ctx.lineWidth = 2.5 * scale;
     ctx.stroke();
-    drawArrowHead(ctx, from.x, from.y, to.x, to.y, arrowSize, "#1E3A5F");
+    drawArrowHead(ctx, fx, fy, tx, ty, arrowSize, "#1E3A5F");
     return;
   }
 
   if (type === "pass") {
     ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
+    ctx.moveTo(fx, fy);
+    ctx.lineTo(tx, ty);
     ctx.strokeStyle = "#059669";
     ctx.lineWidth = 2 * scale;
     ctx.stroke();
-    drawArrowHead(ctx, from.x, from.y, to.x, to.y, arrowSize, "#059669");
+    drawArrowHead(ctx, fx, fy, tx, ty, arrowSize, "#059669");
     return;
   }
 
   if (type === "screen") {
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
+    const dx = tx - fx;
+    const dy = ty - fy;
     const len = Math.sqrt(dx * dx + dy * dy);
     const perpX = len > 0 ? (-dy / len) * 10 * scale : 0;
     const perpY = len > 0 ? (dx / len) * 10 * scale : 0;
     ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
+    ctx.moveTo(fx, fy);
+    ctx.lineTo(tx, ty);
     ctx.strokeStyle = "#7C3AED";
     ctx.lineWidth = 2.5 * scale;
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(to.x + perpX, to.y + perpY);
-    ctx.lineTo(to.x - perpX, to.y - perpY);
+    ctx.moveTo(tx + perpX, ty + perpY);
+    ctx.lineTo(tx - perpX, ty - perpY);
     ctx.lineWidth = 3 * scale;
     ctx.stroke();
     return;
@@ -459,14 +466,14 @@ function drawAnnotation(
 
   if (type === "cut") {
     ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
+    ctx.moveTo(fx, fy);
+    ctx.lineTo(tx, ty);
     ctx.strokeStyle = "#DC2626";
     ctx.lineWidth = 2.5 * scale;
     ctx.setLineDash([7 * scale, 5 * scale]);
     ctx.stroke();
     ctx.setLineDash([]);
-    drawArrowHead(ctx, from.x, from.y, to.x, to.y, arrowSize, "#DC2626");
+    drawArrowHead(ctx, fx, fy, tx, ty, arrowSize, "#DC2626");
   }
 }
 
@@ -501,7 +508,7 @@ function renderFrame(
 
   // Draw annotations (below players)
   for (const ann of visibleAnnotations) {
-    drawAnnotation(ctx, ann, 1);
+    drawAnnotation(ctx, ann, 1, width, height);
   }
 
   // Defense
