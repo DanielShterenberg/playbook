@@ -713,7 +713,7 @@ function encodeFrame(
 
   encoder.writeFrame(index, width, height, {
     palette,
-    delay: delayMs,
+    delay: delayMs, // centiseconds (gifenc unit)
     repeat: 0, // infinite loop
     first: isFirst,
   });
@@ -790,13 +790,14 @@ export async function exportPlayAsGIF(
       // Add this step's annotations to the running cumulative list
       cumulativeAnnotations.push(...group.annotations);
 
-      // Duration for this frame: respect speed and clamp to reasonable range
+      // Duration for this frame: respect speed and clamp to reasonable range.
+      // GIF delay is in centiseconds (1/100 s) — divide ms by 10.
+      // Clamp: min 2 cs (20 ms), max 500 cs (5 s).
       const rawDuration = group.duration / speed;
-      // GIF delay is in 10ms units; minimum 10ms (100fps), cap at 10s
-      const delayMs = Math.min(Math.max(Math.round(rawDuration), 10), 10000);
+      const delayCs = Math.min(Math.max(Math.round(rawDuration / 10), 2), 500);
 
       renderFrame(canvas, scene, cumulativeAnnotations, width, height, sceneFlipped);
-      encodeFrame(encoder, canvas, delayMs, isFirst);
+      encodeFrame(encoder, canvas, delayCs, isFirst);
       isFirst = false;
 
       framesEncoded += 1;
@@ -806,9 +807,10 @@ export async function exportPlayAsGIF(
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
     }
 
-    // Hold frame between scenes (or longer final hold at the last scene)
+    // Hold frame between scenes (or longer final hold at the last scene).
+    // Convert ms → centiseconds.
     const holdMs = si === scenes.length - 1 ? FINAL_HOLD_MS : SCENE_HOLD_MS;
-    const holdDelay = Math.round(holdMs / speed);
+    const holdDelay = Math.round(holdMs / speed / 10);
 
     // Re-render with all annotations of this scene visible for the hold
     renderFrame(canvas, scene, cumulativeAnnotations, width, height, sceneFlipped);
