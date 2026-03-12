@@ -15,7 +15,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useStore, selectEditorScene } from "@/lib/store";
 import { exportSceneAsPNG, type ExportResolution } from "@/lib/exportPNG";
 import { exportPlayAsGIF, type GifResolution } from "@/lib/exportGIF";
-import { exportPlayToPdf, type ExportPdfOptions } from "@/lib/exportPdf";
+import { exportPlayToPdf } from "@/lib/exportPdf";
 
 // ---------------------------------------------------------------------------
 // Resolution options (PNG)
