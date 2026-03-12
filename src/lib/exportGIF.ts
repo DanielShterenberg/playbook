@@ -80,7 +80,7 @@ const COLOR_LINE_WIDTH_PX = 2;
 // Court drawing (copy of the logic in exportPNG.ts — kept in sync)
 // ---------------------------------------------------------------------------
 
-function drawCourtOnCanvas(canvas: HTMLCanvasElement): void {
+function drawCourtOnCanvas(canvas: HTMLCanvasElement, flipped = false): void {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
@@ -93,6 +93,12 @@ function drawCourtOnCanvas(canvas: HTMLCanvasElement): void {
   const scaleY = H / W;
 
   ctx.clearRect(0, 0, W, H);
+
+  if (flipped) {
+    ctx.save();
+    ctx.translate(0, H);
+    ctx.scale(1, -1);
+  }
 
   // 1. Court background
   ctx.fillStyle = COLOR_COURT;
@@ -211,6 +217,8 @@ function drawCourtOnCanvas(canvas: HTMLCanvasElement): void {
   ctx.strokeStyle = COLOR_LINE;
   ctx.stroke();
   ctx.restore();
+
+  if (flipped) ctx.restore();
 }
 
 // ---------------------------------------------------------------------------
@@ -381,66 +389,137 @@ function drawArrowHead(
   ctx.fill();
 }
 
+// Stroke a quadratic bezier (or straight line if no control point).
+function strokeBezier(
+  ctx: CanvasRenderingContext2D,
+  fx: number, fy: number, tx: number, ty: number,
+  cpx?: number, cpy?: number,
+): void {
+  ctx.beginPath();
+  ctx.moveTo(fx, fy);
+  if (cpx !== undefined && cpy !== undefined) {
+    ctx.quadraticCurveTo(cpx, cpy, tx, ty);
+  } else {
+    ctx.lineTo(tx, ty);
+  }
+  ctx.stroke();
+}
+
+// Arrowhead at (tx,ty); for bezier the tail direction comes from the control point.
+function arrowAtEnd(
+  ctx: CanvasRenderingContext2D,
+  fx: number, fy: number, tx: number, ty: number,
+  arrowSize: number, color: string,
+  cpx?: number, cpy?: number,
+): void {
+  const tailX = cpx !== undefined ? cpx : fx;
+  const tailY = cpy !== undefined ? cpy : fy;
+  drawArrowHead(ctx, tailX, tailY, tx, ty, arrowSize, color);
+}
+
+function strokePolyline(ctx: CanvasRenderingContext2D, pts: { x: number; y: number }[]): void {
+  if (pts.length < 2) return;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.stroke();
+}
+
 function drawAnnotation(
   ctx: CanvasRenderingContext2D,
   ann: Annotation,
   scale: number,
   width: number,
   height: number,
+  flipped = false,
 ): void {
   const { from, to, type } = ann;
-  // Convert normalised [0-1] coords to canvas pixels
+  // Convert normalised [0-1] coords to canvas pixels (respects flip)
+  const py = (n: number) => flipped ? (1 - n) * height : n * height;
   const fx = from.x * width;
-  const fy = from.y * height;
+  const fy = py(from.y);
   const tx = to.x * width;
-  const ty = to.y * height;
-  const arrowSize = 12 * scale;
+  const ty = py(to.y);
 
+  // Bezier control point
+  const hasWaypoints = ann.waypoints && ann.waypoints.length > 0;
+  let cpx: number | undefined;
+  let cpy: number | undefined;
+  if (!hasWaypoints && ann.controlPoints.length > 0) {
+    cpx = ann.controlPoints[0].x * width;
+    cpy = py(ann.controlPoints[0].y);
+  }
+
+  // Multi-leg waypoints
+  const allPts = hasWaypoints
+    ? [{ x: fx, y: fy }, ...(ann.waypoints ?? []).map((p) => ({ x: p.x * width, y: py(p.y) })), { x: tx, y: ty }]
+    : [];
+
+  const arrowSize = 12 * scale;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
+  ctx.setLineDash([]);
 
   if (type === "movement") {
-    ctx.beginPath();
-    ctx.moveTo(fx, fy);
-    ctx.lineTo(tx, ty);
     ctx.strokeStyle = "#1E3A5F";
+    ctx.fillStyle = "#1E3A5F";
     ctx.lineWidth = 2.5 * scale;
-    ctx.stroke();
-    drawArrowHead(ctx, fx, fy, tx, ty, arrowSize, "#1E3A5F");
+    if (hasWaypoints) {
+      strokePolyline(ctx, allPts);
+      const n = allPts.length;
+      drawArrowHead(ctx, allPts[n - 2].x, allPts[n - 2].y, allPts[n - 1].x, allPts[n - 1].y, arrowSize, "#1E3A5F");
+    } else {
+      strokeBezier(ctx, fx, fy, tx, ty, cpx, cpy);
+      arrowAtEnd(ctx, fx, fy, tx, ty, arrowSize, "#1E3A5F", cpx, cpy);
+    }
     return;
   }
 
   if (type === "dribble") {
-    const dx = tx - fx;
-    const dy = ty - fy;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    const zigCount = Math.max(2, Math.round(len / (18 * scale)));
-    ctx.beginPath();
-    for (let i = 0; i <= zigCount; i++) {
-      const t = i / zigCount;
-      const mx = fx + dx * t;
-      const my = fy + dy * t;
-      const perp = i % 2 === 0 ? 6 * scale : -6 * scale;
-      const px2 = len > 0 ? (-dy / len) * perp : 0;
-      const py2 = len > 0 ? (dx / len) * perp : 0;
-      if (i === 0) ctx.moveTo(mx + px2, my + py2);
-      else ctx.lineTo(mx + px2, my + py2);
-    }
     ctx.strokeStyle = "#1E3A5F";
+    ctx.fillStyle = "#1E3A5F";
     ctx.lineWidth = 2.5 * scale;
-    ctx.stroke();
-    drawArrowHead(ctx, fx, fy, tx, ty, arrowSize, "#1E3A5F");
+    if (hasWaypoints || cpx !== undefined) {
+      // Curved/multi-leg dribble: dashed bezier or polyline
+      ctx.setLineDash([6 * scale, 4 * scale]);
+      if (hasWaypoints) strokePolyline(ctx, allPts);
+      else strokeBezier(ctx, fx, fy, tx, ty, cpx, cpy);
+      ctx.setLineDash([]);
+      if (hasWaypoints) {
+        const n = allPts.length;
+        drawArrowHead(ctx, allPts[n - 2].x, allPts[n - 2].y, allPts[n - 1].x, allPts[n - 1].y, arrowSize, "#1E3A5F");
+      } else {
+        arrowAtEnd(ctx, fx, fy, tx, ty, arrowSize, "#1E3A5F", cpx, cpy);
+      }
+    } else {
+      // Straight zigzag
+      const dx = tx - fx;
+      const dy = ty - fy;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      const zigCount = Math.max(2, Math.round(len / (18 * scale)));
+      ctx.beginPath();
+      for (let i = 0; i <= zigCount; i++) {
+        const t = i / zigCount;
+        const mx = fx + dx * t;
+        const my = fy + dy * t;
+        const perp = i % 2 === 0 ? 6 * scale : -6 * scale;
+        const px2 = len > 0 ? (-dy / len) * perp : 0;
+        const py2 = len > 0 ? (dx / len) * perp : 0;
+        if (i === 0) ctx.moveTo(mx + px2, my + py2);
+        else ctx.lineTo(mx + px2, my + py2);
+      }
+      ctx.stroke();
+      drawArrowHead(ctx, fx, fy, tx, ty, arrowSize, "#1E3A5F");
+    }
     return;
   }
 
   if (type === "pass") {
-    ctx.beginPath();
-    ctx.moveTo(fx, fy);
-    ctx.lineTo(tx, ty);
     ctx.strokeStyle = "#059669";
+    ctx.fillStyle = "#059669";
     ctx.lineWidth = 2 * scale;
-    ctx.stroke();
-    drawArrowHead(ctx, fx, fy, tx, ty, arrowSize, "#059669");
+    strokeBezier(ctx, fx, fy, tx, ty, cpx, cpy);
+    arrowAtEnd(ctx, fx, fy, tx, ty, arrowSize, "#059669", cpx, cpy);
     return;
   }
 
@@ -450,12 +529,9 @@ function drawAnnotation(
     const len = Math.sqrt(dx * dx + dy * dy);
     const perpX = len > 0 ? (-dy / len) * 10 * scale : 0;
     const perpY = len > 0 ? (dx / len) * 10 * scale : 0;
-    ctx.beginPath();
-    ctx.moveTo(fx, fy);
-    ctx.lineTo(tx, ty);
     ctx.strokeStyle = "#7C3AED";
     ctx.lineWidth = 2.5 * scale;
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(tx, ty); ctx.stroke();
     ctx.beginPath();
     ctx.moveTo(tx + perpX, ty + perpY);
     ctx.lineTo(tx - perpX, ty - perpY);
@@ -465,16 +541,66 @@ function drawAnnotation(
   }
 
   if (type === "cut") {
-    ctx.beginPath();
-    ctx.moveTo(fx, fy);
-    ctx.lineTo(tx, ty);
     ctx.strokeStyle = "#DC2626";
+    ctx.fillStyle = "#DC2626";
     ctx.lineWidth = 2.5 * scale;
     ctx.setLineDash([7 * scale, 5 * scale]);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    drawArrowHead(ctx, fx, fy, tx, ty, arrowSize, "#DC2626");
+    if (hasWaypoints) {
+      strokePolyline(ctx, allPts);
+      ctx.setLineDash([]);
+      const n = allPts.length;
+      drawArrowHead(ctx, allPts[n - 2].x, allPts[n - 2].y, allPts[n - 1].x, allPts[n - 1].y, arrowSize, "#DC2626");
+    } else {
+      strokeBezier(ctx, fx, fy, tx, ty, cpx, cpy);
+      ctx.setLineDash([]);
+      arrowAtEnd(ctx, fx, fy, tx, ty, arrowSize, "#DC2626", cpx, cpy);
+    }
+    return;
   }
+
+  if (type === "guard") {
+    ctx.strokeStyle = "#D97706";
+    ctx.lineWidth = 2 * scale;
+    ctx.setLineDash([6 * scale, 6 * scale]);
+    strokeBezier(ctx, fx, fy, tx, ty, cpx, cpy);
+    ctx.setLineDash([]);
+    return;
+  }
+
+  if (type === "handoff") {
+    ctx.strokeStyle = "#0369A1";
+    ctx.fillStyle = "#0369A1";
+    ctx.lineWidth = 2.5 * scale;
+    ctx.setLineDash([6 * scale, 4 * scale]);
+    strokeBezier(ctx, fx, fy, tx, ty, cpx, cpy);
+    ctx.setLineDash([]);
+
+    // Two perpendicular tick marks near the tip
+    const t1 = 0.82, t2 = 0.68;
+    const getPoint = (t: number) => {
+      if (cpx !== undefined && cpy !== undefined) {
+        const mt = 1 - t;
+        return { x: mt * mt * fx + 2 * mt * t * cpx + t * t * tx, y: mt * mt * fy + 2 * mt * t * cpy + t * t * ty };
+      }
+      return { x: fx + (tx - fx) * t, y: fy + (ty - fy) * t };
+    };
+    const p1 = getPoint(t1), p2 = getPoint(t2);
+    const p1b = getPoint(t1 - 0.04), p2b = getPoint(t2 - 0.04);
+    const tickLen = 8 * scale;
+    for (const [p, pb] of [[p1, p1b], [p2, p2b]] as const) {
+      const ddx = p.x - pb.x, ddy = p.y - pb.y;
+      const dlen = Math.sqrt(ddx * ddx + ddy * ddy) || 1;
+      const perpX = -ddy / dlen * tickLen, perpY = ddx / dlen * tickLen;
+      ctx.beginPath();
+      ctx.moveTo(p.x + perpX, p.y + perpY);
+      ctx.lineTo(p.x - perpX, p.y - perpY);
+      ctx.stroke();
+    }
+    arrowAtEnd(ctx, fx, fy, tx, ty, arrowSize, "#0369A1", cpx, cpy);
+    return;
+  }
+
+  ctx.setLineDash([]);
 }
 
 // ---------------------------------------------------------------------------
@@ -496,44 +622,47 @@ function renderFrame(
   visibleAnnotations: Annotation[],
   width: number,
   height: number,
+  flipped = false,
 ): void {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-  // Court background
-  drawCourtOnCanvas(canvas);
+  const py = (n: number) => flipped ? (1 - n) * height : n * height;
 
-  // Overlay: annotations + players + ball
+  // Court background (flip handled inside)
+  drawCourtOnCanvas(canvas, flipped);
+
   ctx.save();
 
   // Draw annotations (below players)
   for (const ann of visibleAnnotations) {
-    drawAnnotation(ctx, ann, 1, width, height);
+    drawAnnotation(ctx, ann, 1, width, height, flipped);
   }
 
   // Defense
   for (const p of scene.players.defense) {
     if (p.visible) {
-      drawPlayer(ctx, "defense", p.position, p.x * width, p.y * height, 1);
+      drawPlayer(ctx, "defense", p.position, p.x * width, py(p.y), 1);
     }
   }
 
   // Offense
   for (const p of scene.players.offense) {
     if (p.visible) {
-      drawPlayer(ctx, "offense", p.position, p.x * width, p.y * height, 1);
+      drawPlayer(ctx, "offense", p.position, p.x * width, py(p.y), 1);
     }
   }
 
   // Ball
   const ball = scene.ball;
-  let ballPx = { x: ball.x * width, y: ball.y * height };
+  let ballPx = { x: ball.x * width, y: py(ball.y) };
   if (ball.attachedTo) {
     const pool =
       ball.attachedTo.side === "offense" ? scene.players.offense : scene.players.defense;
     const holder = pool.find((p) => p.position === ball.attachedTo!.position);
     if (holder) {
-      ballPx = { x: holder.x * width, y: holder.y * height + BALL_ATTACH_OFFSET_Y };
+      // Float ball toward half-court regardless of flip direction
+      ballPx = { x: holder.x * width, y: py(holder.y) + (flipped ? -BALL_ATTACH_OFFSET_Y : BALL_ATTACH_OFFSET_Y) };
     }
   }
   drawBall(ctx, ballPx.x, ballPx.y, 1);
@@ -629,6 +758,7 @@ export async function exportPlayAsGIF(
 
   for (let si = 0; si < scenes.length; si++) {
     const scene = scenes[si];
+    const sceneFlipped = (scene.flipped ?? play.flipped) === true;
     const sortedGroups = [...scene.timingGroups].sort((a, b) => a.step - b.step);
 
     // Cumulative annotation list — we reveal one timing step at a time
@@ -645,7 +775,7 @@ export async function exportPlayAsGIF(
       // GIF delay is in 10ms units; minimum 10ms (100fps), cap at 10s
       const delayMs = Math.min(Math.max(Math.round(rawDuration), 10), 10000);
 
-      renderFrame(canvas, scene, cumulativeAnnotations, width, height);
+      renderFrame(canvas, scene, cumulativeAnnotations, width, height, sceneFlipped);
       encodeFrame(encoder, canvas, delayMs, isFirst);
       isFirst = false;
 
@@ -661,7 +791,7 @@ export async function exportPlayAsGIF(
     const holdDelay = Math.round(holdMs / speed);
 
     // Re-render with all annotations of this scene visible for the hold
-    renderFrame(canvas, scene, cumulativeAnnotations, width, height);
+    renderFrame(canvas, scene, cumulativeAnnotations, width, height, sceneFlipped);
     encodeFrame(encoder, canvas, holdDelay, isFirst);
     isFirst = false;
 
