@@ -634,8 +634,8 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
         </svg>
       )}
 
-      {/* Annotation drawing layer — hidden in readOnly mode (shared view). */}
-      {courtSize && !readOnly && (
+      {/* Annotation layer — always rendered; readOnly disables interaction. */}
+      {courtSize && (
         <AnnotationLayer
           width={courtSize.width}
           height={courtSize.height}
@@ -646,6 +646,7 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
           sceneId={sceneId ?? null}
           players={allPlayers}
           flipped={flipped}
+          readOnly={readOnly}
         />
       )}
     </div>

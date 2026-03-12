@@ -694,6 +694,8 @@ export interface AnnotationLayerProps {
   players: SnapPlayer[];
   /** Whether the court is flipped (basket at top). */
   flipped?: boolean;
+  /** When true, renders annotations without any drawing/editing interaction. */
+  readOnly?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -710,6 +712,7 @@ export default function AnnotationLayer({
   sceneId,
   players,
   flipped = false,
+  readOnly = false,
 }: AnnotationLayerProps) {
   // Inner court dimensions for coordinate conversion
   const paWidth  = playAreaWidth  ?? width;
@@ -728,10 +731,10 @@ export default function AnnotationLayer({
 
   // Progressive reveal: only show annotations from steps 1..activeStep.
   // During playback activeStep = currentStep; while editing = selectedTimingStep.
-  // This ensures step X never reveals arrows that belong to future steps.
+  // In readOnly (presentation) mode show all annotations regardless of step.
   const activeStep = isPlaying ? currentStep : selectedTimingStep;
   const annotations = (scene?.timingGroups ?? [])
-    .filter((g) => g.step <= activeStep)
+    .filter((g) => readOnly || g.step <= activeStep)
     .flatMap((g) => g.annotations);
 
   // Build a map from annotation id → timing step for badge display
@@ -1134,17 +1137,17 @@ export default function AnnotationLayer({
         width,
         height,
         overflow: "visible",
-        cursor,
+        cursor: readOnly ? "default" : cursor,
         // Capture events when drawing, when dragging a control point, or when
         // in select mode with an annotation selected (so the CP handle is clickable).
-        pointerEvents: (isDrawingTool || cpDragging || toDragging || showCpHandle) ? "all" : "none",
+        pointerEvents: readOnly ? "none" : (isDrawingTool || cpDragging || toDragging || showCpHandle) ? "all" : "none",
       }}
       viewBox={`0 0 ${width} ${height}`}
       aria-label="Annotation drawing layer"
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onClick={handleSVGClick}
+      onMouseDown={readOnly ? undefined : handleMouseDown}
+      onMouseMove={readOnly ? undefined : handleMouseMove}
+      onMouseUp={readOnly ? undefined : handleMouseUp}
+      onClick={readOnly ? undefined : handleSVGClick}
     >
       {/* Existing annotations */}
       {annotations.map((ann) => (
