@@ -506,6 +506,7 @@ function drawAnnotation(
         const px2 = len > 0 ? (-dy / len) * perp : 0;
         const py2 = len > 0 ? (dx / len) * perp : 0;
         if (i === 0) ctx.moveTo(mx + px2, my + py2);
+        else if (i === zigCount) ctx.lineTo(tx, ty);
         else ctx.lineTo(mx + px2, my + py2);
       }
       ctx.stroke();
@@ -518,8 +519,17 @@ function drawAnnotation(
     ctx.strokeStyle = "#059669";
     ctx.fillStyle = "#059669";
     ctx.lineWidth = 2 * scale;
-    strokeBezier(ctx, fx, fy, tx, ty, cpx, cpy);
-    arrowAtEnd(ctx, fx, fy, tx, ty, arrowSize, "#059669", cpx, cpy);
+    ctx.setLineDash([6 * scale, 4 * scale]);
+    if (hasWaypoints) {
+      strokePolyline(ctx, allPts);
+      ctx.setLineDash([]);
+      const n = allPts.length;
+      drawArrowHead(ctx, allPts[n - 2].x, allPts[n - 2].y, allPts[n - 1].x, allPts[n - 1].y, arrowSize, "#059669");
+    } else {
+      strokeBezier(ctx, fx, fy, tx, ty, cpx, cpy);
+      ctx.setLineDash([]);
+      arrowAtEnd(ctx, fx, fy, tx, ty, arrowSize, "#059669", cpx, cpy);
+    }
     return;
   }
 
@@ -634,9 +644,12 @@ function renderFrame(
 
   ctx.save();
 
-  // Draw annotations (below players)
+  // Draw movement/cut/dribble/pass/guard/handoff annotations below players
+  const BELOW_PLAYER_TYPES = new Set(["movement", "cut", "dribble", "pass", "guard", "handoff"]);
   for (const ann of visibleAnnotations) {
-    drawAnnotation(ctx, ann, 1, width, height, flipped);
+    if (BELOW_PLAYER_TYPES.has(ann.type)) {
+      drawAnnotation(ctx, ann, 1, width, height, flipped);
+    }
   }
 
   // Defense
@@ -666,6 +679,13 @@ function renderFrame(
     }
   }
   drawBall(ctx, ballPx.x, ballPx.y, 1);
+
+  // Draw screen annotations on top of players so the perpendicular bar is visible
+  for (const ann of visibleAnnotations) {
+    if (!BELOW_PLAYER_TYPES.has(ann.type)) {
+      drawAnnotation(ctx, ann, 1, width, height, flipped);
+    }
+  }
 
   ctx.restore();
 }
