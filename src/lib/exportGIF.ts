@@ -3,6 +3,12 @@
 /**
  * GIF export utility — renders the full play animation as an animated GIF.
  *
+ * NOTE: GIF export is currently disabled in the UI (ExportMenu.tsx uses
+ * exportVideo.ts instead). This file is preserved so GIF export can be
+ * re-enabled without re-implementing the rendering pipeline — just swap
+ * the import in ExportMenu back to exportPlayAsGIF / GifResolution.
+ *
+ *
  * Implements issue #77: GIF export of play animation.
  *
  * Approach:
