@@ -4,17 +4,20 @@
  * ExportMenu — dropdown menu for scene/play export options.
  *
  * Implements issue #79: PNG export of single scene.
- * Implements issue #77: GIF export of play animation.
+ * Implements issue #77: Video (MP4/WebM) export of play animation.
  *
  * Renders an "Export" button that opens a small dropdown with:
  *   - Export Image (PNG) — current scene, configurable resolution
- *   - Export GIF       — full play animation, configurable speed + resolution
+ *   - Export Video       — full play animation, configurable speed + resolution
+ *   - Export PDF         — play document, configurable layout
+ *
+ * Note: GIF export code is preserved in exportGIF.ts for potential future use.
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useStore, selectEditorScene } from "@/lib/store";
 import { exportSceneAsPNG, type ExportResolution } from "@/lib/exportPNG";
-import { exportPlayAsGIF, type GifResolution } from "@/lib/exportGIF";
+import { exportPlayAsVideo, type VideoResolution } from "@/lib/exportVideo";
 import { exportPlayToPdf, type PdfLayout } from "@/lib/exportPdf";
 
 // ---------------------------------------------------------------------------
@@ -28,17 +31,17 @@ const PNG_RESOLUTION_OPTIONS: { label: string; value: ExportResolution; descript
 ];
 
 // ---------------------------------------------------------------------------
-// Speed options (GIF)
+// Speed + resolution options (Video)
 // ---------------------------------------------------------------------------
 
-const GIF_SPEED_OPTIONS: { label: string; value: number }[] = [
+const VIDEO_SPEED_OPTIONS: { label: string; value: number }[] = [
   { label: "0.5×", value: 0.5 },
   { label: "1×", value: 1 },
   { label: "1.5×", value: 1.5 },
   { label: "2×", value: 2 },
 ];
 
-const GIF_RESOLUTION_OPTIONS: { label: string; value: GifResolution; description: string }[] = [
+const VIDEO_RESOLUTION_OPTIONS: { label: string; value: VideoResolution; description: string }[] = [
   { label: "SD", value: "sd", description: "480 px — small file" },
   { label: "HD", value: "hd", description: "800 px — sharper" },
 ];
@@ -71,15 +74,14 @@ function PdfIcon() {
   );
 }
 
-function GifIcon() {
+function VideoIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="1" y="3" width="14" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="1" y="3" width="10" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
       <path
-        d="M5 6l3 2.5L11 6"
+        d="M11 6l4-2v8l-4-2V6z"
         stroke="currentColor"
         strokeWidth="1.5"
-        strokeLinecap="round"
         strokeLinejoin="round"
       />
     </svg>
@@ -95,7 +97,7 @@ function ProgressBar({ fraction }: { fraction: number }) {
   return (
     <div className="px-4 py-3">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-xs font-medium text-gray-600">Rendering GIF…</span>
+        <span className="text-xs font-medium text-gray-600">Rendering video…</span>
         <span className="text-xs text-gray-500">{pct}%</span>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
@@ -112,7 +114,7 @@ function ProgressBar({ fraction }: { fraction: number }) {
 // Component
 // ---------------------------------------------------------------------------
 
-type ExportMode = "idle" | "png" | "gif" | "pdf";
+type ExportMode = "idle" | "png" | "video" | "pdf";
 
 export default function ExportMenu() {
   const scene = useStore(selectEditorScene);
@@ -120,14 +122,14 @@ export default function ExportMenu() {
 
   const [open, setOpen] = useState(false);
   const [exportMode, setExportMode] = useState<ExportMode>("idle");
-  const [gifProgress, setGifProgress] = useState(0);
+  const [videoProgress, setVideoProgress] = useState(0);
 
   // PNG settings
   const [pngResolution, setPngResolution] = useState<ExportResolution>("2x");
 
-  // GIF settings
-  const [gifSpeed, setGifSpeed] = useState<number>(1);
-  const [gifResolution, setGifResolution] = useState<GifResolution>("sd");
+  // Video settings
+  const [videoSpeed, setVideoSpeed] = useState<number>(1);
+  const [videoResolution, setVideoResolution] = useState<VideoResolution>("sd");
 
   // PDF settings
   const [pdfExportSteps, setPdfExportSteps] = useState(false);
@@ -184,24 +186,24 @@ export default function ExportMenu() {
     }
   }, [currentPlay, pdfExportSteps, pdfLayout]);
 
-  const handleExportGIF = useCallback(async () => {
+  const handleExportVideo = useCallback(async () => {
     if (!currentPlay) return;
-    setExportMode("gif");
-    setGifProgress(0);
+    setExportMode("video");
+    setVideoProgress(0);
     setOpen(false);
     try {
       const title = currentPlay.title ?? "play";
       const safeTitle = title.replace(/[^a-zA-Z0-9-_\s]/g, "").trim().replace(/\s+/g, "-") || "play";
-      await exportPlayAsGIF(currentPlay, safeTitle, {
-        speed: gifSpeed,
-        resolution: gifResolution,
-        onProgress: (fraction) => setGifProgress(fraction),
+      await exportPlayAsVideo(currentPlay, safeTitle, {
+        speed: videoSpeed,
+        resolution: videoResolution,
+        onProgress: (fraction) => setVideoProgress(fraction),
       });
     } finally {
       setExportMode("idle");
-      setGifProgress(0);
+      setVideoProgress(0);
     }
-  }, [currentPlay, gifSpeed, gifResolution]);
+  }, [currentPlay, videoSpeed, videoResolution]);
 
   return (
     <div ref={menuRef} className="relative">
@@ -214,15 +216,15 @@ export default function ExportMenu() {
       >
         {exportMode === "png" || exportMode === "pdf"
           ? "Exporting…"
-          : exportMode === "gif"
-            ? `GIF ${Math.round(gifProgress * 100)}%`
+          : exportMode === "video"
+            ? `Video ${Math.round(videoProgress * 100)}%`
             : "Export"}
       </button>
 
-      {/* GIF progress — shown below the button when not in dropdown */}
-      {exportMode === "gif" && (
+      {/* Video progress — shown below the button while rendering */}
+      {exportMode === "video" && (
         <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-lg border border-gray-200 bg-white shadow-lg">
-          <ProgressBar fraction={gifProgress} />
+          <ProgressBar fraction={videoProgress} />
         </div>
       )}
 
@@ -286,7 +288,7 @@ export default function ExportMenu() {
           </div>
 
           {/* ---------------------------------------------------------------- */}
-          {/* GIF section                                                       */}
+          {/* Video section                                                     */}
           {/* ---------------------------------------------------------------- */}
           <div className="border-t border-gray-200 px-4 py-2.5">
             <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
@@ -294,20 +296,20 @@ export default function ExportMenu() {
             </p>
           </div>
 
-          {/* GIF speed + resolution */}
+          {/* Video speed + resolution */}
           <div className="px-4 py-3">
             <div className="mb-3">
               <p className="mb-1.5 text-xs font-medium text-gray-600">Playback Speed</p>
               <div className="flex gap-1.5">
-                {GIF_SPEED_OPTIONS.map((opt) => (
+                {VIDEO_SPEED_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
-                    onClick={() => setGifSpeed(opt.value)}
-                    aria-pressed={gifSpeed === opt.value}
+                    onClick={() => setVideoSpeed(opt.value)}
+                    aria-pressed={videoSpeed === opt.value}
                     className={[
                       "rounded px-2.5 py-1 text-xs font-medium transition-colors",
-                      gifSpeed === opt.value
-                        ? "bg-blue-100 text-blue-700"
+                      videoSpeed === opt.value
+                        ? "bg-green-100 text-green-700"
                         : "bg-gray-100 text-gray-600 hover:bg-gray-200",
                     ].join(" ")}
                   >
@@ -320,16 +322,16 @@ export default function ExportMenu() {
             <div>
               <p className="mb-1.5 text-xs font-medium text-gray-600">Resolution</p>
               <div className="flex gap-1.5">
-                {GIF_RESOLUTION_OPTIONS.map((opt) => (
+                {VIDEO_RESOLUTION_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
-                    onClick={() => setGifResolution(opt.value)}
-                    aria-pressed={gifResolution === opt.value}
+                    onClick={() => setVideoResolution(opt.value)}
+                    aria-pressed={videoResolution === opt.value}
                     title={opt.description}
                     className={[
                       "rounded px-2.5 py-1 text-xs font-medium transition-colors",
-                      gifResolution === opt.value
-                        ? "bg-blue-100 text-blue-700"
+                      videoResolution === opt.value
+                        ? "bg-green-100 text-green-700"
                         : "bg-gray-100 text-gray-600 hover:bg-gray-200",
                     ].join(" ")}
                   >
@@ -338,28 +340,28 @@ export default function ExportMenu() {
                 ))}
               </div>
               <p className="mt-1 text-xs text-gray-400">
-                {GIF_RESOLUTION_OPTIONS.find((o) => o.value === gifResolution)?.description}
+                {VIDEO_RESOLUTION_OPTIONS.find((o) => o.value === videoResolution)?.description}
               </p>
             </div>
           </div>
 
-          {/* GIF export button */}
+          {/* Video export button */}
           <div className="border-t border-gray-100 p-2">
             <button
               className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-green-50 hover:text-green-700"
               role="menuitem"
-              onClick={handleExportGIF}
+              onClick={handleExportVideo}
               disabled={!currentPlay}
             >
               <span className="flex h-8 w-8 items-center justify-center rounded-md bg-green-100 text-green-600">
-                <GifIcon />
+                <VideoIcon />
               </span>
               <span>
-                <span className="block font-medium">Export as GIF</span>
+                <span className="block font-medium">Export as Video</span>
                 <span className="block text-xs text-gray-500">
                   All {currentPlay?.scenes.length ?? 0} scene
-                  {(currentPlay?.scenes.length ?? 0) !== 1 ? "s" : ""} · {gifSpeed}× speed ·{" "}
-                  {gifResolution.toUpperCase()}
+                  {(currentPlay?.scenes.length ?? 0) !== 1 ? "s" : ""} · {videoSpeed}× speed ·{" "}
+                  {videoResolution.toUpperCase()} · MP4/WebM
                 </span>
               </span>
             </button>

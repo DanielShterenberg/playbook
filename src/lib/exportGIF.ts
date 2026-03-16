@@ -3,6 +3,12 @@
 /**
  * GIF export utility — renders the full play animation as an animated GIF.
  *
+ * NOTE: GIF export is currently disabled in the UI (ExportMenu.tsx uses
+ * exportVideo.ts instead). This file is preserved so GIF export can be
+ * re-enabled without re-implementing the rendering pipeline — just swap
+ * the import in ExportMenu back to exportPlayAsGIF / GifResolution.
+ *
+ *
  * Implements issue #77: GIF export of play animation.
  *
  * Approach:
@@ -59,10 +65,10 @@ import {
 // ---------------------------------------------------------------------------
 
 /** Brief pause between scenes (ms). */
-const SCENE_HOLD_MS = 400;
+export const SCENE_HOLD_MS = 400;
 
 /** Longer pause at the very end of the animation before it loops (ms). */
-const FINAL_HOLD_MS = 1200;
+export const FINAL_HOLD_MS = 1200;
 
 /** Maximum GIF palette size (256 is the GIF spec limit). */
 const MAX_COLORS = 128;
@@ -614,7 +620,7 @@ function drawAnnotation(
 }
 
 // ---------------------------------------------------------------------------
-// Frame rendering
+// Frame rendering (exported so exportVideo.ts can reuse the same pipeline)
 // ---------------------------------------------------------------------------
 
 /**
@@ -626,7 +632,7 @@ function drawAnnotation(
  * @param width     Canvas width in px.
  * @param height    Canvas height in px.
  */
-function renderFrame(
+export function renderFrame(
   canvas: HTMLCanvasElement,
   scene: Scene,
   visibleAnnotations: Annotation[],
@@ -734,7 +740,7 @@ export interface ExportGIFOptions {
   onProgress?: (fraction: number) => void;
 }
 
-const RESOLUTION_WIDTH: Record<GifResolution, number> = {
+export const RESOLUTION_WIDTH: Record<GifResolution, number> = {
   sd: 480,
   hd: 800,
 };
