@@ -10,13 +10,14 @@
  *   - Slot for action buttons (passed as children by the server page)
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
 import type { Category, CourtType, PlayColors } from "@/lib/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { createShareToken } from "@/lib/team";
 import PresentationOverlay from "@/components/editor/PresentationOverlay";
+import CommentsPanel from "@/components/editor/CommentsPanel";
 
 const CATEGORY_OPTIONS: { value: Category; label: string }[] = [
   { value: "offense", label: "Offense" },
@@ -55,6 +56,20 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
   // ---------------------------------------------------------------------------
   // Edit metadata modal
   // ---------------------------------------------------------------------------
+
+  const selectedSceneId = useStore((s) => s.selectedSceneId);
+  const [showComments, setShowComments] = useState(false);
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+
+  const sceneLabels = useMemo<Record<string, string>>(() => {
+    if (!currentPlay) return {};
+    const sorted = [...currentPlay.scenes].sort((a, b) => a.order - b.order);
+    const labels: Record<string, string> = {};
+    sorted.forEach((s, i) => { labels[s.id] = `Scene ${i + 1}`; });
+    return labels;
+  }, [currentPlay]);
+
+  const totalOpenComments = Object.values(commentCounts).reduce((s, n) => s + n, 0);
 
   const [isSharing, setIsSharing] = useState(false);
   const [shareMsg, setShareMsg] = useState<string | null>(null);
@@ -256,6 +271,36 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
             </button>
           )}
 
+          {/* Comments button */}
+          {currentPlay && (
+            <button
+              onClick={() => setShowComments((v) => !v)}
+              aria-label="Toggle comments"
+              aria-pressed={showComments}
+              title="Comments"
+              className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+                showComments
+                  ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+              }`}
+            >
+              <svg width={12} height={12} viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <path
+                  d="M2 5a2 2 0 012-2h12a2 2 0 012 2v7a2 2 0 01-2 2H6l-4 3V5z"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                  strokeLinejoin="round"
+                />
+              </svg>
+              Comments
+              {totalOpenComments > 0 && (
+                <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-400 px-1 text-[10px] font-bold leading-none text-white">
+                  {totalOpenComments}
+                </span>
+              )}
+            </button>
+          )}
+
           {/* Present button */}
           <button
             onClick={enterPresentationMode}
@@ -277,6 +322,17 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
 
       {/* Presentation mode overlay */}
       {isPresentationMode && <PresentationOverlay />}
+
+      {/* Comments panel */}
+      {showComments && currentPlay && (
+        <CommentsPanel
+          playId={currentPlay.id}
+          selectedSceneId={selectedSceneId}
+          onCountsChange={setCommentCounts}
+          onClose={() => setShowComments(false)}
+          sceneLabels={sceneLabels}
+        />
+      )}
 
       {/* Edit play modal */}
       {showEdit && (
