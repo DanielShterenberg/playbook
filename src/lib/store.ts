@@ -301,7 +301,16 @@ export const useStore = create<AppStore>()(
 
     setCurrentPlay: (play) => {
       useHistoryStore.getState().resetHistory();
-      set({ currentPlay: play });
+      // Normalize timing step numbers on load so legacy plays with gaps (e.g.
+      // steps 1,3 instead of 1,2) don't cause skipped steps in presentation.
+      const normalized: Play = {
+        ...play,
+        scenes: play.scenes.map((sc) => ({
+          ...sc,
+          timingGroups: normalizeSteps(sc.timingGroups),
+        })),
+      };
+      set({ currentPlay: normalized });
     },
 
     clearCurrentPlay: () => {
