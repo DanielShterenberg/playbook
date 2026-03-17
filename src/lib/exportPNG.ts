@@ -47,7 +47,7 @@ const COLOR_LINE_WIDTH_PX = 2;
 // Court drawing (mirrors Court.tsx drawCourt — kept in sync manually)
 // ---------------------------------------------------------------------------
 
-function drawCourtOnCanvas(canvas: HTMLCanvasElement): void {
+function drawCourtOnCanvas(canvas: HTMLCanvasElement, flipped = false): void {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
@@ -60,6 +60,12 @@ function drawCourtOnCanvas(canvas: HTMLCanvasElement): void {
   const scaleY = H / W;
 
   ctx.clearRect(0, 0, W, H);
+
+  if (flipped) {
+    ctx.save();
+    ctx.translate(0, H);
+    ctx.scale(1, -1);
+  }
 
   // 1. Court background
   ctx.fillStyle = COLOR_COURT;
@@ -184,6 +190,8 @@ function drawCourtOnCanvas(canvas: HTMLCanvasElement): void {
   ctx.strokeStyle = COLOR_LINE;
   ctx.stroke();
   ctx.restore();
+
+  if (flipped) ctx.restore();
 }
 
 // ---------------------------------------------------------------------------
@@ -431,17 +439,19 @@ function drawAnnotation(
   scale: number,
   width: number,
   height: number,
+  flipped = false,
 ) {
+  const py = (n: number) => flipped ? (1 - n) * height : n * height;
   // Convert normalised [0-1] coords to CSS pixel space
   const fx = ann.from.x * width;
-  const fy = ann.from.y * height;
+  const fy = py(ann.from.y);
   const tx = ann.to.x   * width;
-  const ty = ann.to.y   * height;
+  const ty = py(ann.to.y);
 
   // Multi-leg path support
   const hasWaypoints = ann.waypoints && ann.waypoints.length > 0;
   const allPts: { x: number; y: number }[] = hasWaypoints
-    ? [{ x: fx, y: fy }, ...(ann.waypoints ?? []).map((p) => ({ x: p.x * width, y: p.y * height })), { x: tx, y: ty }]
+    ? [{ x: fx, y: fy }, ...(ann.waypoints ?? []).map((p) => ({ x: p.x * width, y: py(p.y) })), { x: tx, y: ty }]
     : [];
 
   // Bezier control point (if any — only for single-leg paths)
@@ -449,7 +459,7 @@ function drawAnnotation(
   let cpy: number | undefined;
   if (!hasWaypoints && ann.controlPoints.length > 0) {
     cpx = ann.controlPoints[0].x * width;
-    cpy = ann.controlPoints[0].y * height;
+    cpy = py(ann.controlPoints[0].y);
   }
 
   const arrowSize = 12 * scale;
@@ -620,22 +630,24 @@ function computePixelPositions(
   scene: Scene,
   width: number,
   height: number,
+  flipped = false,
 ): PlayerPositions {
+  const normY = (n: number) => flipped ? (1 - n) * height : n * height;
   const offensePx = scene.players.offense.map((p) => ({
     position: p.position,
     px: p.x * width,
-    py: p.y * height,
+    py: normY(p.y),
     visible: p.visible,
   }));
   const defensePx = scene.players.defense.map((p) => ({
     position: p.position,
     px: p.x * width,
-    py: p.y * height,
+    py: normY(p.y),
     visible: p.visible,
   }));
 
   const ball = scene.ball;
-  const ballPx = { x: ball.x * width, y: ball.y * height };
+  const ballPx = { x: ball.x * width, y: normY(ball.y) };
   const ballAttachment = ball.attachedTo ?? null;
 
   return { offensePx, defensePx, ballPx, ballAttachment };
@@ -647,12 +659,13 @@ function getEffectiveBallPx(
   defensePx: { position: number; px: number; py: number; visible: boolean }[],
   freeBall: { x: number; y: number } | null,
   scale: number,
+  flipped = false,
 ): { x: number; y: number } | null {
   if (attachment) {
     const pool = attachment.side === "offense" ? offensePx : defensePx;
     const player = pool.find((p) => p.position === attachment.position);
     if (player) {
-      return { x: player.px, y: player.py + BALL_ATTACH_OFFSET_Y * scale };
+      return { x: player.px, y: player.py + BALL_ATTACH_OFFSET_Y * scale * (flipped ? -1 : 1) };
     }
   }
   return freeBall;
@@ -664,17 +677,19 @@ function drawOverlay(
   width: number,
   height: number,
   scale: number,
+  flipped = false,
 ) {
   const { offensePx, defensePx, ballPx, ballAttachment } = computePixelPositions(
     scene,
     width,
     height,
+    flipped,
   );
 
   // Draw all annotations first (below players)
   const annotations = scene.timingGroups.flatMap((g) => g.annotations);
   for (const ann of annotations) {
-    drawAnnotation(ctx, ann, scale, width, height);
+    drawAnnotation(ctx, ann, scale, width, height, flipped);
   }
 
   // Defensive players (below offensive)
@@ -688,7 +703,7 @@ function drawOverlay(
   }
 
   // Ball
-  const effectiveBall = getEffectiveBallPx(ballAttachment, offensePx, defensePx, ballPx, scale);
+  const effectiveBall = getEffectiveBallPx(ballAttachment, offensePx, defensePx, ballPx, scale, flipped);
   if (effectiveBall) {
     drawBall(ctx, effectiveBall.x, effectiveBall.y, scale);
   }
@@ -713,12 +728,14 @@ const RESOLUTION_SCALE: Record<ExportResolution, number> = {
  * @param baseWidth     Desired export width in CSS pixels (height derived from aspect ratio).
  * @param resolution    Pixel density multiplier ("1x" | "2x" | "3x").
  * @param filename      Suggested download filename (without .png extension).
+ * @param flipped       When true, basket is at the top (north) — mirrors play/scene flip flag.
  */
 export function exportSceneAsPNG(
   scene: Scene,
   baseWidth: number = 800,
   resolution: ExportResolution = "2x",
   filename: string = "play-scene",
+  flipped = false,
 ): void {
   const scale = RESOLUTION_SCALE[resolution];
   const cssWidth = baseWidth;
@@ -734,25 +751,12 @@ export function exportSceneAsPNG(
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-  // Scale the context so all drawing coords are in CSS pixel space
-  ctx.scale(scale, scale);
-
-  // Draw court
-  // drawCourtOnCanvas expects canvas.width / canvas.height to be the full pixel dims
-  // We temporarily draw to the full canvas and rely on scale transform
-  drawCourtOnCanvas(canvas);
-
-  // Re-apply scale (drawCourtOnCanvas uses canvas.width/height directly, not ctx transform)
-  // So we need to do a second pass for the overlay in scaled CSS space:
-  // Reset and re-draw properly:
-  ctx.resetTransform();
-
   // Draw court at full pixel resolution (drawCourtOnCanvas uses canvas.width/height)
-  drawCourtOnCanvas(canvas);
+  drawCourtOnCanvas(canvas, flipped);
 
   // Draw overlay at scaled coordinates
   ctx.scale(scale, scale);
-  drawOverlay(ctx, scene, cssWidth, cssHeight, scale);
+  drawOverlay(ctx, scene, cssWidth, cssHeight, scale, flipped);
 
   // Trigger download
   canvas.toBlob((blob) => {

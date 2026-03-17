@@ -94,9 +94,12 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   const [sceneIndex, setSceneIndex] = useState(0);
   const [stepIndex, setStepIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [speed, setSpeed] = useState<0.5 | 1 | 1.5 | 2>(1);
 
   const rafRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playStateRef = useRef(false);
+  const speedRef = useRef(speed);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
 
   useEffect(() => {
     loadSharedPlay(shareToken)
@@ -120,7 +123,7 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   // Auto-advance through steps when playing
   const scheduleNext = useCallback(() => {
     if (!scene || !playStateRef.current) return;
-    const duration = getStepDuration(scene, steps[stepIndex]);
+    const duration = getStepDuration(scene, steps[stepIndex]) / speedRef.current;
     rafRef.current = setTimeout(() => {
       if (!playStateRef.current) return;
       setStepIndex((si) => {
@@ -349,6 +352,30 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
             </button>
           </div>
         )}
+
+        {/* Speed control */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 11, color: "#9CA3AF", marginRight: 2 }}>Speed</span>
+          {([0.5, 1, 1.5, 2] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setSpeed(s)}
+              aria-pressed={speed === s}
+              style={{
+                padding: "3px 9px",
+                borderRadius: 99,
+                border: speed === s ? "1.5px solid #1E3A5F" : "1.5px solid #E5E7EB",
+                background: speed === s ? "#1E3A5F" : "#fff",
+                color: speed === s ? "#fff" : "#6B7280",
+                fontSize: 11,
+                fontWeight: speed === s ? 700 : 400,
+                cursor: "pointer",
+              }}
+            >
+              {s}×
+            </button>
+          ))}
+        </div>
 
         {/* Keyboard hint */}
         <p style={{ margin: 0, fontSize: 11, color: "#C4C4C4" }}>
