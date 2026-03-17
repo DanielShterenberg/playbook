@@ -19,6 +19,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useStore, selectEditorScene } from "@/lib/store";
 import type { Scene } from "@/lib/types";
 import InfoTooltip from "./InfoTooltip";
+import { subscribeToComments } from "@/lib/comments";
 
 // ---------------------------------------------------------------------------
 // Mini court thumbnail
@@ -326,9 +327,10 @@ interface SceneCardProps {
   onClick: () => void;
   offenseColor?: string;
   defenseColor?: string;
+  commentCount?: number;
 }
 
-function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, offenseColor, defenseColor }: SceneCardProps) {
+function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, offenseColor, defenseColor, commentCount = 0 }: SceneCardProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -365,7 +367,34 @@ function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, offe
           if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "#F9FAFB";
         }}
       >
-        <SceneThumbnail scene={scene} compact={compact} offenseColor={offenseColor} defenseColor={defenseColor} />
+        <div style={{ position: "relative", display: "inline-block" }}>
+          <SceneThumbnail scene={scene} compact={compact} offenseColor={offenseColor} defenseColor={defenseColor} />
+          {commentCount > 0 && (
+            <span
+              title={`${commentCount} open comment${commentCount !== 1 ? "s" : ""}`}
+              style={{
+                position: "absolute",
+                top: -4,
+                right: -4,
+                minWidth: 14,
+                height: 14,
+                borderRadius: 7,
+                background: "#F59E0B",
+                color: "#fff",
+                fontSize: 9,
+                fontWeight: 700,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "0 3px",
+                boxShadow: "0 0 0 1.5px #fff",
+                lineHeight: 1,
+              }}
+            >
+              {commentCount}
+            </span>
+          )}
+        </div>
         <span
           style={{
             fontSize: 11,
@@ -424,6 +453,22 @@ export default function SceneStrip() {
   const scene = useStore(selectEditorScene);
   const playColors = useStore((s) => s.currentPlay?.colors);
 
+  // Subscribe to comments to show dot indicators on scene cards
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const playId = currentPlay?.id;
+    if (!playId) return;
+    return subscribeToComments(playId, (comments) => {
+      const counts: Record<string, number> = {};
+      for (const c of comments) {
+        if (c.sceneId && !c.resolved) {
+          counts[c.sceneId] = (counts[c.sceneId] ?? 0) + 1;
+        }
+      }
+      setCommentCounts(counts);
+    });
+  }, [currentPlay?.id]);
+
   /**
    * Issue #81 — at tablet widths use compact (smaller) scene thumbnails
    * so the strip fits without triggering horizontal overflow.
@@ -476,6 +521,7 @@ export default function SceneStrip() {
           onClick={() => { setSelectedSceneId(s.id); setCurrentSceneIndex(i); }}
           offenseColor={playColors?.offense}
           defenseColor={playColors?.defense}
+          commentCount={commentCounts[s.id] ?? 0}
         />
       ))}
 

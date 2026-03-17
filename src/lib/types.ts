@@ -127,3 +127,26 @@ export interface User {
   photoURL: string | null;
   teamId: string | null;
 }
+
+export interface CommentReply {
+  id: string;
+  authorId: string;
+  authorName: string;
+  text: string;
+  createdAt: Date;
+}
+
+export interface Comment {
+  id: string;
+  playId: string;
+  sceneId: string | null;
+  stepId: number | null;
+  authorId: string;
+  authorName: string;
+  text: string;
+  createdAt: Date;
+  resolved: boolean;
+  resolvedBy: string | null;
+  resolvedAt: Date | null;
+  replies: CommentReply[];
+}
