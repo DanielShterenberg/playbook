@@ -478,6 +478,7 @@ export default function PresentationOverlay() {
           variant={courtType as CourtVariant}
           readOnly
           flipped={effectiveFlipped}
+          activeStep={currentStep}
           className="w-full"
         />
       </div>
