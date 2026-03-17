@@ -674,13 +674,15 @@ export const useStore = create<AppStore>()(
         return {
           currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => ({
             ...sc,
-            timingGroups: sc.timingGroups
-              .map((g) => ({
-                ...g,
-                annotations: g.annotations.filter((a) => a.id !== annotationId),
-              }))
-              // Keep step 1 even if empty so there's always at least one step
-              .filter((g) => g.annotations.length > 0 || g.step === 1),
+            timingGroups: normalizeSteps(
+              sc.timingGroups
+                .map((g) => ({
+                  ...g,
+                  annotations: g.annotations.filter((a) => a.id !== annotationId),
+                }))
+                // Keep step 1 even if empty so there's always at least one step
+                .filter((g) => g.annotations.length > 0 || g.step === 1),
+            ),
           })),
           selectedAnnotationId:
             currentSelectedAnnotation === annotationId ? null : currentSelectedAnnotation,
