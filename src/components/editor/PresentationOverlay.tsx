@@ -8,15 +8,13 @@
  * Features:
  *   - Full-screen fixed overlay (black background) that hides all editor chrome
  *   - Large court display with play title and scene note overlay
- *   - Touch-friendly playback controls (play/pause, prev/next scene)
- *   - Scene dot indicator showing position within the play
- *   - Keyboard shortcuts: Space (play/pause), Left/Right (scene nav), Esc (exit)
+ *   - Step-by-step navigation within scenes (Left/Right arrows)
+ *   - Scene navigation ([ / ] keys or dedicated buttons)
+ *   - Go-to-beginning button (⏮ / Home key)
+ *   - Speed control (0.5×, 1×, 1.5×, 2×)
+ *   - Scene dots and step dots as visual timeline indicators
  *   - Auto-hide controls after 3 seconds of inactivity
- *
- * Architecture:
- *   - Reads playback state from the Zustand store (isPlaying, currentSceneIndex, etc.)
- *   - Uses the same rAF-based playback loop as PlaybackControls
- *   - exitPresentationMode stops playback and clears the flag from the store
+ *   - Keyboard: Space (play/pause), ← → (step), [ ] (scene), Home (restart), Esc (exit)
  */
 
 import { useEffect, useRef, useCallback, useState } from "react";
@@ -25,16 +23,17 @@ import {
   selectPlaybackScene,
   selectSceneCount,
 } from "@/lib/store";
+import type { PlaybackSpeed } from "@/lib/store";
 import CourtWithPlayers from "@/components/players/CourtWithPlayers";
 import type { CourtVariant } from "@/components/court/Court";
 
 // ---------------------------------------------------------------------------
-// Icon helpers (inline SVG, no external deps)
+// Icon helpers
 // ---------------------------------------------------------------------------
 
 function PlayIcon() {
   return (
-    <svg viewBox="0 0 24 24" width={28} height={28} fill="currentColor" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={26} height={26} fill="currentColor" aria-hidden="true">
       <path d="M8 5v14l11-7z" />
     </svg>
   );
@@ -42,25 +41,49 @@ function PlayIcon() {
 
 function PauseIcon() {
   return (
-    <svg viewBox="0 0 24 24" width={28} height={28} fill="currentColor" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={26} height={26} fill="currentColor" aria-hidden="true">
       <rect x="6" y="4" width="4" height="16" rx="1" />
       <rect x="14" y="4" width="4" height="16" rx="1" />
     </svg>
   );
 }
 
-function ChevronLeftIcon() {
+function StepBackIcon() {
   return (
-    <svg viewBox="0 0 24 24" width={28} height={28} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M15 18l-6-6 6-6" />
     </svg>
   );
 }
 
-function ChevronRightIcon() {
+function StepForwardIcon() {
   return (
-    <svg viewBox="0 0 24 24" width={28} height={28} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M9 18l6-6-6-6" />
+    </svg>
+  );
+}
+
+function SceneBackIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M19 18l-6-6 6-6M11 18l-6-6 6-6" />
+    </svg>
+  );
+}
+
+function SceneForwardIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M5 18l6-6-6-6M13 18l6-6-6-6" />
+    </svg>
+  );
+}
+
+function RestartIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={18} height={18} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 6h16M4 6l4-4M4 6l4 4M20 18H4M20 18l-4-4M20 18l-4 4" />
     </svg>
   );
 }
@@ -77,23 +100,32 @@ function XIcon() {
 // Component
 // ---------------------------------------------------------------------------
 
-export default function PresentationOverlay() {
-  const currentPlay = useStore((s) => s.currentPlay);
-  const isPlaying = useStore((s) => s.isPlaying);
-  const currentSceneIndex = useStore((s) => s.currentSceneIndex);
-  const currentStep = useStore((s) => s.currentStep);
-  const loop = useStore((s) => s.loop);
-  const sceneCount = useStore(selectSceneCount);
-  const scene = useStore(selectPlaybackScene);
-  const courtType = useStore((s) => s.currentPlay?.courtType ?? "half");
+const SPEED_OPTIONS: { label: string; value: PlaybackSpeed }[] = [
+  { label: "0.5×", value: 0.5 },
+  { label: "1×",   value: 1   },
+  { label: "1.5×", value: 1.5 },
+  { label: "2×",   value: 2   },
+];
 
-  const togglePlayback = useStore((s) => s.togglePlayback);
-  const pausePlayback = useStore((s) => s.pausePlayback);
-  const stepForward = useStore((s) => s.stepForward);
-  const stepBack = useStore((s) => s.stepBack);
-  const setCurrentSceneIndex = useStore((s) => s.setCurrentSceneIndex);
-  const setCurrentStep = useStore((s) => s.setCurrentStep);
+export default function PresentationOverlay() {
+  const currentPlay        = useStore((s) => s.currentPlay);
+  const isPlaying          = useStore((s) => s.isPlaying);
+  const currentSceneIndex  = useStore((s) => s.currentSceneIndex);
+  const currentStep        = useStore((s) => s.currentStep);
+  const speed              = useStore((s) => s.speed);
+  const loop               = useStore((s) => s.loop);
+  const sceneCount         = useStore(selectSceneCount);
+  const scene              = useStore(selectPlaybackScene);
+  const courtType          = useStore((s) => s.currentPlay?.courtType ?? "half");
+
+  const togglePlayback     = useStore((s) => s.togglePlayback);
+  const pausePlayback      = useStore((s) => s.pausePlayback);
+  const setCurrentStep     = useStore((s) => s.setCurrentStep);
+  const setSpeed           = useStore((s) => s.setSpeed);
   const exitPresentationMode = useStore((s) => s.exitPresentationMode);
+
+  // Effective flip: scene override > play default
+  const effectiveFlipped = ((scene?.flipped ?? currentPlay?.flipped) === true);
 
   // Auto-hide controls after 3 s of inactivity
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -106,35 +138,146 @@ export default function PresentationOverlay() {
   }, []);
 
   useEffect(() => {
-    // Show controls on mount WITHOUT starting the hide timer — controls stay
-    // visible until the first mouse/pointer interaction, which then starts
-    // the 3-second auto-hide countdown via showControls().
     setControlsVisible(true);
-    return () => {
-      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    };
+    return () => { if (hideTimerRef.current) clearTimeout(hideTimerRef.current); };
   }, []);
 
   // ---------------------------------------------------------------------------
-  // Keyboard shortcuts: Space, Left/Right, Esc
+  // Step navigation helpers (within scene, crossing scene boundaries)
+  // ---------------------------------------------------------------------------
+
+  const goNextStep = useCallback(() => {
+    const state = useStore.getState();
+    const scenes = state.currentPlay?.scenes ?? [];
+    const sortedScenes = [...scenes].sort((a, b) => a.order - b.order);
+    const curScene = sortedScenes[state.currentSceneIndex];
+    if (!curScene) return;
+    const sortedGroups = [...curScene.timingGroups].sort((a, b) => a.step - b.step);
+    const stepIdx = sortedGroups.findIndex((g) => g.step === state.currentStep);
+    if (stepIdx < sortedGroups.length - 1) {
+      state.setCurrentStep(sortedGroups[stepIdx + 1].step);
+    } else {
+      // Advance to next scene
+      const nextIdx = state.currentSceneIndex + 1;
+      if (nextIdx < sortedScenes.length) {
+        const nextScene = sortedScenes[nextIdx];
+        const nextGroups = [...nextScene.timingGroups].sort((a, b) => a.step - b.step);
+        useStore.setState({
+          currentSceneIndex: nextIdx,
+          currentStep: nextGroups[0]?.step ?? 1,
+          selectedSceneId: nextScene.id,
+        });
+      } else if (state.loop) {
+        const firstScene = sortedScenes[0];
+        const firstGroups = [...firstScene.timingGroups].sort((a, b) => a.step - b.step);
+        useStore.setState({
+          currentSceneIndex: 0,
+          currentStep: firstGroups[0]?.step ?? 1,
+          selectedSceneId: firstScene.id,
+        });
+      }
+    }
+  }, []);
+
+  const goPrevStep = useCallback(() => {
+    const state = useStore.getState();
+    const scenes = state.currentPlay?.scenes ?? [];
+    const sortedScenes = [...scenes].sort((a, b) => a.order - b.order);
+    const curScene = sortedScenes[state.currentSceneIndex];
+    if (!curScene) return;
+    const sortedGroups = [...curScene.timingGroups].sort((a, b) => a.step - b.step);
+    const stepIdx = sortedGroups.findIndex((g) => g.step === state.currentStep);
+    if (stepIdx > 0) {
+      state.setCurrentStep(sortedGroups[stepIdx - 1].step);
+    } else if (state.currentSceneIndex > 0) {
+      // Go to last step of previous scene
+      const prevIdx = state.currentSceneIndex - 1;
+      const prevScene = sortedScenes[prevIdx];
+      const prevGroups = [...prevScene.timingGroups].sort((a, b) => a.step - b.step);
+      useStore.setState({
+        currentSceneIndex: prevIdx,
+        currentStep: prevGroups[prevGroups.length - 1]?.step ?? 1,
+        selectedSceneId: prevScene.id,
+      });
+    }
+  }, []);
+
+  const goNextScene = useCallback(() => {
+    const state = useStore.getState();
+    const scenes = state.currentPlay?.scenes ?? [];
+    const sortedScenes = [...scenes].sort((a, b) => a.order - b.order);
+    const nextIdx = state.currentSceneIndex + 1;
+    if (nextIdx < sortedScenes.length) {
+      const nextScene = sortedScenes[nextIdx];
+      const nextGroups = [...nextScene.timingGroups].sort((a, b) => a.step - b.step);
+      useStore.setState({
+        currentSceneIndex: nextIdx,
+        currentStep: nextGroups[0]?.step ?? 1,
+        selectedSceneId: nextScene.id,
+      });
+    }
+  }, []);
+
+  const goPrevScene = useCallback(() => {
+    const state = useStore.getState();
+    const scenes = state.currentPlay?.scenes ?? [];
+    const sortedScenes = [...scenes].sort((a, b) => a.order - b.order);
+    if (state.currentSceneIndex > 0) {
+      const prevIdx = state.currentSceneIndex - 1;
+      const prevScene = sortedScenes[prevIdx];
+      const prevGroups = [...prevScene.timingGroups].sort((a, b) => a.step - b.step);
+      useStore.setState({
+        currentSceneIndex: prevIdx,
+        currentStep: prevGroups[0]?.step ?? 1,
+        selectedSceneId: prevScene.id,
+      });
+    }
+  }, []);
+
+  const goToBeginning = useCallback(() => {
+    const state = useStore.getState();
+    const scenes = state.currentPlay?.scenes ?? [];
+    const sortedScenes = [...scenes].sort((a, b) => a.order - b.order);
+    const firstScene = sortedScenes[0];
+    if (!firstScene) return;
+    const firstGroups = [...firstScene.timingGroups].sort((a, b) => a.step - b.step);
+    state.pausePlayback();
+    useStore.setState({
+      currentSceneIndex: 0,
+      currentStep: firstGroups[0]?.step ?? 1,
+      selectedSceneId: firstScene.id,
+    });
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Keyboard shortcuts
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
+      showControls();
       if (e.code === "Space") {
         e.preventDefault();
-        showControls();
         togglePlayback();
       } else if (e.code === "ArrowRight") {
         e.preventDefault();
-        showControls();
         pausePlayback();
-        stepForward();
+        goNextStep();
       } else if (e.code === "ArrowLeft") {
         e.preventDefault();
-        showControls();
         pausePlayback();
-        stepBack();
+        goPrevStep();
+      } else if (e.code === "BracketRight") {
+        e.preventDefault();
+        pausePlayback();
+        goNextScene();
+      } else if (e.code === "BracketLeft") {
+        e.preventDefault();
+        pausePlayback();
+        goPrevScene();
+      } else if (e.code === "Home") {
+        e.preventDefault();
+        goToBeginning();
       } else if (e.key === "Escape") {
         e.preventDefault();
         exitPresentationMode();
@@ -142,10 +285,10 @@ export default function PresentationOverlay() {
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [togglePlayback, pausePlayback, stepForward, stepBack, exitPresentationMode, showControls]);
+  }, [togglePlayback, pausePlayback, goNextStep, goPrevStep, goNextScene, goPrevScene, goToBeginning, exitPresentationMode, showControls]);
 
   // ---------------------------------------------------------------------------
-  // rAF-based playback loop (mirrors PlaybackControls logic)
+  // rAF-based playback loop
   // ---------------------------------------------------------------------------
 
   const rafRef = useRef<number | null>(null);
@@ -154,47 +297,43 @@ export default function PresentationOverlay() {
 
   const advancePlayback = useCallback(
     (timestamp: number) => {
-      if (!lastTimestampRef.current) {
-        lastTimestampRef.current = timestamp;
-      }
+      if (!lastTimestampRef.current) lastTimestampRef.current = timestamp;
       const dt = (timestamp - lastTimestampRef.current) * useStore.getState().speed;
       lastTimestampRef.current = timestamp;
       msAccRef.current += dt;
 
       const state = useStore.getState();
       const scenes = state.currentPlay?.scenes ?? [];
-      if (scenes.length === 0) return;
+      const sortedScenes = [...scenes].sort((a, b) => a.order - b.order);
+      if (sortedScenes.length === 0) return;
 
-      const sceneIdx = state.currentSceneIndex;
-      const curScene = scenes[sceneIdx];
+      const curScene = sortedScenes[state.currentSceneIndex];
       if (!curScene) return;
 
       const sortedGroups = [...curScene.timingGroups].sort((a, b) => a.step - b.step);
       const stepIndex = sortedGroups.findIndex((g) => g.step === state.currentStep);
-      const group = sortedGroups[stepIndex];
-      const stepDuration = group?.duration ?? 1000;
+      const stepDuration = sortedGroups[stepIndex]?.duration ?? 1000;
 
       if (msAccRef.current >= stepDuration) {
         msAccRef.current -= stepDuration;
-
         if (stepIndex < sortedGroups.length - 1) {
           state.setCurrentStep(sortedGroups[stepIndex + 1].step);
         } else {
-          const nextSceneIdx = sceneIdx + 1;
-          if (nextSceneIdx < scenes.length) {
-            const nextScene = scenes[nextSceneIdx];
-            const nextSteps = [...nextScene.timingGroups].sort((a, b) => a.step - b.step);
+          const nextSceneIdx = state.currentSceneIndex + 1;
+          if (nextSceneIdx < sortedScenes.length) {
+            const nextScene = sortedScenes[nextSceneIdx];
+            const nextGroups = [...nextScene.timingGroups].sort((a, b) => a.step - b.step);
             useStore.setState({
               currentSceneIndex: nextSceneIdx,
-              currentStep: nextSteps[0]?.step ?? 1,
+              currentStep: nextGroups[0]?.step ?? 1,
               selectedSceneId: nextScene.id,
             });
           } else if (state.loop) {
-            const firstScene = scenes[0];
-            const firstSteps = [...firstScene.timingGroups].sort((a, b) => a.step - b.step);
+            const firstScene = sortedScenes[0];
+            const firstGroups = [...firstScene.timingGroups].sort((a, b) => a.step - b.step);
             useStore.setState({
               currentSceneIndex: 0,
-              currentStep: firstSteps[0]?.step ?? 1,
+              currentStep: firstGroups[0]?.step ?? 1,
               selectedSceneId: firstScene.id,
             });
           } else {
@@ -217,22 +356,24 @@ export default function PresentationOverlay() {
       msAccRef.current = 0;
       rafRef.current = requestAnimationFrame(advancePlayback);
     } else {
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
+      if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
     }
-    return () => {
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
-    };
+    return () => { if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; } };
   }, [isPlaying, advancePlayback]);
 
   if (!currentPlay) return null;
 
   const sortedScenes = [...currentPlay.scenes].sort((a, b) => a.order - b.order);
+
+  // Step indicators for current scene
+  const sortedSteps = scene
+    ? [...scene.timingGroups].sort((a, b) => a.step - b.step)
+    : [];
+  const currentStepIndex = sortedSteps.findIndex((g) => g.step === currentStep);
+  const hasMultipleSteps = sortedSteps.length > 1;
+
+  const atStart = currentSceneIndex === 0 && currentStepIndex <= 0;
+  const atEnd   = currentSceneIndex >= sceneCount - 1 && currentStepIndex >= sortedSteps.length - 1;
 
   return (
     <div
@@ -253,9 +394,7 @@ export default function PresentationOverlay() {
         cursor: controlsVisible ? "default" : "none",
       }}
     >
-      {/* ------------------------------------------------------------------ */}
-      {/* Title + scene note overlay — top-left, fades with controls          */}
-      {/* ------------------------------------------------------------------ */}
+      {/* Title + scene note — top left */}
       <div
         aria-live="polite"
         style={{
@@ -269,39 +408,21 @@ export default function PresentationOverlay() {
           pointerEvents: "none",
         }}
       >
-        <p
-          style={{
-            margin: 0,
-            fontSize: "clamp(15px, 2.2vw, 24px)",
-            fontWeight: 700,
-            color: "#fff",
-            textShadow: "0 1px 6px rgba(0,0,0,0.7)",
-            lineHeight: 1.3,
-          }}
-        >
+        <p style={{ margin: 0, fontSize: "clamp(15px, 2.2vw, 24px)", fontWeight: 700, color: "#fff", textShadow: "0 1px 6px rgba(0,0,0,0.7)", lineHeight: 1.3 }}>
           {currentPlay.title}
         </p>
         {scene?.note && (
-          <p
-            style={{
-              margin: "4px 0 0",
-              fontSize: "clamp(12px, 1.6vw, 18px)",
-              color: "rgba(255,255,255,0.75)",
-              textShadow: "0 1px 4px rgba(0,0,0,0.6)",
-            }}
-          >
+          <p style={{ margin: "4px 0 0", fontSize: "clamp(12px, 1.6vw, 18px)", color: "rgba(255,255,255,0.75)", textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}>
             {scene.note}
           </p>
         )}
       </div>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Exit button — top-right                                             */}
-      {/* ------------------------------------------------------------------ */}
+      {/* Exit button — top right */}
       <button
         onClick={exitPresentationMode}
         aria-label="Exit presentation mode (Esc)"
-        title="Exit presentation mode (Esc)"
+        title="Exit (Esc)"
         style={{
           position: "absolute",
           top: 16,
@@ -318,22 +439,19 @@ export default function PresentationOverlay() {
           justifyContent: "center",
           cursor: "pointer",
           opacity: controlsVisible ? 1 : 0,
-          transition: "opacity 0.4s, background 0.2s",
+          transition: "opacity 0.4s",
         }}
       >
         <XIcon />
       </button>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Court — fills available space                                        */}
-      {/* ------------------------------------------------------------------ */}
+      {/* Court */}
       <div
         style={{
           width: "100%",
-          maxWidth:
-            courtType === "full"
-              ? "min(90vw, calc(85vh * 0.55))"
-              : "min(90vw, calc(85vh * 1.1))",
+          maxWidth: courtType === "full"
+            ? "min(90vw, calc(80vh * 0.55))"
+            : "min(90vw, calc(80vh * 1.1))",
           padding: "0 8px",
         }}
       >
@@ -342,36 +460,32 @@ export default function PresentationOverlay() {
           scene={scene}
           variant={courtType as CourtVariant}
           readOnly
+          flipped={effectiveFlipped}
+          activeStep={currentStep}
           className="w-full"
         />
       </div>
 
-      {/* ------------------------------------------------------------------ */}
-      {/* Bottom controls bar — auto-hides                                     */}
-      {/* ------------------------------------------------------------------ */}
+      {/* Bottom controls — auto-hides */}
       <div
         style={{
           position: "absolute",
           bottom: 0,
           left: 0,
           right: 0,
-          padding: "16px 24px 24px",
-          background: "linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%)",
+          padding: "16px 24px 20px",
+          background: "linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 100%)",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 12,
+          gap: 10,
           opacity: controlsVisible ? 1 : 0,
           transition: "opacity 0.4s",
           pointerEvents: controlsVisible ? "auto" : "none",
         }}
       >
-        {/* Scene dot indicators */}
-        <div
-          role="group"
-          aria-label="Scene timeline"
-          style={{ display: "flex", gap: 8, alignItems: "center" }}
-        >
+        {/* Scene dots */}
+        <div role="group" aria-label="Scene timeline" style={{ display: "flex", gap: 6, alignItems: "center" }}>
           {sortedScenes.map((s, i) => {
             const isActive = i === currentSceneIndex;
             return (
@@ -379,19 +493,18 @@ export default function PresentationOverlay() {
                 key={s.id}
                 onClick={() => {
                   pausePlayback();
-                  setCurrentSceneIndex(i);
-                  const steps = [...s.timingGroups].sort((a, b) => a.step - b.step);
-                  setCurrentStep(steps[0]?.step ?? 1);
+                  const groups = [...s.timingGroups].sort((a, b) => a.step - b.step);
+                  useStore.setState({ currentSceneIndex: i, currentStep: groups[0]?.step ?? 1, selectedSceneId: s.id });
                   showControls();
                 }}
                 aria-label={`Scene ${i + 1}${s.note ? ` — ${s.note}` : ""}`}
                 aria-pressed={isActive}
                 title={`Scene ${i + 1}${s.note ? ` — ${s.note}` : ""}`}
                 style={{
-                  width: isActive ? 28 : 10,
-                  height: 10,
-                  borderRadius: 5,
-                  background: isActive ? "#fff" : "rgba(255,255,255,0.35)",
+                  width: isActive ? 28 : 8,
+                  height: 8,
+                  borderRadius: 4,
+                  background: isActive ? "#fff" : "rgba(255,255,255,0.3)",
                   border: "none",
                   cursor: "pointer",
                   padding: 0,
@@ -403,38 +516,110 @@ export default function PresentationOverlay() {
           })}
         </div>
 
-        {/* Play controls row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {/* Prev scene */}
+        {/* Step dots — only if current scene has multiple steps */}
+        {hasMultipleSteps && (
+          <div role="group" aria-label="Step timeline" style={{ display: "flex", gap: 5, alignItems: "center" }}>
+            {sortedSteps.map((g, i) => {
+              const isActive = i === currentStepIndex;
+              return (
+                <button
+                  key={g.step}
+                  onClick={() => { pausePlayback(); setCurrentStep(g.step); showControls(); }}
+                  aria-label={`Step ${i + 1}`}
+                  aria-pressed={isActive}
+                  style={{
+                    width: isActive ? 20 : 6,
+                    height: 6,
+                    borderRadius: 3,
+                    background: isActive ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.2)",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 0,
+                    transition: "width 0.2s, background 0.15s",
+                    flexShrink: 0,
+                  }}
+                />
+              );
+            })}
+          </div>
+        )}
+
+        {/* Main controls row */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* Go to beginning */}
           <button
-            onClick={() => { pausePlayback(); stepBack(); showControls(); }}
-            disabled={currentSceneIndex === 0 && !loop}
-            aria-label="Previous scene"
-            title="Previous scene (Left Arrow)"
+            onClick={() => { goToBeginning(); showControls(); }}
+            disabled={atStart}
+            aria-label="Go to beginning (Home)"
+            title="Go to beginning (Home)"
             style={{
-              width: 52,
-              height: 52,
+              width: 38,
+              height: 38,
               borderRadius: "50%",
-              background: "rgba(255,255,255,0.15)",
-              border: "1px solid rgba(255,255,255,0.2)",
-              color: currentSceneIndex === 0 && !loop ? "rgba(255,255,255,0.3)" : "#fff",
+              background: "rgba(255,255,255,0.1)",
+              border: "1px solid rgba(255,255,255,0.15)",
+              color: atStart ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.7)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              cursor: currentSceneIndex === 0 && !loop ? "default" : "pointer",
+              cursor: atStart ? "default" : "pointer",
             }}
           >
-            <ChevronLeftIcon />
+            <RestartIcon />
+          </button>
+
+          {/* Prev scene */}
+          <button
+            onClick={() => { pausePlayback(); goPrevScene(); showControls(); }}
+            disabled={currentSceneIndex === 0}
+            aria-label="Previous scene ([)"
+            title="Previous scene ([)"
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.1)",
+              border: "1px solid rgba(255,255,255,0.15)",
+              color: currentSceneIndex === 0 ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.7)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: currentSceneIndex === 0 ? "default" : "pointer",
+            }}
+          >
+            <SceneBackIcon />
+          </button>
+
+          {/* Prev step */}
+          <button
+            onClick={() => { pausePlayback(); goPrevStep(); showControls(); }}
+            disabled={atStart}
+            aria-label="Previous step (←)"
+            title="Previous step (←)"
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.15)",
+              border: "1px solid rgba(255,255,255,0.2)",
+              color: atStart ? "rgba(255,255,255,0.25)" : "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: atStart ? "default" : "pointer",
+            }}
+          >
+            <StepBackIcon />
           </button>
 
           {/* Play / Pause */}
           <button
             onClick={() => { togglePlayback(); showControls(); }}
-            aria-label={isPlaying ? "Pause" : "Play"}
+            aria-label={isPlaying ? "Pause (Space)" : "Play (Space)"}
             title={isPlaying ? "Pause (Space)" : "Play (Space)"}
             style={{
-              width: 68,
-              height: 68,
+              width: 64,
+              height: 64,
               borderRadius: "50%",
               background: "#fff",
               border: "none",
@@ -449,45 +634,97 @@ export default function PresentationOverlay() {
             {isPlaying ? <PauseIcon /> : <PlayIcon />}
           </button>
 
-          {/* Next scene */}
+          {/* Next step */}
           <button
-            onClick={() => { pausePlayback(); stepForward(); showControls(); }}
-            disabled={currentSceneIndex >= sceneCount - 1 && !loop}
-            aria-label="Next scene"
-            title="Next scene (Right Arrow)"
+            onClick={() => { pausePlayback(); goNextStep(); showControls(); }}
+            disabled={atEnd && !loop}
+            aria-label="Next step (→)"
+            title="Next step (→)"
             style={{
-              width: 52,
-              height: 52,
+              width: 48,
+              height: 48,
               borderRadius: "50%",
               background: "rgba(255,255,255,0.15)",
               border: "1px solid rgba(255,255,255,0.2)",
-              color: currentSceneIndex >= sceneCount - 1 && !loop ? "rgba(255,255,255,0.3)" : "#fff",
+              color: atEnd && !loop ? "rgba(255,255,255,0.25)" : "#fff",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              cursor: currentSceneIndex >= sceneCount - 1 && !loop ? "default" : "pointer",
+              cursor: atEnd && !loop ? "default" : "pointer",
             }}
           >
-            <ChevronRightIcon />
+            <StepForwardIcon />
+          </button>
+
+          {/* Next scene */}
+          <button
+            onClick={() => { pausePlayback(); goNextScene(); showControls(); }}
+            disabled={currentSceneIndex >= sceneCount - 1}
+            aria-label="Next scene (])"
+            title="Next scene (])"
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.1)",
+              border: "1px solid rgba(255,255,255,0.15)",
+              color: currentSceneIndex >= sceneCount - 1 ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.7)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: currentSceneIndex >= sceneCount - 1 ? "default" : "pointer",
+            }}
+          >
+            <SceneForwardIcon />
           </button>
         </div>
 
-        {/* Scene / step counter */}
-        <p
-          aria-live="polite"
-          aria-atomic="true"
-          style={{
-            margin: 0,
-            fontSize: 13,
-            color: "rgba(255,255,255,0.55)",
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
-          Scene {currentSceneIndex + 1} / {sceneCount}
-          {scene && scene.timingGroups.length > 1
-            ? `  ·  Step ${currentStep} / ${scene.timingGroups.length}`
-            : ""}
-        </p>
+        {/* Speed + counter row */}
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          {/* Speed pills */}
+          <div style={{ display: "flex", gap: 4 }}>
+            {SPEED_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => { setSpeed(opt.value); showControls(); }}
+                aria-pressed={speed === opt.value}
+                style={{
+                  padding: "3px 9px",
+                  borderRadius: 99,
+                  border: speed === opt.value ? "1px solid rgba(255,255,255,0.7)" : "1px solid rgba(255,255,255,0.2)",
+                  background: speed === opt.value ? "rgba(255,255,255,0.2)" : "transparent",
+                  color: speed === opt.value ? "#fff" : "rgba(255,255,255,0.45)",
+                  fontSize: 11,
+                  fontWeight: speed === opt.value ? 700 : 400,
+                  cursor: "pointer",
+                  transition: "background 0.15s, border-color 0.15s, color 0.15s",
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Counter */}
+          <p
+            aria-live="polite"
+            aria-atomic="true"
+            style={{
+              margin: 0,
+              fontSize: 12,
+              color: "rgba(255,255,255,0.45)",
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            Scene {currentSceneIndex + 1}/{sceneCount}
+            {hasMultipleSteps ? `  ·  Step ${currentStepIndex + 1}/${sortedSteps.length}` : ""}
+          </p>
+
+          {/* Keyboard hint */}
+          <p style={{ margin: 0, fontSize: 10, color: "rgba(255,255,255,0.2)" }}>
+            ← →: step  ·  [ ]: scene  ·  Home: restart
+          </p>
+        </div>
       </div>
     </div>
   );

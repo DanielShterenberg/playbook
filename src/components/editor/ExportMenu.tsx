@@ -169,7 +169,8 @@ export default function ExportMenu() {
       const safeTitle = title.replace(/[^a-zA-Z0-9-_\s]/g, "").trim().replace(/\s+/g, "-");
       const sceneIndex = (currentPlay?.scenes.findIndex((s) => s.id === scene.id) ?? 0) + 1;
       const filename = `${safeTitle}-scene-${sceneIndex}`;
-      exportSceneAsPNG(scene, 800, pngResolution, filename);
+      const flipped = (scene.flipped ?? currentPlay?.flipped) === true;
+      exportSceneAsPNG(scene, 800, pngResolution, filename, flipped);
     } finally {
       setTimeout(() => setExportMode("idle"), 500);
     }
