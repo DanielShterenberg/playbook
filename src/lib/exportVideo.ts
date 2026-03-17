@@ -57,19 +57,24 @@ async function exportViaWebCodecs(
   canvas.width  = encW;
   canvas.height = encH;
 
+  // WhatsApp requires an audio track to display video inline (video-only MP4s
+  // are rejected or shown as raw file attachments). We add a silent AAC track.
+  const SAMPLE_RATE = 44100;
+
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
     video: { codec: "avc", width: encW, height: encH },
+    audio: { codec: "aac", sampleRate: SAMPLE_RATE, numberOfChannels: 1 },
     fastStart: "in-memory",
   });
 
-  const encoder = new VideoEncoder({
+  const videoEncoder = new VideoEncoder({
     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
     error: (e) => { throw e; },
   });
 
-  encoder.configure({
-    codec: "avc1.4d0028", // H.264 High Profile Level 4.0
+  videoEncoder.configure({
+    codec: "avc1.4d0028", // H.264 Main Profile Level 4.0
     width: encW,
     height: encH,
     bitrate: resolution === "hd" ? 3_000_000 : 1_500_000,
@@ -77,7 +82,39 @@ async function exportViaWebCodecs(
     latencyMode: "quality",
   });
 
+  const audioEncoder = new AudioEncoder({
+    output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
+    error: (e) => { throw e; },
+  });
+
+  audioEncoder.configure({
+    codec: "mp4a.40.2", // AAC-LC
+    sampleRate: SAMPLE_RATE,
+    numberOfChannels: 1,
+    bitrate: 64_000,
+  });
+
   const scenes = [...play.scenes].sort((a, b) => a.order - b.order);
+
+  // Pre-calculate total video duration so we can add the right amount of silence
+  let totalDurationMs = 0;
+  for (let si = 0; si < scenes.length; si++) {
+    for (const g of scenes[si].timingGroups) totalDurationMs += g.duration / speed;
+    totalDurationMs += (si === scenes.length - 1 ? FINAL_HOLD_MS : SCENE_HOLD_MS) / speed;
+  }
+
+  // Encode one chunk of silence covering the full duration
+  const totalSamples = Math.ceil((totalDurationMs / 1000) * SAMPLE_RATE);
+  const silence = new AudioData({
+    format: "f32-planar",
+    sampleRate: SAMPLE_RATE,
+    numberOfFrames: totalSamples,
+    numberOfChannels: 1,
+    timestamp: 0,
+    data: new Float32Array(totalSamples),
+  });
+  audioEncoder.encode(silence);
+  silence.close();
 
   let totalSteps = 0;
   for (const scene of scenes) totalSteps += scene.timingGroups.length + 1;
@@ -88,7 +125,7 @@ async function exportViaWebCodecs(
   const encodeFrame = (durationMs: number, keyFrame: boolean) => {
     const durationUs = Math.round((durationMs / speed) * 1000);
     const frame = new VideoFrame(canvas, { timestamp: timestampUs, duration: durationUs });
-    encoder.encode(frame, { keyFrame });
+    videoEncoder.encode(frame, { keyFrame });
     frame.close();
     timestampUs += durationUs;
   };
@@ -113,15 +150,15 @@ async function exportViaWebCodecs(
 
     // Hold frame
     const holdMs = si === scenes.length - 1 ? FINAL_HOLD_MS : SCENE_HOLD_MS;
-    const cumulativeCopy = [...cumulativeAnnotations];
-    renderFrame(canvas, scene, cumulativeCopy, encW, encH, sceneFlipped);
+    renderFrame(canvas, scene, [...cumulativeAnnotations], encW, encH, sceneFlipped);
     encodeFrame(holdMs, false);
 
     stepsRendered++;
     onProgress?.(stepsRendered / totalSteps);
   }
 
-  await encoder.flush();
+  await videoEncoder.flush();
+  await audioEncoder.flush();
   muxer.finalize();
 
   const { buffer } = muxer.target;
