@@ -332,7 +332,7 @@ export default function PresentationOverlay() {
       const stepDuration = sortedGroups[stepIndex]?.duration ?? 1000;
 
       if (msAccRef.current >= stepDuration) {
-        msAccRef.current -= stepDuration;
+        msAccRef.current = 0;
         if (stepIndex < sortedGroups.length - 1) {
           state.setCurrentStep(sortedGroups[stepIndex + 1].step);
         } else {
