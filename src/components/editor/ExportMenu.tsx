@@ -203,6 +203,8 @@ export default function ExportMenu() {
         onProgress: (fraction) => setVideoProgress(fraction),
         displayMode,
         playerNames,
+        offenseColor: currentPlay.colors?.offense,
+        defenseColor: currentPlay.colors?.defense,
       });
     } finally {
       setExportMode("idle");

@@ -238,7 +238,6 @@ const COLOR_OFFENSE_STROKE = "#FFFFFF";
 const COLOR_DEFENSE_FILL = "#FFFFFF";
 const COLOR_DEFENSE_STROKE = "#1E3A5F";
 const COLOR_TEXT_OFFENSE = "#FFFFFF";
-const COLOR_TEXT_DEFENSE = "#1E3A5F";
 
 const OFFENSE_ABBRS: Record<number, string> = { 1: "PG", 2: "SG", 3: "SF", 4: "PF", 5: "C" };
 
@@ -251,9 +250,14 @@ function drawPlayer(
   scale: number,
   displayMode: PlayerDisplayMode = "numbers",
   playerNames: Record<string, string> = {},
+  offenseColor?: string,
+  defenseColor?: string,
 ): void {
   const r = PLAYER_RADIUS * scale;
   const isOffense = side === "offense";
+
+  const offenseFill   = offenseColor ?? COLOR_OFFENSE_FILL;
+  const defenseStroke = defenseColor ?? COLOR_DEFENSE_STROKE;
 
   ctx.save();
   ctx.globalAlpha = 0.25;
@@ -265,15 +269,15 @@ function drawPlayer(
 
   ctx.beginPath();
   ctx.arc(px, py, r, 0, Math.PI * 2);
-  ctx.fillStyle = isOffense ? COLOR_OFFENSE_FILL : COLOR_DEFENSE_FILL;
+  ctx.fillStyle = isOffense ? offenseFill : COLOR_DEFENSE_FILL;
   ctx.fill();
-  ctx.strokeStyle = isOffense ? COLOR_OFFENSE_STROKE : COLOR_DEFENSE_STROKE;
+  ctx.strokeStyle = isOffense ? COLOR_OFFENSE_STROKE : defenseStroke;
   ctx.lineWidth = (isOffense ? 2 : 2.5) * scale;
   ctx.stroke();
 
   if (!isOffense) {
     const xSize = 7 * scale;
-    ctx.strokeStyle = COLOR_DEFENSE_STROKE;
+    ctx.strokeStyle = defenseStroke;
     ctx.lineWidth = 2.5 * scale;
     ctx.lineCap = "round";
     ctx.beginPath();
@@ -302,7 +306,7 @@ function drawPlayer(
       ? Math.max(6, baseFontSize - (label.length - 2) * 1.5)
       : baseFontSize) * scale;
 
-  ctx.fillStyle = isOffense ? COLOR_TEXT_OFFENSE : COLOR_TEXT_DEFENSE;
+  ctx.fillStyle = isOffense ? COLOR_TEXT_OFFENSE : defenseStroke;
   ctx.font = `700 ${fontSize}px system-ui, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -653,9 +657,14 @@ export function renderFrame(
   flipped = false,
   displayMode: PlayerDisplayMode = "numbers",
   playerNames: Record<string, string> = {},
+  offenseColor?: string,
+  defenseColor?: string,
 ): void {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
+
+  // Scale everything proportionally to canvas width (SD=480 is the baseline).
+  const scale = width / 480;
 
   const py = (n: number) => flipped ? (1 - n) * height : n * height;
 
@@ -668,21 +677,21 @@ export function renderFrame(
   const BELOW_PLAYER_TYPES = new Set(["movement", "cut", "dribble", "pass", "guard", "handoff"]);
   for (const ann of visibleAnnotations) {
     if (BELOW_PLAYER_TYPES.has(ann.type)) {
-      drawAnnotation(ctx, ann, 1, width, height, flipped);
+      drawAnnotation(ctx, ann, scale, width, height, flipped);
     }
   }
 
   // Defense
   for (const p of scene.players.defense) {
     if (p.visible) {
-      drawPlayer(ctx, "defense", p.position, p.x * width, py(p.y), 1, displayMode, playerNames);
+      drawPlayer(ctx, "defense", p.position, p.x * width, py(p.y), scale, displayMode, playerNames, offenseColor, defenseColor);
     }
   }
 
   // Offense
   for (const p of scene.players.offense) {
     if (p.visible) {
-      drawPlayer(ctx, "offense", p.position, p.x * width, py(p.y), 1, displayMode, playerNames);
+      drawPlayer(ctx, "offense", p.position, p.x * width, py(p.y), scale, displayMode, playerNames, offenseColor, defenseColor);
     }
   }
 
@@ -695,15 +704,15 @@ export function renderFrame(
     const holder = pool.find((p) => p.position === ball.attachedTo!.position);
     if (holder) {
       // Float ball toward half-court regardless of flip direction
-      ballPx = { x: holder.x * width, y: py(holder.y) + (flipped ? -BALL_ATTACH_OFFSET_Y : BALL_ATTACH_OFFSET_Y) };
+      ballPx = { x: holder.x * width, y: py(holder.y) + (flipped ? -BALL_ATTACH_OFFSET_Y : BALL_ATTACH_OFFSET_Y) * scale };
     }
   }
-  drawBall(ctx, ballPx.x, ballPx.y, 1);
+  drawBall(ctx, ballPx.x, ballPx.y, scale);
 
   // Draw screen annotations on top of players so the perpendicular bar is visible
   for (const ann of visibleAnnotations) {
     if (!BELOW_PLAYER_TYPES.has(ann.type)) {
-      drawAnnotation(ctx, ann, 1, width, height, flipped);
+      drawAnnotation(ctx, ann, scale, width, height, flipped);
     }
   }
 
