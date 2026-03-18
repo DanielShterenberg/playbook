@@ -27,6 +27,7 @@ import {
   RESOLUTION_WIDTH,
 } from "./exportGIF";
 import type { GifResolution } from "./exportGIF";
+import type { PlayerDisplayMode } from "./store";
 
 export type VideoResolution = GifResolution;
 
@@ -34,6 +35,8 @@ export interface ExportVideoOptions {
   speed?: number;
   resolution?: VideoResolution;
   onProgress?: (fraction: number) => void;
+  displayMode?: PlayerDisplayMode;
+  playerNames?: Record<string, string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -45,7 +48,7 @@ async function exportViaWebCodecs(
   filename: string,
   options: ExportVideoOptions,
 ): Promise<void> {
-  const { speed = 1, resolution = "sd", onProgress } = options;
+  const { speed = 1, resolution = "sd", onProgress, displayMode = "numbers", playerNames = {} } = options;
 
   const width  = RESOLUTION_WIDTH[resolution];
   const height = Math.round(width / COURT_ASPECT_RATIO);
@@ -147,7 +150,7 @@ async function exportViaWebCodecs(
     for (let gi = 0; gi < sortedGroups.length; gi++) {
       const group = sortedGroups[gi];
       cumulativeAnnotations.push(...group.annotations);
-      renderFrame(canvas, scene, cumulativeAnnotations, encW, encH, sceneFlipped);
+      renderFrame(canvas, scene, cumulativeAnnotations, encW, encH, sceneFlipped, displayMode, playerNames);
       encodeFrame(group.duration, si === 0 && gi === 0);
 
       stepsRendered++;
@@ -158,7 +161,7 @@ async function exportViaWebCodecs(
 
     // Hold frame
     const holdMs = si === scenes.length - 1 ? FINAL_HOLD_MS : SCENE_HOLD_MS;
-    renderFrame(canvas, scene, [...cumulativeAnnotations], encW, encH, sceneFlipped);
+    renderFrame(canvas, scene, [...cumulativeAnnotations], encW, encH, sceneFlipped, displayMode, playerNames);
     encodeFrame(holdMs, false);
 
     stepsRendered++;

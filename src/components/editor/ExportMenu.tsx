@@ -119,6 +119,8 @@ type ExportMode = "idle" | "png" | "video" | "pdf";
 export default function ExportMenu() {
   const scene = useStore(selectEditorScene);
   const currentPlay = useStore((s) => s.currentPlay);
+  const displayMode = useStore((s) => s.playerDisplayMode);
+  const playerNames = useStore((s) => s.playerNames);
 
   const [open, setOpen] = useState(false);
   const [exportMode, setExportMode] = useState<ExportMode>("idle");
@@ -199,12 +201,14 @@ export default function ExportMenu() {
         speed: videoSpeed,
         resolution: videoResolution,
         onProgress: (fraction) => setVideoProgress(fraction),
+        displayMode,
+        playerNames,
       });
     } finally {
       setExportMode("idle");
       setVideoProgress(0);
     }
-  }, [currentPlay, videoSpeed, videoResolution]);
+  }, [currentPlay, videoSpeed, videoResolution, displayMode, playerNames]);
 
   return (
     <div ref={menuRef} className="relative">

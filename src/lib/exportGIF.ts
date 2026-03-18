@@ -42,6 +42,7 @@
 
 import { GIFEncoder, quantize, applyPalette } from "gifenc";
 import type { Play, Scene, Annotation } from "./types";
+import type { PlayerDisplayMode } from "./store";
 import {
   COURT_ASPECT_RATIO,
   BASKET_X,
@@ -239,6 +240,8 @@ const COLOR_DEFENSE_STROKE = "#1E3A5F";
 const COLOR_TEXT_OFFENSE = "#FFFFFF";
 const COLOR_TEXT_DEFENSE = "#1E3A5F";
 
+const OFFENSE_ABBRS: Record<number, string> = { 1: "PG", 2: "SG", 3: "SF", 4: "PF", 5: "C" };
+
 function drawPlayer(
   ctx: CanvasRenderingContext2D,
   side: "offense" | "defense",
@@ -246,6 +249,8 @@ function drawPlayer(
   px: number,
   py: number,
   scale: number,
+  displayMode: PlayerDisplayMode = "numbers",
+  playerNames: Record<string, string> = {},
 ): void {
   const r = PLAYER_RADIUS * scale;
   const isOffense = side === "offense";
@@ -281,9 +286,16 @@ function drawPlayer(
     ctx.stroke();
   }
 
-  const label = isOffense
-    ? ({ 1: "PG", 2: "SG", 3: "SF", 4: "PF", 5: "C" }[position] ?? String(position))
-    : `X${position}`;
+  let label: string;
+  if (displayMode === "names") {
+    const key = `${side}-${position}`;
+    label = playerNames[key] ?? (isOffense ? String(position) : `X${position}`);
+  } else if (displayMode === "abbreviations") {
+    label = OFFENSE_ABBRS[position] ?? String(position);
+  } else {
+    // "numbers"
+    label = isOffense ? String(position) : `X${position}`;
+  }
   const baseFontSize = isOffense ? 11 : 9;
   const fontSize =
     (label.length > 2
@@ -639,6 +651,8 @@ export function renderFrame(
   width: number,
   height: number,
   flipped = false,
+  displayMode: PlayerDisplayMode = "numbers",
+  playerNames: Record<string, string> = {},
 ): void {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
@@ -661,14 +675,14 @@ export function renderFrame(
   // Defense
   for (const p of scene.players.defense) {
     if (p.visible) {
-      drawPlayer(ctx, "defense", p.position, p.x * width, py(p.y), 1);
+      drawPlayer(ctx, "defense", p.position, p.x * width, py(p.y), 1, displayMode, playerNames);
     }
   }
 
   // Offense
   for (const p of scene.players.offense) {
     if (p.visible) {
-      drawPlayer(ctx, "offense", p.position, p.x * width, py(p.y), 1);
+      drawPlayer(ctx, "offense", p.position, p.x * width, py(p.y), 1, displayMode, playerNames);
     }
   }
 
