@@ -63,11 +63,33 @@ async function exportViaWebCodecs(
   canvas.width  = encW;
   canvas.height = encH;
 
-  // [DIAGNOSTIC] No audio track — isolating whether AudioEncoder is causing the
-  // malformed MP4 that produces QuickTime error -12842.
+  // WhatsApp requires an audio track to display video inline. We add a silent
+  // AAC track — but ONLY if the browser actually supports AAC encoding. If we
+  // declare an audio track in the muxer but the encoder silently fails (Chrome
+  // throws inside the async error callback, producing an unhandled rejection),
+  // the resulting MP4 has a declared-but-empty audio track which corrupts the
+  // container and causes QuickTime error -12842.
+  const SAMPLE_RATE = 44100;
+  const audioConfig = {
+    codec: "mp4a.40.2" as const, // AAC-LC
+    sampleRate: SAMPLE_RATE,
+    numberOfChannels: 1,
+    bitrate: 64_000,
+  };
+  let useAudio = false;
+  if (typeof AudioEncoder !== "undefined") {
+    try {
+      const support = await AudioEncoder.isConfigSupported(audioConfig);
+      useAudio = support.supported === true;
+    } catch {
+      useAudio = false;
+    }
+  }
+
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
     video: { codec: "avc", width: encW, height: encH },
+    ...(useAudio ? { audio: { codec: "aac", sampleRate: SAMPLE_RATE, numberOfChannels: 1 } } : {}),
     fastStart: "in-memory",
   });
 
@@ -86,6 +108,44 @@ async function exportViaWebCodecs(
   });
 
   const scenes = [...play.scenes].sort((a, b) => a.order - b.order);
+
+  // Pre-calculate total duration for the silent audio track.
+  let totalDurationMs = 0;
+  for (let si = 0; si < scenes.length; si++) {
+    for (const g of scenes[si].timingGroups) totalDurationMs += g.duration / speed;
+    totalDurationMs += (si === scenes.length - 1 ? FINAL_HOLD_MS : SCENE_HOLD_MS) / speed;
+  }
+
+  // Encode silence in 4096-frame chunks (large single chunks can trip Chrome's
+  // internal AudioEncoder buffer limits for long plays).
+  if (useAudio) {
+    const audioEncoder = new AudioEncoder({
+      output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
+      error: (e) => console.warn("AudioEncoder error (audio will be silent/missing):", e),
+    });
+    audioEncoder.configure(audioConfig);
+
+    const totalSamples = Math.ceil((totalDurationMs / 1000) * SAMPLE_RATE);
+    const CHUNK_FRAMES = 4096;
+    const silentBuf = new Float32Array(CHUNK_FRAMES);
+    let samplesEncoded = 0;
+    while (samplesEncoded < totalSamples) {
+      const frames = Math.min(CHUNK_FRAMES, totalSamples - samplesEncoded);
+      const chunk = new AudioData({
+        format: "f32-planar",
+        sampleRate: SAMPLE_RATE,
+        numberOfFrames: frames,
+        numberOfChannels: 1,
+        timestamp: Math.round((samplesEncoded / SAMPLE_RATE) * 1_000_000),
+        data: frames === CHUNK_FRAMES ? silentBuf : new Float32Array(frames),
+      });
+      audioEncoder.encode(chunk);
+      chunk.close();
+      samplesEncoded += frames;
+    }
+    await audioEncoder.flush();
+  }
+
   let totalSteps = 0;
   for (const scene of scenes) totalSteps += scene.timingGroups.length + 1;
   let stepsRendered = 0;
