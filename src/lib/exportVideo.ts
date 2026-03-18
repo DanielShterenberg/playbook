@@ -19,7 +19,6 @@
 
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 import type { Play, Annotation } from "./types";
-import { COURT_ASPECT_RATIO } from "@/components/court/courtDimensions";
 import {
   renderFrame,
   SCENE_HOLD_MS,
@@ -27,6 +26,7 @@ import {
   RESOLUTION_WIDTH,
 } from "./exportGIF";
 import type { GifResolution } from "./exportGIF";
+import { computeCourtLayout } from "./exportGIF";
 import type { PlayerDisplayMode } from "./store";
 
 export type VideoResolution = GifResolution;
@@ -53,7 +53,7 @@ async function exportViaWebCodecs(
   const { speed = 1, resolution = "sd", onProgress, displayMode = "numbers", playerNames = {}, offenseColor, defenseColor } = options;
 
   const width  = RESOLUTION_WIDTH[resolution];
-  const height = Math.round(width / COURT_ASPECT_RATIO);
+  const height = computeCourtLayout(width).totalHeight;
   // H.264 requires dimensions divisible by 2
   const encW = width  % 2 === 0 ? width  : width  - 1;
   const encH = height % 2 === 0 ? height : height - 1;
@@ -191,7 +191,7 @@ async function exportViaMediaRecorder(
   const { speed = 1, resolution = "sd", onProgress } = options;
 
   const width  = RESOLUTION_WIDTH[resolution];
-  const height = Math.round(width / COURT_ASPECT_RATIO);
+  const height = computeCourtLayout(width).totalHeight;
 
   const canvas = document.createElement("canvas");
   canvas.width  = width;

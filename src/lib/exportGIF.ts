@@ -60,6 +60,7 @@ import {
   FT_CIRCLE_CENTER_Y,
   CENTRE_CIRCLE_RADIUS,
 } from "@/components/court/courtDimensions";
+import { OOB_SIDE_FRAC, OOB_BOTTOM_FRAC } from "@/components/court/Court";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -84,32 +85,54 @@ const COLOR_LINE = "#FFFFFF";
 const COLOR_LINE_WIDTH_PX = 2;
 
 // ---------------------------------------------------------------------------
+// Court layout (mirrors the OOB margins used by the editor's Court component)
+// ---------------------------------------------------------------------------
+
+/**
+ * Computes the OOB-aware canvas dimensions that exactly match the editor.
+ * `totalWidth` is the full export canvas width (including OOB side margins).
+ */
+export function computeCourtLayout(totalWidth: number) {
+  const oobLeft  = Math.round((totalWidth * OOB_SIDE_FRAC) / (1 + 2 * OOB_SIDE_FRAC));
+  const innerW   = totalWidth - 2 * oobLeft;
+  const innerH   = Math.round(innerW / COURT_ASPECT_RATIO);
+  const oobBot   = Math.round(innerH * OOB_BOTTOM_FRAC);
+  const totalHeight = innerH + oobBot;
+  return { oobLeft, innerW, innerH, oobBot, totalHeight };
+}
+
+// ---------------------------------------------------------------------------
 // Court drawing (copy of the logic in exportPNG.ts — kept in sync)
 // ---------------------------------------------------------------------------
 
-function drawCourtOnCanvas(canvas: HTMLCanvasElement, flipped = false): void {
+function drawCourtOnCanvas(
+  canvas: HTMLCanvasElement,
+  flipped: boolean,
+  layout: { oobLeft: number; innerW: number; innerH: number },
+): void {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-  const W = canvas.width;
-  const H = canvas.height;
+  const { oobLeft, innerW: W, innerH: H } = layout;
 
   const cx = (nx: number) => nx * W;
   const cy = (ny: number) => ny * H;
   const rx = (nr: number) => nr * W;
   const scaleY = H / W;
 
-  ctx.clearRect(0, 0, W, H);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  // 1. Fill entire canvas (OOB + inner court) with floor colour
+  ctx.fillStyle = COLOR_COURT;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // All court markings live in innerW × innerH space, offset right by oobLeft
+  ctx.save();
+  ctx.translate(oobLeft, 0);
   if (flipped) {
-    ctx.save();
     ctx.translate(0, H);
     ctx.scale(1, -1);
   }
-
-  // 1. Court background
-  ctx.fillStyle = COLOR_COURT;
-  ctx.fillRect(0, 0, W, H);
 
   // 2. Paint
   ctx.fillStyle = COLOR_PAINT;
@@ -223,9 +246,9 @@ function drawCourtOnCanvas(canvas: HTMLCanvasElement, flipped = false): void {
   ctx.arc(cx(BASKET_X), cy(BASKET_Y) / scaleY, rx(BASKET_RADIUS), 0, Math.PI * 2);
   ctx.strokeStyle = COLOR_LINE;
   ctx.stroke();
-  ctx.restore();
+  ctx.restore(); // end rim scale
 
-  if (flipped) ctx.restore();
+  ctx.restore(); // end oobLeft translate + optional flip
 }
 
 // ---------------------------------------------------------------------------
@@ -451,30 +474,32 @@ function drawAnnotation(
   ctx: CanvasRenderingContext2D,
   ann: Annotation,
   scale: number,
-  width: number,
-  height: number,
-  flipped = false,
+  innerW: number,
+  innerH: number,
+  flipped: boolean,
+  oobLeft: number,
 ): void {
   const { from, to, type } = ann;
-  // Convert normalised [0-1] coords to canvas pixels (respects flip)
-  const py = (n: number) => flipped ? (1 - n) * height : n * height;
-  const fx = from.x * width;
-  const fy = py(from.y);
-  const tx = to.x * width;
-  const ty = py(to.y);
+  // Convert normalised [0-1] coords to canvas pixels (respects OOB offset + flip)
+  const toX = (n: number) => n * innerW + oobLeft;
+  const toY = (n: number) => flipped ? (1 - n) * innerH : n * innerH;
+  const fx = toX(from.x);
+  const fy = toY(from.y);
+  const tx = toX(to.x);
+  const ty = toY(to.y);
 
   // Bezier control point
   const hasWaypoints = ann.waypoints && ann.waypoints.length > 0;
   let cpx: number | undefined;
   let cpy: number | undefined;
   if (!hasWaypoints && ann.controlPoints.length > 0) {
-    cpx = ann.controlPoints[0].x * width;
-    cpy = py(ann.controlPoints[0].y);
+    cpx = toX(ann.controlPoints[0].x);
+    cpy = toY(ann.controlPoints[0].y);
   }
 
   // Multi-leg waypoints
   const allPts = hasWaypoints
-    ? [{ x: fx, y: fy }, ...(ann.waypoints ?? []).map((p) => ({ x: p.x * width, y: py(p.y) })), { x: tx, y: ty }]
+    ? [{ x: fx, y: fy }, ...(ann.waypoints ?? []).map((p) => ({ x: toX(p.x), y: toY(p.y) })), { x: tx, y: ty }]
     : [];
 
   const arrowSize = 12 * scale;
@@ -663,13 +688,18 @@ export function renderFrame(
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
+  // Compute OOB-aware layout — mirrors the editor's Court component exactly.
+  const layout = computeCourtLayout(width);
+  const { oobLeft, innerW, innerH } = layout;
+
   // Scale everything proportionally to canvas width (SD=480 is the baseline).
   const scale = width / 480;
 
-  const py = (n: number) => flipped ? (1 - n) * height : n * height;
+  const toX = (n: number) => n * innerW + oobLeft;
+  const toY = (n: number) => flipped ? (1 - n) * innerH : n * innerH;
 
-  // Court background (flip handled inside)
-  drawCourtOnCanvas(canvas, flipped);
+  // Court background + markings (with OOB margins)
+  drawCourtOnCanvas(canvas, flipped, layout);
 
   ctx.save();
 
@@ -677,34 +707,36 @@ export function renderFrame(
   const BELOW_PLAYER_TYPES = new Set(["movement", "cut", "dribble", "pass", "guard", "handoff"]);
   for (const ann of visibleAnnotations) {
     if (BELOW_PLAYER_TYPES.has(ann.type)) {
-      drawAnnotation(ctx, ann, scale, width, height, flipped);
+      drawAnnotation(ctx, ann, scale, innerW, innerH, flipped, oobLeft);
     }
   }
 
   // Defense
   for (const p of scene.players.defense) {
     if (p.visible) {
-      drawPlayer(ctx, "defense", p.position, p.x * width, py(p.y), scale, displayMode, playerNames, offenseColor, defenseColor);
+      drawPlayer(ctx, "defense", p.position, toX(p.x), toY(p.y), scale, displayMode, playerNames, offenseColor, defenseColor);
     }
   }
 
   // Offense
   for (const p of scene.players.offense) {
     if (p.visible) {
-      drawPlayer(ctx, "offense", p.position, p.x * width, py(p.y), scale, displayMode, playerNames, offenseColor, defenseColor);
+      drawPlayer(ctx, "offense", p.position, toX(p.x), toY(p.y), scale, displayMode, playerNames, offenseColor, defenseColor);
     }
   }
 
   // Ball
   const ball = scene.ball;
-  let ballPx = { x: ball.x * width, y: py(ball.y) };
+  let ballPx = { x: toX(ball.x), y: toY(ball.y) };
   if (ball.attachedTo) {
     const pool =
       ball.attachedTo.side === "offense" ? scene.players.offense : scene.players.defense;
     const holder = pool.find((p) => p.position === ball.attachedTo!.position);
     if (holder) {
-      // Float ball toward half-court regardless of flip direction
-      ballPx = { x: holder.x * width, y: py(holder.y) + (flipped ? -BALL_ATTACH_OFFSET_Y : BALL_ATTACH_OFFSET_Y) * scale };
+      ballPx = {
+        x: toX(holder.x),
+        y: toY(holder.y) + (flipped ? -BALL_ATTACH_OFFSET_Y : BALL_ATTACH_OFFSET_Y) * scale,
+      };
     }
   }
   drawBall(ctx, ballPx.x, ballPx.y, scale);
@@ -712,7 +744,7 @@ export function renderFrame(
   // Draw screen annotations on top of players so the perpendicular bar is visible
   for (const ann of visibleAnnotations) {
     if (!BELOW_PLAYER_TYPES.has(ann.type)) {
-      drawAnnotation(ctx, ann, scale, width, height, flipped);
+      drawAnnotation(ctx, ann, scale, innerW, innerH, flipped, oobLeft);
     }
   }
 
@@ -783,7 +815,7 @@ export async function exportPlayAsGIF(
   const { speed = 1, resolution = "sd", onProgress } = options;
 
   const width = RESOLUTION_WIDTH[resolution];
-  const height = Math.round(width / COURT_ASPECT_RATIO);
+  const { totalHeight: height } = computeCourtLayout(width);
 
   // Allocate a single offscreen canvas reused for every frame.
   const canvas = document.createElement("canvas");
