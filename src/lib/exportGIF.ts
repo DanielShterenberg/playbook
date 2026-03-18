@@ -346,7 +346,6 @@ const BALL_RADIUS = 12;
 const COLOR_BALL = "#E05C00";
 const COLOR_BALL_HIGHLIGHT = "#F47B2A";
 const COLOR_SEAM = "#FFFFFF";
-const BALL_ATTACH_OFFSET_Y = -22;
 
 function drawBall(ctx: CanvasRenderingContext2D, px: number, py: number, r: number): void {
   const s = r / BALL_RADIUS;
