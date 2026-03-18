@@ -96,6 +96,8 @@ export default function PlaybackControls() {
   const sceneCount = useStore(selectSceneCount);
   const scene = useStore(selectEditorScene);
 
+  const isPresentationMode = useStore((s) => s.isPresentationMode);
+
   const togglePlayback = useStore((s) => s.togglePlayback);
   const pausePlayback = useStore((s) => s.pausePlayback);
   const stepForward = useStore((s) => s.stepForward);
@@ -183,7 +185,9 @@ export default function PlaybackControls() {
   );
 
   useEffect(() => {
-    if (isPlaying) {
+    // Don't run this loop in presentation mode — PresentationOverlay has its own.
+    // Running both simultaneously causes double-advancement (step skipping).
+    if (isPlaying && !isPresentationMode) {
       lastTimestampRef.current = null;
       msAccRef.current = 0;
       rafRef.current = requestAnimationFrame(advancePlayback);
@@ -199,7 +203,7 @@ export default function PlaybackControls() {
         rafRef.current = null;
       }
     };
-  }, [isPlaying, advancePlayback]);
+  }, [isPlaying, isPresentationMode, advancePlayback]);
 
   // Keyboard shortcut registration (Space, Left/Right, L, Ctrl+Left/Right) is
   // handled centrally by EditorKeyboardManager (useKeyboardShortcuts, issue #82).
