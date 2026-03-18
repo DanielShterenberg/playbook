@@ -79,7 +79,7 @@ async function exportViaWebCodecs(
   });
 
   videoEncoder.configure({
-    codec: "avc1.4d0028", // H.264 Main Profile Level 4.0
+    codec: "avc1.640028", // H.264 High Profile Level 4.0 — better QuickTime/Apple compatibility
     width: encW,
     height: encH,
     bitrate: resolution === "hd" ? 3_000_000 : 1_500_000,
@@ -153,7 +153,7 @@ async function exportViaWebCodecs(
       const group = sortedGroups[gi];
       cumulativeAnnotations.push(...group.annotations);
       renderFrame(canvas, scene, cumulativeAnnotations, encW, encH, sceneFlipped, displayMode, playerNames, offenseColor, defenseColor);
-      encodeFrame(group.duration, si === 0 && gi === 0);
+      encodeFrame(group.duration, gi === 0); // keyframe at start of each scene
 
       stepsRendered++;
       onProgress?.(stepsRendered / totalSteps);
