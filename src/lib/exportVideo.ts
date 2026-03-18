@@ -63,14 +63,11 @@ async function exportViaWebCodecs(
   canvas.width  = encW;
   canvas.height = encH;
 
-  // WhatsApp requires an audio track to display video inline (video-only MP4s
-  // are rejected or shown as raw file attachments). We add a silent AAC track.
-  const SAMPLE_RATE = 44100;
-
+  // [DIAGNOSTIC] No audio track — isolating whether AudioEncoder is causing the
+  // malformed MP4 that produces QuickTime error -12842.
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
     video: { codec: "avc", width: encW, height: encH },
-    audio: { codec: "aac", sampleRate: SAMPLE_RATE, numberOfChannels: 1 },
     fastStart: "in-memory",
   });
 
@@ -88,40 +85,7 @@ async function exportViaWebCodecs(
     latencyMode: "quality",
   });
 
-  const audioEncoder = new AudioEncoder({
-    output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
-    error: (e) => { throw e; },
-  });
-
-  audioEncoder.configure({
-    codec: "mp4a.40.2", // AAC-LC
-    sampleRate: SAMPLE_RATE,
-    numberOfChannels: 1,
-    bitrate: 64_000,
-  });
-
   const scenes = [...play.scenes].sort((a, b) => a.order - b.order);
-
-  // Pre-calculate total video duration so we can add the right amount of silence
-  let totalDurationMs = 0;
-  for (let si = 0; si < scenes.length; si++) {
-    for (const g of scenes[si].timingGroups) totalDurationMs += g.duration / speed;
-    totalDurationMs += (si === scenes.length - 1 ? FINAL_HOLD_MS : SCENE_HOLD_MS) / speed;
-  }
-
-  // Encode one silent AAC chunk covering the full play duration.
-  const totalSamples = Math.ceil((totalDurationMs / 1000) * SAMPLE_RATE);
-  const silence = new AudioData({
-    format: "f32-planar",
-    sampleRate: SAMPLE_RATE,
-    numberOfFrames: totalSamples,
-    numberOfChannels: 1,
-    timestamp: 0,
-    data: new Float32Array(totalSamples),
-  });
-  audioEncoder.encode(silence);
-  silence.close();
-
   let totalSteps = 0;
   for (const scene of scenes) totalSteps += scene.timingGroups.length + 1;
   let stepsRendered = 0;
@@ -164,7 +128,6 @@ async function exportViaWebCodecs(
   }
 
   await videoEncoder.flush();
-  if (audioEncoder.state !== "closed") await audioEncoder.flush();
   muxer.finalize();
 
   const { buffer } = muxer.target;
