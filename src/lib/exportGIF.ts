@@ -255,7 +255,6 @@ function drawCourtOnCanvas(
 // Player drawing (mirrors exportPNG.ts)
 // ---------------------------------------------------------------------------
 
-const PLAYER_RADIUS = 18;
 const COLOR_OFFENSE_FILL = "#E07B39";
 const COLOR_OFFENSE_STROKE = "#FFFFFF";
 const COLOR_DEFENSE_FILL = "#FFFFFF";
@@ -270,13 +269,13 @@ function drawPlayer(
   position: number,
   px: number,
   py: number,
+  r: number,
   scale: number,
   displayMode: PlayerDisplayMode = "numbers",
   playerNames: Record<string, string> = {},
   offenseColor?: string,
   defenseColor?: string,
 ): void {
-  const r = PLAYER_RADIUS * scale;
   const isOffense = side === "offense";
 
   const offenseFill   = offenseColor ?? COLOR_OFFENSE_FILL;
@@ -299,7 +298,7 @@ function drawPlayer(
   ctx.stroke();
 
   if (!isOffense) {
-    const xSize = 7 * scale;
+    const xSize = r * (7 / 18);
     ctx.strokeStyle = defenseStroke;
     ctx.lineWidth = 2.5 * scale;
     ctx.lineCap = "round";
@@ -341,14 +340,11 @@ function drawPlayer(
 // Ball drawing (mirrors exportPNG.ts)
 // ---------------------------------------------------------------------------
 
-const BALL_RADIUS = 12;
 const COLOR_BALL = "#E05C00";
 const COLOR_BALL_HIGHLIGHT = "#F47B2A";
 const COLOR_SEAM = "#FFFFFF";
-const BALL_ATTACH_OFFSET_Y = -22;
 
-function drawBall(ctx: CanvasRenderingContext2D, px: number, py: number, scale: number): void {
-  const r = BALL_RADIUS * scale;
+function drawBall(ctx: CanvasRenderingContext2D, px: number, py: number, r: number, scale: number): void {
 
   ctx.save();
   ctx.globalAlpha = 0.3;
@@ -692,8 +688,15 @@ export function renderFrame(
   const layout = computeCourtLayout(width);
   const { oobLeft, innerW, innerH } = layout;
 
-  // Scale everything proportionally to canvas width (SD=480 is the baseline).
+  // Scale line widths / arrow sizes proportionally to canvas width (SD=480 is the baseline).
   const scale = width / 480;
+
+  // Token and ball radii — match the editor's proportional formula exactly.
+  const tokenR = Math.max(10, Math.round(innerW * 0.03));
+  const ballR   = Math.max(7,  Math.round(innerW * 0.02));
+  // Ball attachment offset: ball sits just above the player token (negative = upward).
+  // toY already handles the court flip, so we always subtract to go "above" the player.
+  const ballAttachOffsetY = -(tokenR + ballR + 2);
 
   const toX = (n: number) => n * innerW + oobLeft;
   const toY = (n: number) => flipped ? (1 - n) * innerH : n * innerH;
@@ -714,14 +717,14 @@ export function renderFrame(
   // Defense
   for (const p of scene.players.defense) {
     if (p.visible) {
-      drawPlayer(ctx, "defense", p.position, toX(p.x), toY(p.y), scale, displayMode, playerNames, offenseColor, defenseColor);
+      drawPlayer(ctx, "defense", p.position, toX(p.x), toY(p.y), tokenR, scale, displayMode, playerNames, offenseColor, defenseColor);
     }
   }
 
   // Offense
   for (const p of scene.players.offense) {
     if (p.visible) {
-      drawPlayer(ctx, "offense", p.position, toX(p.x), toY(p.y), scale, displayMode, playerNames, offenseColor, defenseColor);
+      drawPlayer(ctx, "offense", p.position, toX(p.x), toY(p.y), tokenR, scale, displayMode, playerNames, offenseColor, defenseColor);
     }
   }
 
@@ -735,11 +738,11 @@ export function renderFrame(
     if (holder) {
       ballPx = {
         x: toX(holder.x),
-        y: toY(holder.y) + (flipped ? -BALL_ATTACH_OFFSET_Y : BALL_ATTACH_OFFSET_Y) * scale,
+        y: toY(holder.y) + ballAttachOffsetY,
       };
     }
   }
-  drawBall(ctx, ballPx.x, ballPx.y, scale);
+  drawBall(ctx, ballPx.x, ballPx.y, ballR, scale);
 
   // Draw screen annotations on top of players so the perpendicular bar is visible
   for (const ann of visibleAnnotations) {
