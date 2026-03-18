@@ -103,18 +103,26 @@ async function exportViaWebCodecs(
     totalDurationMs += (si === scenes.length - 1 ? FINAL_HOLD_MS : SCENE_HOLD_MS) / speed;
   }
 
-  // Encode one chunk of silence covering the full duration
+  // Encode silence in small chunks — AudioEncoder expects ~4096 frames at a time.
+  // Encoding one giant buffer can trigger an async error that closes the encoder.
   const totalSamples = Math.ceil((totalDurationMs / 1000) * SAMPLE_RATE);
-  const silence = new AudioData({
-    format: "f32-planar",
-    sampleRate: SAMPLE_RATE,
-    numberOfFrames: totalSamples,
-    numberOfChannels: 1,
-    timestamp: 0,
-    data: new Float32Array(totalSamples),
-  });
-  audioEncoder.encode(silence);
-  silence.close();
+  const CHUNK_FRAMES = 4096;
+  const silentBuf = new Float32Array(CHUNK_FRAMES);
+  let samplesEncoded = 0;
+  while (samplesEncoded < totalSamples) {
+    const frames = Math.min(CHUNK_FRAMES, totalSamples - samplesEncoded);
+    const chunk = new AudioData({
+      format: "f32-planar",
+      sampleRate: SAMPLE_RATE,
+      numberOfFrames: frames,
+      numberOfChannels: 1,
+      timestamp: Math.round((samplesEncoded / SAMPLE_RATE) * 1_000_000),
+      data: frames === CHUNK_FRAMES ? silentBuf : new Float32Array(frames),
+    });
+    audioEncoder.encode(chunk);
+    chunk.close();
+    samplesEncoded += frames;
+  }
 
   let totalSteps = 0;
   for (const scene of scenes) totalSteps += scene.timingGroups.length + 1;
@@ -158,7 +166,7 @@ async function exportViaWebCodecs(
   }
 
   await videoEncoder.flush();
-  await audioEncoder.flush();
+  if (audioEncoder.state !== "closed") await audioEncoder.flush();
   muxer.finalize();
 
   const { buffer } = muxer.target;
