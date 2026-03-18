@@ -559,7 +559,7 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
   return (
     <div className={`relative ${className ?? "w-full"}`}>
       {/* Court canvas */}
-      <Court variant={variant} onReady={handleCourtReady} className="w-full" paintColor={playColors?.offense} flipped={flipped} />
+      <Court variant={variant} onReady={handleCourtReady} className="w-full" flipped={flipped} />
 
       {/* SVG player + ball overlay — same dimensions as the canvas */}
       {courtSize && (

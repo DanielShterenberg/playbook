@@ -84,11 +84,6 @@ export interface CourtProps {
   onReady?: (payload: CourtReadyPayload) => void;
   className?: string;
   /**
-   * Optional color for the paint (free-throw lane) fill.
-   * Defaults to "#E07B39" (orange).
-   */
-  paintColor?: string;
-  /**
    * When true, flips the court so the basket is at the top (north).
    * The flip is purely visual — normalised coords are unchanged.
    */
@@ -337,7 +332,7 @@ export function drawCourt(
     ctx.restore();
     ctx.stroke();
   } else {
-    drawHalfCourtInner(ctx, cssWidth, cssHeight, paintColor);
+    drawHalfCourtInner(ctx, cssWidth, cssHeight);
   }
 }
 
@@ -345,7 +340,7 @@ export function drawCourt(
 // Component
 // ---------------------------------------------------------------------------
 
-export default function Court({ variant = "half", onReady, className, paintColor, flipped = false }: CourtProps) {
+export default function Court({ variant = "half", onReady, className, flipped = false }: CourtProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -391,14 +386,14 @@ export default function Court({ variant = "half", onReady, className, paintColor
       // Near basket end (bottom half) — normal orientation
       ctx.save();
       ctx.translate(oobLeft, innerH + oobBot);
-      drawHalfCourtInner(ctx, innerW, innerH, paintColor);
+      drawHalfCourtInner(ctx, innerW, innerH);
       ctx.restore();
 
       // Far basket end (top half) — mirrored vertically
       ctx.save();
       ctx.translate(oobLeft, innerH + oobBot);
       ctx.scale(1, -1);
-      drawHalfCourtInner(ctx, innerW, innerH, paintColor);
+      drawHalfCourtInner(ctx, innerW, innerH);
       ctx.restore();
 
       // Centre line
@@ -422,7 +417,7 @@ export default function Court({ variant = "half", onReady, className, paintColor
       // Half court — translate right by OOB margin
       ctx.save();
       ctx.translate(oobLeft, 0);
-      drawHalfCourtInner(ctx, innerW, innerH, paintColor);
+      drawHalfCourtInner(ctx, innerW, innerH);
       ctx.restore();
     }
 
@@ -448,7 +443,7 @@ export default function Court({ variant = "half", onReady, className, paintColor
         playAreaWidth: innerW,
       });
     }
-  }, [variant, onReady, paintColor, flipped]);
+  }, [variant, onReady, flipped]);
 
   useEffect(() => {
     draw();
