@@ -480,9 +480,10 @@ function drawAnnotation(
   oobLeft: number,
 ): void {
   const { from, to, type } = ann;
+  const oobBot = Math.round(innerH * OOB_BOTTOM_FRAC);
   // Convert normalised [0-1] coords to canvas pixels (respects OOB offset + flip)
   const toX = (n: number) => n * innerW + oobLeft;
-  const toY = (n: number) => flipped ? (1 - n) * innerH : n * innerH;
+  const toY = (n: number) => flipped ? (1 - n) * innerH - oobBot : n * innerH;
   const fx = toX(from.x);
   const fy = toY(from.y);
   const tx = toX(to.x);
@@ -690,7 +691,7 @@ export function renderFrame(
 
   // Compute OOB-aware layout — mirrors the editor's Court component exactly.
   const layout = computeCourtLayout(width);
-  const { oobLeft, innerW, innerH } = layout;
+  const { oobLeft, innerW, innerH, oobBot } = layout;
 
   // Token sizes mirror CourtWithPlayers: Math.max(10, round(innerW * 0.03)) for
   // players and Math.max(7, round(innerW * 0.02)) for the ball.
@@ -702,7 +703,10 @@ export function renderFrame(
   const scale = width / 480;
 
   const toX = (n: number) => n * innerW + oobLeft;
-  const toY = (n: number) => flipped ? (1 - n) * innerH : n * innerH;
+  // When flipped, the editor draws the court oobBot pixels lower than the export
+  // (editor uses translate(0, innerH+oobBot) vs export's translate(0, innerH)).
+  // Subtract oobBot so player positions match the editor's visual coordinate frame.
+  const toY = (n: number) => flipped ? (1 - n) * innerH - oobBot : n * innerH;
 
   // Court background + markings (with OOB margins)
   drawCourtOnCanvas(canvas, flipped, layout);
