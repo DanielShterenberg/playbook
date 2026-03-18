@@ -270,14 +270,15 @@ function drawPlayer(
   position: number,
   px: number,
   py: number,
-  scale: number,
+  r: number,
   displayMode: PlayerDisplayMode = "numbers",
   playerNames: Record<string, string> = {},
   offenseColor?: string,
   defenseColor?: string,
 ): void {
-  const r = PLAYER_RADIUS * scale;
   const isOffense = side === "offense";
+  // Scale all size-based values proportionally to the token radius.
+  const s = r / PLAYER_RADIUS;
 
   const offenseFill   = offenseColor ?? COLOR_OFFENSE_FILL;
   const defenseStroke = defenseColor ?? COLOR_DEFENSE_STROKE;
@@ -286,7 +287,7 @@ function drawPlayer(
   ctx.globalAlpha = 0.25;
   ctx.fillStyle = "#000000";
   ctx.beginPath();
-  ctx.arc(px + scale, py + 2 * scale, r, 0, Math.PI * 2);
+  ctx.arc(px + s, py + 2 * s, r, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
@@ -295,13 +296,13 @@ function drawPlayer(
   ctx.fillStyle = isOffense ? offenseFill : COLOR_DEFENSE_FILL;
   ctx.fill();
   ctx.strokeStyle = isOffense ? COLOR_OFFENSE_STROKE : defenseStroke;
-  ctx.lineWidth = (isOffense ? 2 : 2.5) * scale;
+  ctx.lineWidth = (isOffense ? 2 : 2.5) * s;
   ctx.stroke();
 
   if (!isOffense) {
-    const xSize = 7 * scale;
+    const xSize = r * (7 / PLAYER_RADIUS);
     ctx.strokeStyle = defenseStroke;
-    ctx.lineWidth = 2.5 * scale;
+    ctx.lineWidth = 2.5 * s;
     ctx.lineCap = "round";
     ctx.beginPath();
     ctx.moveTo(px - xSize, py - xSize);
@@ -327,13 +328,13 @@ function drawPlayer(
   const fontSize =
     (label.length > 2
       ? Math.max(6, baseFontSize - (label.length - 2) * 1.5)
-      : baseFontSize) * scale;
+      : baseFontSize) * s;
 
   ctx.fillStyle = isOffense ? COLOR_TEXT_OFFENSE : defenseStroke;
   ctx.font = `700 ${fontSize}px system-ui, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const dyOffset = isOffense ? 0 : -9 * scale;
+  const dyOffset = isOffense ? 0 : -9 * s;
   ctx.fillText(label, px, py + dyOffset);
 }
 
@@ -347,14 +348,14 @@ const COLOR_BALL_HIGHLIGHT = "#F47B2A";
 const COLOR_SEAM = "#FFFFFF";
 const BALL_ATTACH_OFFSET_Y = -22;
 
-function drawBall(ctx: CanvasRenderingContext2D, px: number, py: number, scale: number): void {
-  const r = BALL_RADIUS * scale;
+function drawBall(ctx: CanvasRenderingContext2D, px: number, py: number, r: number): void {
+  const s = r / BALL_RADIUS;
 
   ctx.save();
   ctx.globalAlpha = 0.3;
   ctx.fillStyle = "#000000";
   ctx.beginPath();
-  ctx.arc(px + scale, py + 2 * scale, r, 0, Math.PI * 2);
+  ctx.arc(px + s, py + 2 * s, r, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
@@ -367,7 +368,7 @@ function drawBall(ctx: CanvasRenderingContext2D, px: number, py: number, scale: 
   ctx.moveTo(px - r * 0.5, py - r * 0.6);
   ctx.arc(px, py, r * 0.7, Math.PI + 0.6, Math.PI * 2 - 0.4, false);
   ctx.strokeStyle = COLOR_BALL_HIGHLIGHT;
-  ctx.lineWidth = 1.5 * scale;
+  ctx.lineWidth = 1.5 * s;
   ctx.lineCap = "round";
   ctx.globalAlpha = 0.5;
   ctx.stroke();
@@ -377,7 +378,7 @@ function drawBall(ctx: CanvasRenderingContext2D, px: number, py: number, scale: 
     `M ${px} ${py - r} C ${px + r * 0.55} ${py - r * 0.5} ${px + r * 0.55} ${py + r * 0.5} ${px} ${py + r}`,
   );
   ctx.strokeStyle = COLOR_SEAM;
-  ctx.lineWidth = 1.2 * scale;
+  ctx.lineWidth = 1.2 * s;
   ctx.lineCap = "round";
   ctx.stroke(vPath);
 
@@ -692,7 +693,13 @@ export function renderFrame(
   const layout = computeCourtLayout(width);
   const { oobLeft, innerW, innerH } = layout;
 
-  // Scale everything proportionally to canvas width (SD=480 is the baseline).
+  // Token sizes mirror CourtWithPlayers: Math.max(10, round(innerW * 0.03)) for
+  // players and Math.max(7, round(innerW * 0.02)) for the ball.
+  const tokenR = Math.max(10, Math.round(innerW * 0.03));
+  const ballR  = Math.max(7,  Math.round(innerW * 0.02));
+  const ballAttachOffsetY = -(tokenR + ballR + 2);
+
+  // Scale for annotation stroke widths etc. (SD=480 is the baseline).
   const scale = width / 480;
 
   const toX = (n: number) => n * innerW + oobLeft;
@@ -714,14 +721,14 @@ export function renderFrame(
   // Defense
   for (const p of scene.players.defense) {
     if (p.visible) {
-      drawPlayer(ctx, "defense", p.position, toX(p.x), toY(p.y), scale, displayMode, playerNames, offenseColor, defenseColor);
+      drawPlayer(ctx, "defense", p.position, toX(p.x), toY(p.y), tokenR, displayMode, playerNames, offenseColor, defenseColor);
     }
   }
 
   // Offense
   for (const p of scene.players.offense) {
     if (p.visible) {
-      drawPlayer(ctx, "offense", p.position, toX(p.x), toY(p.y), scale, displayMode, playerNames, offenseColor, defenseColor);
+      drawPlayer(ctx, "offense", p.position, toX(p.x), toY(p.y), tokenR, displayMode, playerNames, offenseColor, defenseColor);
     }
   }
 
@@ -735,11 +742,11 @@ export function renderFrame(
     if (holder) {
       ballPx = {
         x: toX(holder.x),
-        y: toY(holder.y) + (flipped ? -BALL_ATTACH_OFFSET_Y : BALL_ATTACH_OFFSET_Y) * scale,
+        y: toY(holder.y) + (flipped ? -ballAttachOffsetY : ballAttachOffsetY),
       };
     }
   }
-  drawBall(ctx, ballPx.x, ballPx.y, scale);
+  drawBall(ctx, ballPx.x, ballPx.y, ballR);
 
   // Draw screen annotations on top of players so the perpendicular bar is visible
   for (const ann of visibleAnnotations) {
