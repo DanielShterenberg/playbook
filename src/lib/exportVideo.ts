@@ -19,6 +19,7 @@
 
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 import type { Play, Annotation } from "./types";
+import { COURT_ASPECT_RATIO } from "@/components/court/courtDimensions";
 import {
   renderFrame,
   SCENE_HOLD_MS,
@@ -53,7 +54,7 @@ async function exportViaWebCodecs(
   const { speed = 1, resolution = "sd", onProgress, displayMode = "numbers", playerNames = {}, offenseColor, defenseColor } = options;
 
   const width  = RESOLUTION_WIDTH[resolution];
-  const height = computeCourtLayout(width).totalHeight;
+  const height = Math.round(width / COURT_ASPECT_RATIO);
   // H.264 requires dimensions divisible by 2
   const encW = width  % 2 === 0 ? width  : width  - 1;
   const encH = height % 2 === 0 ? height : height - 1;
@@ -108,26 +109,18 @@ async function exportViaWebCodecs(
     totalDurationMs += (si === scenes.length - 1 ? FINAL_HOLD_MS : SCENE_HOLD_MS) / speed;
   }
 
-  // Encode silence in small chunks — AudioEncoder expects ~4096 frames at a time.
-  // Encoding one giant buffer can trigger an async error that closes the encoder.
+  // Encode one silent AAC chunk covering the full play duration.
   const totalSamples = Math.ceil((totalDurationMs / 1000) * SAMPLE_RATE);
-  const CHUNK_FRAMES = 4096;
-  const silentBuf = new Float32Array(CHUNK_FRAMES);
-  let samplesEncoded = 0;
-  while (samplesEncoded < totalSamples) {
-    const frames = Math.min(CHUNK_FRAMES, totalSamples - samplesEncoded);
-    const chunk = new AudioData({
-      format: "f32-planar",
-      sampleRate: SAMPLE_RATE,
-      numberOfFrames: frames,
-      numberOfChannels: 1,
-      timestamp: Math.round((samplesEncoded / SAMPLE_RATE) * 1_000_000),
-      data: frames === CHUNK_FRAMES ? silentBuf : new Float32Array(frames),
-    });
-    audioEncoder.encode(chunk);
-    chunk.close();
-    samplesEncoded += frames;
-  }
+  const silence = new AudioData({
+    format: "f32-planar",
+    sampleRate: SAMPLE_RATE,
+    numberOfFrames: totalSamples,
+    numberOfChannels: 1,
+    timestamp: 0,
+    data: new Float32Array(totalSamples),
+  });
+  audioEncoder.encode(silence);
+  silence.close();
 
   let totalSteps = 0;
   for (const scene of scenes) totalSteps += scene.timingGroups.length + 1;
