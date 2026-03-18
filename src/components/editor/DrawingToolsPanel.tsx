@@ -182,28 +182,6 @@ function HandoffIcon({ active }: { active: boolean }) {
   );
 }
 
-/** Eraser tool icon */
-function EraserIcon({ active }: { active: boolean }) {
-  const c = active ? ACTIVE_COLOR : IDLE_COLOR;
-  return (
-    <svg viewBox="0 0 28 28" width={22} height={22} aria-hidden="true">
-      <rect
-        x="5"
-        y="14"
-        width="18"
-        height="10"
-        rx="2"
-        fill="none"
-        stroke={c}
-        strokeWidth={2}
-      />
-      <line x1="5" y1="19" x2="23" y2="19" stroke={c} strokeWidth={1.5} />
-      <line x1="12" y1="14" x2="8" y2="5" stroke={c} strokeWidth={2} strokeLinecap="round" />
-      <line x1="16" y1="14" x2="20" y2="5" stroke={c} strokeWidth={2} strokeLinecap="round" />
-    </svg>
-  );
-}
-
 const TOOLS: ToolDef[] = [
   { id: "select",   label: "Select",   shortcut: "V", Icon: SelectIcon   },
   { id: "movement", label: "Move",     shortcut: "M", Icon: MovementIcon },
@@ -213,7 +191,6 @@ const TOOLS: ToolDef[] = [
   { id: "cut",      label: "Cut",      shortcut: "C", Icon: CutIcon      },
   { id: "guard",    label: "Guard",    shortcut: "G", Icon: GuardIcon    },
   { id: "handoff",  label: "Hand-off", shortcut: "H", Icon: HandoffIcon  },
-  { id: "eraser",   label: "Eraser",   shortcut: "E", Icon: EraserIcon   },
 ];
 
 /** CSS cursor per tool */
@@ -226,7 +203,6 @@ export const TOOL_CURSOR: Record<DrawingTool, string> = {
   cut:      "crosshair",
   guard:    "crosshair",
   handoff:  "crosshair",
-  eraser:   "cell",
 };
 
 // ---------------------------------------------------------------------------

@@ -818,7 +818,7 @@ export default function AnnotationLayer({
     };
   }, []);
 
-  // Handle annotation selection / eraser click on background
+  // Handle annotation selection / deselect click on background
   const handleSVGClick = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
       if (selectedTool === "select") {
@@ -843,7 +843,7 @@ export default function AnnotationLayer({
   // Mouse down — start drawing
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
-      if (!isDrawingTool || selectedTool === "eraser") return;
+      if (!isDrawingTool) return;
       e.preventDefault();
 
       legExtensionRef.current = null;
@@ -1103,16 +1103,11 @@ export default function AnnotationLayer({
     [sceneId],
   );
 
-  // Handle eraser click on annotation
   const handleAnnotationSelect = useCallback(
     (id: string) => {
-      if (selectedTool === "eraser") {
-        if (sceneId) removeAnnotation(sceneId, id);
-      } else {
-        setSelectedAnnotationId(id);
-      }
+      setSelectedAnnotationId(id);
     },
-    [selectedTool, sceneId, removeAnnotation, setSelectedAnnotationId],
+    [setSelectedAnnotationId],
   );
 
   const cursor = (cpDragging || toDragging) ? "grabbing" : TOOL_CURSOR[selectedTool];

@@ -7,7 +7,7 @@
  *
  * Shortcuts registered here:
  *   Tool switching   : V (select), M (move), D (dribble), P (pass),
- *                      S (screen), C (cut), G (guard), E (eraser)
+ *                      S (screen), C (cut), G (guard)
  *   Playback         : Space (play/pause), Left/Right (step scenes),
  *                      L (loop toggle)
  *   Scene navigation : Ctrl+Right / Ctrl+Left (next/prev scene)
@@ -48,7 +48,6 @@ const TOOL_KEY_MAP: Record<string, DrawingTool> = {
   c: "cut",
   g: "guard",
   h: "handoff",
-  e: "eraser",
 };
 
 export interface KeyboardShortcutsOptions {

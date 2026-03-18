@@ -29,8 +29,7 @@ export type DrawingTool =
   | "screen"
   | "cut"
   | "guard"
-  | "handoff"
-  | "eraser";
+  | "handoff";
 
 export type PlaybackSpeed = 0.5 | 1 | 1.5 | 2;
 
