@@ -735,7 +735,6 @@ export default function AnnotationLayer({
   const selectedAnnotationId = useStore((s) => s.selectedAnnotationId);
   const setSelectedAnnotationId = useStore((s) => s.setSelectedAnnotationId);
   const addAnnotation = useStore((s) => s.addAnnotation);
-  const removeAnnotation = useStore((s) => s.removeAnnotation);
   const updateAnnotation = useStore((s) => s.updateAnnotation);
   const appendAnnotationLeg = useStore((s) => s.appendAnnotationLeg);
   const isPlaying = useStore((s) => s.isPlaying);
