@@ -94,10 +94,10 @@ export interface CourtProps {
 // Out-of-bounds margin fractions (relative to inner court dimensions)
 // ---------------------------------------------------------------------------
 
-/** Side OOB margin on each side, as a fraction of inner court width. */
-export const OOB_SIDE_FRAC = 0.03;
-/** Bottom (baseline) OOB margin, as a fraction of inner court height. */
-export const OOB_BOTTOM_FRAC = 0.07;
+// OOB margin constants live in courtLayout.ts (shared with export paths).
+// Imported for internal use and re-exported so existing imports from this file keep working.
+export { OOB_SIDE_FRAC, OOB_BOTTOM_FRAC } from "@/lib/courtLayout";
+import { OOB_SIDE_FRAC, OOB_BOTTOM_FRAC } from "@/lib/courtLayout";
 // No top margin — the half-court line is the court boundary.
 
 // ---------------------------------------------------------------------------

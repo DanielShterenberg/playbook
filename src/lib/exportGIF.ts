@@ -60,7 +60,7 @@ import {
   FT_CIRCLE_CENTER_Y,
   CENTRE_CIRCLE_RADIUS,
 } from "@/components/court/courtDimensions";
-import { OOB_SIDE_FRAC, OOB_BOTTOM_FRAC } from "@/components/court/Court";
+import { OOB_SIDE_FRAC, OOB_BOTTOM_FRAC } from "@/lib/courtLayout";
 
 // ---------------------------------------------------------------------------
 // Constants
