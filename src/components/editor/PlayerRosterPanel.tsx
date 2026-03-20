@@ -19,6 +19,8 @@ import { useState } from "react";
 import { useStore, selectEditorScene } from "@/lib/store";
 import type { PlayerDisplayMode } from "@/lib/store";
 
+const POSITION_ABBRS: Record<number, string> = { 1: "PG", 2: "SG", 3: "SF", 4: "PF", 5: "C" };
+
 // ---------------------------------------------------------------------------
 // Display mode toggle button group
 // ---------------------------------------------------------------------------
@@ -127,7 +129,9 @@ export default function PlayerRosterPanel() {
             <ul className="flex flex-col gap-1">
               {offensePlayers.map((p) => (
                 <li key={p.position} className="flex items-center justify-between gap-1">
-                  <span className="flex-shrink-0 font-medium text-gray-700">O{p.position}</span>
+                  <span className="flex-shrink-0 font-medium text-gray-700">
+                    {displayMode === "abbreviations" ? POSITION_ABBRS[p.position] : `O${p.position}`}
+                  </span>
                   {displayMode === "names" ? (
                     <input
                       type="text"
@@ -165,7 +169,9 @@ export default function PlayerRosterPanel() {
             <ul className="flex flex-col gap-1">
               {defensePlayers.map((p) => (
                 <li key={p.position} className="flex items-center justify-between gap-1">
-                  <span className="flex-shrink-0 font-medium text-gray-700">X{p.position}</span>
+                  <span className="flex-shrink-0 font-medium text-gray-700">
+                    {displayMode === "abbreviations" ? POSITION_ABBRS[p.position] : `X${p.position}`}
+                  </span>
                   {displayMode === "names" ? (
                     <input
                       type="text"
