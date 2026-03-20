@@ -13,6 +13,15 @@
 - Always rebase before creating PR; force push is expected
 - Use `fix/` prefix for bug fixes, `feature/` for new features
 
+## Testing
+- Run tests: `npm test` (Vitest, ~100ms)
+- Tests live in `src/__tests__/`
+- CI runs tests + build on every push/PR via `.github/workflows/ci.yml`
+- Pre-commit hook runs tests automatically — activate once after cloning:
+  ```
+  git config core.hooksPath .githooks
+  ```
+
 ## Key Conventions
 
 ### Zustand store
