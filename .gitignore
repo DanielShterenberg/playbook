@@ -42,3 +42,6 @@ next-env.d.ts
 
 # Claude Code local files (agent memory, local settings)
 .claude/
+
+# Babysitter artifacts
+.a5c/
