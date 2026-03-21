@@ -39,9 +39,9 @@
 - **Always verify SVG arcs in the browser** via `evaluate_script` + `take_screenshot` before pushing
 
 ### Player tokens
-- `PlayerToken.tsx`: radius prop scales everything proportionally (X size, font, stroke)
+- `PlayerToken.tsx`: radius prop scales everything proportionally (font, stroke)
 - Default radius = 18px; mobile uses `Math.max(10, courtWidth * 0.03)`
-- Defense: X mark size = `radius * 5 / 18`, label font same as offense (11px base)
+- Defense tokens show centered label (no X mark) — color/outline distinguishes them from offense
 
 ### EditorCourtArea infinite loop guard
 - Never put `currentPlay` in useEffect deps while also calling `setCurrentPlay` inside it
@@ -52,10 +52,6 @@
 - Password: Test1234!
 - Team: מכבי קדימה (admin role)
 
-## Open Issues (as of 2026-02-21)
-- #77  GIF export
-- #128 Defender follow/guard assignment
-- #129 Multi-leg player paths
-- #130 Custom team colors
-- #132 Presentation mode
-- #133 Scene comments with threading
+## Issues & Backlog
+
+Track open issues on GitHub: https://github.com/DanielShterenberg/playbook/issues
