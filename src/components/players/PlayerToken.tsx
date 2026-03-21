@@ -45,7 +45,6 @@ const COLOR_OFFENSE_STROKE = "#FFFFFF";
 const COLOR_DEFENSE_FILL = "#FFFFFF";
 const COLOR_DEFENSE_STROKE = "#1E3A5F"; // dark navy
 const COLOR_TEXT_OFFENSE = "#FFFFFF";
-// Defense text color uses the resolved defense color (same as border/X stroke)
 
 // ---------------------------------------------------------------------------
 // Types
@@ -228,19 +227,14 @@ export default function PlayerToken({
     label = abbrs[position] ?? String(position);
   } else {
     // "numbers" — default
-    label = isOffense ? String(position) : `X${position}`;
+    label = String(position);
   }
 
-  // Scale X-line extent and font proportionally to radius
-  const xSize = Math.round(radius * 5 / PLAYER_RADIUS);
   const scaledStrokeWidth = Math.max(1.5, strokeWidth * radius / PLAYER_RADIUS);
 
   // Shrink font for long names so they fit inside the token
   const baseFontSize = Math.max(6, Math.round(11 * radius / PLAYER_RADIUS));
   const fontSize = label.length > 2 ? Math.max(5, baseFontSize - (label.length - 2) * 1.5) : baseFontSize;
-
-  // Defense label sits above the X mark; scale the offset with radius
-  const textDy = isOffense ? 0 : -Math.round(radius * 7 / PLAYER_RADIUS);
 
   return (
     <g
@@ -265,29 +259,6 @@ export default function PlayerToken({
         stroke={strokeColor}
         strokeWidth={scaledStrokeWidth}
       />
-      {/* Defensive X lines */}
-      {!isOffense && (
-        <>
-          <line
-            x1={-xSize}
-            y1={-xSize}
-            x2={xSize}
-            y2={xSize}
-            stroke={resolvedDefenseColor}
-            strokeWidth={scaledStrokeWidth}
-            strokeLinecap="round"
-          />
-          <line
-            x1={xSize}
-            y1={-xSize}
-            x2={-xSize}
-            y2={xSize}
-            stroke={resolvedDefenseColor}
-            strokeWidth={scaledStrokeWidth}
-            strokeLinecap="round"
-          />
-        </>
-      )}
       {/* Position label */}
       <text
         textAnchor="middle"
@@ -296,7 +267,6 @@ export default function PlayerToken({
         fontSize={fontSize}
         fontWeight="700"
         fontFamily="system-ui, sans-serif"
-        dy={textDy}
         style={{ pointerEvents: "none", userSelect: "none" }}
       >
         {label}
