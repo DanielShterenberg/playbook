@@ -165,12 +165,11 @@ export interface CourtWithPlayersProps {
 }
 
 export default function CourtWithPlayers({ sceneId, scene, variant = "half", className, readOnly = false, flipped = false, activeStep }: CourtWithPlayersProps) {
-  const updatePlayerState        = useStore((s) => s.updatePlayerState);
-  const updateBallState          = useStore((s) => s.updateBallState);
-  const togglePlayerVisibility   = useStore((s) => s.togglePlayerVisibility);
-  const displayMode              = useStore((s) => s.playerDisplayMode);
-  const playerNames              = useStore((s) => s.playerNames);
-  const playColors               = useStore((s) => s.currentPlay?.colors);
+  const updatePlayerState  = useStore((s) => s.updatePlayerState);
+  const updateBallState    = useStore((s) => s.updateBallState);
+  const displayMode        = useStore((s) => s.playerDisplayMode);
+  const playerNames        = useStore((s) => s.playerNames);
+  const playColors         = useStore((s) => s.currentPlay?.colors);
 
   // Court layout reported by the Court canvas
   const [courtSize, setCourtSize] = useState<{
@@ -583,66 +582,54 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
             {/* Defensive players (rendered first = underneath offensive) */}
             {defensePx
               ?.filter((p) => {
-                // In readOnly mode, hide invisible players entirely.
-                // In editor mode, render all players (hidden ones appear as ghosts).
-                if (!readOnly) return true;
+                // Read visibility from scene (Zustand source of truth) so that
+                // togglePlayerVisibility changes are reflected immediately
+                // without relying on local pixel state staying in sync.
                 const scenePlayer = defenseVisible?.find((sp) => sp.position === p.position);
                 return scenePlayer ? scenePlayer.visible : p.visible;
               })
-              .map((p) => {
-                const scenePlayer = defenseVisible?.find((sp) => sp.position === p.position);
-                const isVisible = scenePlayer ? scenePlayer.visible : p.visible;
-                return (
-                  <PlayerToken
-                    key={`defense-${p.position}`}
-                    side="defense"
-                    position={p.position}
-                    cx={p.px}
-                    cy={p.py}
-                    courtBounds={{ width: courtSize.width, height: courtSize.height, minY: playAreaRef.current.offsetY > 0 ? playAreaRef.current.offsetY : undefined }}
-                    onDrag={(x, y) => handleDefenseDrag(p.position, x, y)}
-                    onDragEnd={(x, y) => handleDefenseDragEnd(p.position, x, y)}
-                    onTap={sceneId ? () => togglePlayerVisibility(sceneId, "defense", p.position) : undefined}
-                    visible={isVisible}
-                    displayMode={displayMode}
-                    playerName={playerNames[`defense-${p.position}`]}
-                    radius={tokenRadius}
-                    defenseColor={playColors?.defense}
-                  />
-                );
-              })}
+              .map((p) => (
+                <PlayerToken
+                  key={`defense-${p.position}`}
+                  side="defense"
+                  position={p.position}
+                  cx={p.px}
+                  cy={p.py}
+                  courtBounds={{ width: courtSize.width, height: courtSize.height, minY: playAreaRef.current.offsetY > 0 ? playAreaRef.current.offsetY : undefined }}
+                  onDrag={(x, y) => handleDefenseDrag(p.position, x, y)}
+                  onDragEnd={(x, y) => handleDefenseDragEnd(p.position, x, y)}
+                  displayMode={displayMode}
+                  playerName={playerNames[`defense-${p.position}`]}
+                  radius={tokenRadius}
+                  defenseColor={playColors?.defense}
+                />
+              ))}
 
             {/* Offensive players (rendered on top of defensive) */}
             {offensePx
               ?.filter((p) => {
-                // In readOnly mode, hide invisible players entirely.
-                // In editor mode, render all players (hidden ones appear as ghosts).
-                if (!readOnly) return true;
+                // Read visibility from scene (Zustand source of truth) so that
+                // togglePlayerVisibility changes are reflected immediately
+                // without relying on local pixel state staying in sync.
                 const scenePlayer = offenseVisible?.find((sp) => sp.position === p.position);
                 return scenePlayer ? scenePlayer.visible : p.visible;
               })
-              .map((p) => {
-                const scenePlayer = offenseVisible?.find((sp) => sp.position === p.position);
-                const isVisible = scenePlayer ? scenePlayer.visible : p.visible;
-                return (
-                  <PlayerToken
-                    key={`offense-${p.position}`}
-                    side="offense"
-                    position={p.position}
-                    cx={p.px}
-                    cy={p.py}
-                    courtBounds={{ width: courtSize.width, height: courtSize.height, minY: playAreaRef.current.offsetY > 0 ? playAreaRef.current.offsetY : undefined }}
-                    onDrag={(x, y) => handleOffenseDrag(p.position, x, y)}
-                    onDragEnd={(x, y) => handleOffenseDragEnd(p.position, x, y)}
-                    onTap={sceneId ? () => togglePlayerVisibility(sceneId, "offense", p.position) : undefined}
-                    visible={isVisible}
-                    displayMode={displayMode}
-                    playerName={playerNames[`offense-${p.position}`]}
-                    radius={tokenRadius}
-                    offenseColor={playColors?.offense}
-                  />
-                );
-              })}
+              .map((p) => (
+                <PlayerToken
+                  key={`offense-${p.position}`}
+                  side="offense"
+                  position={p.position}
+                  cx={p.px}
+                  cy={p.py}
+                  courtBounds={{ width: courtSize.width, height: courtSize.height, minY: playAreaRef.current.offsetY > 0 ? playAreaRef.current.offsetY : undefined }}
+                  onDrag={(x, y) => handleOffenseDrag(p.position, x, y)}
+                  onDragEnd={(x, y) => handleOffenseDragEnd(p.position, x, y)}
+                  displayMode={displayMode}
+                  playerName={playerNames[`offense-${p.position}`]}
+                  radius={tokenRadius}
+                  offenseColor={playColors?.offense}
+                />
+              ))}
 
             {/* Basketball — rendered on top of all players */}
             {effectiveBall && (

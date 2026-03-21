@@ -45,14 +45,10 @@ const COLOR_OFFENSE_STROKE = "#FFFFFF";
 const COLOR_DEFENSE_FILL = "#FFFFFF";
 const COLOR_DEFENSE_STROKE = "#1E3A5F"; // dark navy
 const COLOR_TEXT_OFFENSE = "#FFFFFF";
-// Defense text color uses the resolved defense color (same as border/X stroke)
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-/** Pointer movement threshold (CSS px) below which a press is treated as a tap. */
-const TAP_THRESHOLD = 8;
 
 export interface PlayerTokenProps {
   /** "offense" or "defense" */
@@ -67,11 +63,6 @@ export interface PlayerTokenProps {
   onDrag: (newCx: number, newCy: number) => void;
   /** Called when drag ends, signals store should be updated */
   onDragEnd: (newCx: number, newCy: number) => void;
-  /**
-   * Called when the token is tapped (pointer pressed + released without moving
-   * more than TAP_THRESHOLD pixels). Used to toggle player visibility.
-   */
-  onTap?: () => void;
   /** Bounding box (in CSS px) to clamp drag inside the court */
   courtBounds: { width: number; height: number; minY?: number };
   /**
@@ -98,11 +89,6 @@ export interface PlayerTokenProps {
    * Only used when side === "defense".
    */
   defenseColor?: string;
-  /**
-   * When false, the token is rendered as a ghost (semi-transparent, dashed
-   * border) to indicate the player is hidden. Defaults to true.
-   */
-  visible?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -116,14 +102,12 @@ export default function PlayerToken({
   cy,
   onDrag,
   onDragEnd,
-  onTap,
   courtBounds,
   displayMode = "numbers",
   playerName,
   radius = PLAYER_RADIUS,
   offenseColor,
   defenseColor,
-  visible = true,
 }: PlayerTokenProps) {
   const isDragging = useRef(false);
   const dragStart = useRef<{ mouseX: number; mouseY: number; playerCx: number; playerCy: number }>({
@@ -158,16 +142,12 @@ export default function PlayerToken({
       isDragging.current = false;
       const dx = e.clientX - dragStart.current.mouseX;
       const dy = e.clientY - dragStart.current.mouseY;
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-      if (Math.sqrt(dx * dx + dy * dy) < TAP_THRESHOLD) {
-        onTap?.();
-        return;
-      }
       const { x, y } = clamp(dragStart.current.playerCx + dx, dragStart.current.playerCy + dy);
       onDragEnd(x, y);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
     },
-    [clamp, onDragEnd, onTap, handleMouseMove],
+    [clamp, onDragEnd, handleMouseMove],
   );
 
   const handleMouseDown = useCallback(
@@ -200,21 +180,17 @@ export default function PlayerToken({
     (e: TouchEvent) => {
       if (!isDragging.current) return;
       isDragging.current = false;
-      window.removeEventListener("touchmove", handleTouchMove);
-      window.removeEventListener("touchend", handleTouchEnd);
       const touch = e.changedTouches[0];
       if (touch) {
         const dx = touch.clientX - dragStart.current.mouseX;
         const dy = touch.clientY - dragStart.current.mouseY;
-        if (Math.sqrt(dx * dx + dy * dy) < TAP_THRESHOLD) {
-          onTap?.();
-          return;
-        }
         const { x, y } = clamp(dragStart.current.playerCx + dx, dragStart.current.playerCy + dy);
         onDragEnd(x, y);
       }
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
     },
-    [clamp, onDragEnd, onTap, handleTouchMove],
+    [clamp, onDragEnd, handleTouchMove],
   );
 
   const handleTouchStart = useCallback(
@@ -251,72 +227,38 @@ export default function PlayerToken({
     label = abbrs[position] ?? String(position);
   } else {
     // "numbers" — default
-    label = isOffense ? String(position) : `X${position}`;
+    label = String(position);
   }
 
-  // Scale X-line extent and font proportionally to radius
-  const xSize = Math.round(radius * 5 / PLAYER_RADIUS);
   const scaledStrokeWidth = Math.max(1.5, strokeWidth * radius / PLAYER_RADIUS);
 
   // Shrink font for long names so they fit inside the token
   const baseFontSize = Math.max(6, Math.round(11 * radius / PLAYER_RADIUS));
   const fontSize = label.length > 2 ? Math.max(5, baseFontSize - (label.length - 2) * 1.5) : baseFontSize;
 
-  // Defense label sits above the X mark; scale the offset with radius
-  const textDy = isOffense ? 0 : -Math.round(radius * 7 / PLAYER_RADIUS);
-
-  const ghostOpacity = visible ? 1 : 0.35;
-  const dashArray = visible ? undefined : `${Math.round(radius * 0.6)} ${Math.round(radius * 0.4)}`;
-
   return (
     <g
       transform={`translate(${cx}, ${cy})`}
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}
-      style={{ cursor: "grab", opacity: ghostOpacity }}
+      style={{ cursor: "grab" }}
       role="button"
-      aria-label={`${isOffense ? "Offensive" : "Defensive"} player ${position}${visible ? "" : " (hidden)"}`}
+      aria-label={`${isOffense ? "Offensive" : "Defensive"} player ${position}`}
     >
       {/* Drop shadow */}
-      {visible && (
-        <circle
-          r={radius}
-          cx={1}
-          cy={2}
-          fill="rgba(0,0,0,0.25)"
-        />
-      )}
+      <circle
+        r={radius}
+        cx={1}
+        cy={2}
+        fill="rgba(0,0,0,0.25)"
+      />
       {/* Main circle */}
       <circle
         r={radius}
         fill={fillColor}
         stroke={strokeColor}
         strokeWidth={scaledStrokeWidth}
-        strokeDasharray={dashArray}
       />
-      {/* Defensive X lines */}
-      {!isOffense && (
-        <>
-          <line
-            x1={-xSize}
-            y1={-xSize}
-            x2={xSize}
-            y2={xSize}
-            stroke={resolvedDefenseColor}
-            strokeWidth={scaledStrokeWidth}
-            strokeLinecap="round"
-          />
-          <line
-            x1={xSize}
-            y1={-xSize}
-            x2={-xSize}
-            y2={xSize}
-            stroke={resolvedDefenseColor}
-            strokeWidth={scaledStrokeWidth}
-            strokeLinecap="round"
-          />
-        </>
-      )}
       {/* Position label */}
       <text
         textAnchor="middle"
@@ -325,7 +267,6 @@ export default function PlayerToken({
         fontSize={fontSize}
         fontWeight="700"
         fontFamily="system-ui, sans-serif"
-        dy={textDy}
         style={{ pointerEvents: "none", userSelect: "none" }}
       >
         {label}
