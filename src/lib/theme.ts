@@ -2,8 +2,9 @@
  * App theme (light / dark).
  *
  * The source of truth is the `data-theme` attribute on <html>: an inline
- * script in the root layout sets it before first paint (THEME_INIT_SCRIPT), and
- * setTheme updates it and remembers the choice in localStorage.
+ * script in the root layout sets it before first paint (THEME_INIT_SCRIPT) from
+ * the stored choice, else the device's colour scheme; setTheme updates it and
+ * remembers the choice in localStorage.
  *
  * Deliberately NOT part of the Zustand editor store: every write there goes
  * through undo history, and a theme toggle must not become an undo step.
@@ -56,8 +57,8 @@ function onStorage(e: StorageEvent): void {
 }
 
 /**
- * Runs in <head> before first paint so a stored dark choice never flashes
- * light. Only an explicit stored choice is honoured for now; following the
- * device setting is switched on once every screen is themed.
+ * Runs in <head> before first paint so the page never flashes the wrong
+ * theme. A stored choice (the toggle) wins; with none, the device's colour
+ * scheme decides.
  */
-export const THEME_INIT_SCRIPT = `try{if(localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)})==="dark")document.documentElement.dataset.theme="dark"}catch(e){}`;
+export const THEME_INIT_SCRIPT = `try{var t=localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});if(t!=="light"&&t!=="dark")t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.dataset.theme=t}catch(e){}`;
