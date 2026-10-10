@@ -17,6 +17,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import Logo from "@/components/brand/Logo";
 import {
   signInWithEmail,
   signUpWithEmail,
@@ -122,24 +123,8 @@ function SignInContent() {
       >
         {/* Logo + title */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <svg
-            width={40}
-            height={40}
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-            style={{ display: "inline-block", marginBottom: 10 }}
-          >
-            <circle cx={12} cy={12} r={10} fill="#F97316" />
-            <path d="M12 2 A10 10 0 0 1 22 12" stroke="#fff" strokeWidth={1.5} fill="none" />
-            <path d="M2 12 A10 10 0 0 1 12 2" stroke="#fff" strokeWidth={1.5} fill="none" />
-            <line x1={12} y1={2} x2={12} y2={22} stroke="#fff" strokeWidth={1.5} />
-            <line x1={2} y1={12} x2={22} y2={12} stroke="#fff" strokeWidth={1.5} />
-            <path d="M4.9 5.6 Q12 10 19.1 5.6" stroke="#fff" strokeWidth={1.2} fill="none" />
-            <path d="M4.9 18.4 Q12 14 19.1 18.4" stroke="#fff" strokeWidth={1.2} fill="none" />
-          </svg>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#111827" }}>
-            Playbook
+          <h1 style={{ margin: 0 }}>
+            <Logo size={44} stacked wordmarkColor="#141A23" />
           </h1>
           <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6B7280" }}>
             {mode === "signin" ? "Sign in to your account" : "Create a new account"}

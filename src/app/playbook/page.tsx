@@ -24,6 +24,7 @@ import { loadPlaysForUser, loadPlaysForTeam } from "@/lib/db";
 import { ensureInviteDoc } from "@/lib/team";
 import CreateTeamModal from "@/components/playbook/CreateTeamModal";
 import { useCourtPalette } from "@/hooks/useTheme";
+import Logo from "@/components/brand/Logo";
 
 const CATEGORY_FILTERS: { value: Category | "all"; label: string }[] = [
   { value: "all", label: "All" },
@@ -134,55 +135,9 @@ export default function PlaybookPage() {
             gap: 16,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {/* Basketball icon */}
-            <svg
-              width={24}
-              height={24}
-              viewBox="0 0 24 24"
-              fill="none"
-              aria-hidden="true"
-            >
-              <circle cx={12} cy={12} r={10} fill="#F97316" />
-              <path
-                d="M12 2 A10 10 0 0 1 22 12"
-                stroke="#fff"
-                strokeWidth={1.5}
-                fill="none"
-              />
-              <path
-                d="M2 12 A10 10 0 0 1 12 2"
-                stroke="#fff"
-                strokeWidth={1.5}
-                fill="none"
-              />
-              <line x1={12} y1={2} x2={12} y2={22} stroke="#fff" strokeWidth={1.5} />
-              <line x1={2} y1={12} x2={22} y2={12} stroke="#fff" strokeWidth={1.5} />
-              <path
-                d="M4.9 5.6 Q12 10 19.1 5.6"
-                stroke="#fff"
-                strokeWidth={1.2}
-                fill="none"
-              />
-              <path
-                d="M4.9 18.4 Q12 14 19.1 18.4"
-                stroke="#fff"
-                strokeWidth={1.2}
-                fill="none"
-              />
-            </svg>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: 18,
-                fontWeight: 700,
-                color: "#111827",
-                letterSpacing: "-0.01em",
-              }}
-            >
-              Playbook
-            </h1>
-          </div>
+          <h1 style={{ margin: 0, display: "flex" }}>
+            <Logo size={30} wordmarkColor="#141A23" />
+          </h1>
 
           {/* Team badge / Create Team button */}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

@@ -18,6 +18,12 @@
   --color-muted: #5B6675;
   --color-accent: #FF7A1A;
   --color-accent-ink: #0E1116;
+  /* Text-safe accent (links, small labels) — the fill accent fails contrast on white */
+  --color-accent-text: #A84A06;
+  --color-chip: #E8ECF1;
+  --color-line-strong: #8A94A1;
+  --color-danger: #B42318;
+  --color-success: #1F5A35;
 }
 
 [data-theme="dark"] {
@@ -29,12 +35,16 @@
   --color-line: #262D38;
   --color-ink: #E8ECF1;
   --color-muted: #9AA5B4;
+  --color-accent-text: #FF9A4D;
+  --color-chip: #262D38;
+  --color-line-strong: #3A4453;
+  --color-danger: #F87171;
+  --color-success: #34D399;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
 }
 
 /*

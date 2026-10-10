@@ -48,7 +48,7 @@ export default function EditorAuthGate({ children }: { children: React.ReactNode
           <circle cx={18} cy={18} r={14} stroke="#E5E7EB" strokeWidth={4} />
           <path
             d="M18 4 A14 14 0 0 1 32 18"
-            stroke="#F97316"
+            stroke="#FF7A1A"
             strokeWidth={4}
             strokeLinecap="round"
           />

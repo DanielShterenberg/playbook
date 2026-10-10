@@ -221,6 +221,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
         dominantBaseline="central"
         fontSize={9}
         fontWeight="bold"
+        fontFamily="system-ui, sans-serif"
         fill="#fff"
       >
         {step}

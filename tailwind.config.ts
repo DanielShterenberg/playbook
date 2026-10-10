@@ -9,6 +9,11 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-body)", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "var(--font-body)", "system-ui", "sans-serif"],
+        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
+      },
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
@@ -20,6 +25,11 @@ const config: Config = {
         muted: "var(--color-muted)",
         accent: "var(--color-accent)",
         "accent-ink": "var(--color-accent-ink)",
+        "accent-text": "var(--color-accent-text)",
+        chip: "var(--color-chip)",
+        "line-strong": "var(--color-line-strong)",
+        danger: "var(--color-danger)",
+        success: "var(--color-success)",
       },
     },
   },
