@@ -13,15 +13,19 @@
  * avoid loading it on the server.
  *
  * Coordinate conventions:
- *   - Player positions are normalised [0-1] in play-area space.
- *     For half court: play area = full canvas (paOffY = 0).
- *     For full court: play area = bottom half (paOffY = halfH).
- *   - Annotations are stored in normalised [0-1] coords relative to the
- *     FULL canvas (width × height), matching how AnnotationLayer stores them.
+ *   - The court frame is the editor's: computeCourtLayout(EXPORT_W, variant)
+ *     painted by the shared paintCourt (out-of-bounds margins included, and
+ *     the editor's flip transform when flipped).
+ *   - Player, ball and annotation positions are normalised [0-1] in play-area
+ *     space and mapped with the shared normToCanvasPx.
+ *   - Token radii come from tokenSizing (same token-to-court ratio as the
+ *     editor and the other exports).
  */
 
-import { drawCourt } from "@/components/court/Court";
-import type { CourtVariant } from "@/components/court/Court";
+import { computeCourtLayout, normToCanvasPx } from "@/lib/courtLayout";
+import type { CourtLayout, CourtVariant } from "@/lib/courtLayout";
+import { paintCourt } from "@/lib/courtRendering";
+import { computeTokenSizes } from "@/lib/tokenSizing";
 import type { Annotation, Play, Scene } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
@@ -30,15 +34,7 @@ import type { Annotation, Play, Scene } from "@/lib/types";
 
 /** Canvas width in pixels for the export. Higher = sharper in PDF. */
 const EXPORT_W = 1200;
-
-/** Half-court aspect ratio (width / height = 50ft / 47ft). */
-const HALF_COURT_ASPECT = 50 / 47;
-
-/** Player token radius as a fraction of court width. */
-const PLAYER_R = EXPORT_W * 0.03;
-
-/** Ball radius as a fraction of court width. */
-const BALL_R = EXPORT_W * 0.016;
+export { EXPORT_W as PDF_EXPORT_W };
 
 /** Line width for annotations, scaled to canvas. */
 const ANN_LINE_W = EXPORT_W * 0.003;
@@ -96,7 +92,7 @@ function drawPlayer(
     ctx.textBaseline = "middle";
     ctx.fillText(String(position), px, py);
   } else {
-    // White circle with navy X
+    // White circle with navy outline and number, as in the editor
     ctx.beginPath();
     ctx.arc(px, py, r, 0, Math.PI * 2);
     ctx.fillStyle = "#FFFFFF";
@@ -105,22 +101,11 @@ function drawPlayer(
     ctx.lineWidth = r * 0.18;
     ctx.stroke();
 
-    const x = r * 0.42;
-    ctx.beginPath();
-    ctx.moveTo(px - x, py - x);
-    ctx.lineTo(px + x, py + x);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(px + x, py - x);
-    ctx.lineTo(px - x, py + x);
-    ctx.stroke();
-
-    // Label above the X
     ctx.fillStyle = "#1E3A5F";
-    ctx.font = `bold ${Math.round(r * 0.58)}px system-ui, sans-serif`;
+    ctx.font = `bold ${Math.round(r * 0.78)}px system-ui, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(`X${position}`, px, py - x - r * 0.22);
+    ctx.fillText(String(position), px, py);
   }
 
   ctx.restore();
@@ -228,29 +213,25 @@ function strokePolyline(
 function drawAnnotation(
   ctx: CanvasRenderingContext2D,
   ann: Annotation,
-  canvasW: number,
-  canvasH: number,
+  frame: CourtLayout,
   flipped = false,
 ): void {
-  // Annotations stored in normalised [0-1] coords relative to full canvas.
-  const ny = (n: number) => flipped ? (1 - n) * canvasH : n * canvasH;
-  const fx = ann.from.x * canvasW;
-  const fy = ny(ann.from.y);
-  const tx = ann.to.x * canvasW;
-  const ty = ny(ann.to.y);
+  // Annotations are stored in normalised play-area coords, like players.
+  const pt = (p: { x: number; y: number }) => normToCanvasPx(p.x, p.y, frame, flipped);
+  const { x: fx, y: fy } = pt(ann.from);
+  const { x: tx, y: ty } = pt(ann.to);
 
   // Multi-leg waypoints
   const hasWaypoints = ann.waypoints && ann.waypoints.length > 0;
   const allPts: { x: number; y: number }[] = hasWaypoints
-    ? [{ x: fx, y: fy }, ...(ann.waypoints ?? []).map((p) => ({ x: p.x * canvasW, y: ny(p.y) })), { x: tx, y: ty }]
+    ? [{ x: fx, y: fy }, ...(ann.waypoints ?? []).map(pt), { x: tx, y: ty }]
     : [];
 
   // Bezier control point (if any — single-leg only)
   let cpx: number | undefined;
   let cpy: number | undefined;
   if (!hasWaypoints && ann.controlPoints.length > 0) {
-    cpx = ann.controlPoints[0].x * canvasW;
-    cpy = ny(ann.controlPoints[0].y);
+    ({ x: cpx, y: cpy } = pt(ann.controlPoints[0]));
   }
 
   const color = ANN_COLOR[ann.type] ?? "#1E3A5F";
@@ -392,67 +373,61 @@ function drawAnnotation(
 // Scene → canvas
 // ---------------------------------------------------------------------------
 
-function renderScene(
+/**
+ * Size `canvas` to the shared court layout and draw the scene on it. Split from
+ * renderScene so it can be driven without a DOM.
+ */
+export function drawPdfSceneOnCanvas(
+  canvas: HTMLCanvasElement,
   scene: Scene,
-  courtType: "half" | "full",
+  courtType: CourtVariant,
   flipped = false,
   maxStep = Infinity,
-): HTMLCanvasElement {
-  const halfH = Math.round(EXPORT_W / HALF_COURT_ASPECT);
-  const H = courtType === "full" ? halfH * 2 : halfH;
+): void {
+  const layout = computeCourtLayout(EXPORT_W, courtType);
+  const { playerR, ballR, ballAttachOffsetY } = computeTokenSizes(layout.innerW);
 
-  // Play-area offset: where players live on the canvas
-  const paH = halfH;
-  const paOffY = courtType === "full" ? halfH : 0;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = EXPORT_W;
-  canvas.height = H;
+  canvas.width = layout.totalWidth;
+  canvas.height = layout.totalHeight;
 
   const ctx = canvas.getContext("2d");
-  if (!ctx) return canvas;
+  if (!ctx) return;
 
-  // Draw court markings — apply flip transform if needed
-  if (flipped) {
-    ctx.save();
-    ctx.translate(0, H);
-    ctx.scale(1, -1);
-  }
-  drawCourt(canvas, EXPORT_W, H, courtType as CourtVariant);
-  if (flipped) ctx.restore();
+  // Court (floor, OOB margins, markings) in the editor's frame, flip included
+  paintCourt(ctx, layout, { flipped });
 
-  // Normalised y → canvas y helper
-  const cy = (normY: number) => flipped ? (1 - normY) * paH + paOffY : normY * paH + paOffY;
+  const pos = (p: { x: number; y: number }) => normToCanvasPx(p.x, p.y, layout, flipped);
 
   // Defense (underneath offense)
   for (const p of scene.players.defense) {
     if (!p.visible) continue;
-    drawPlayer(ctx, "defense", p.position, p.x * EXPORT_W, cy(p.y), PLAYER_R);
+    const { x, y } = pos(p);
+    drawPlayer(ctx, "defense", p.position, x, y, playerR);
   }
 
   // Offense
   for (const p of scene.players.offense) {
     if (!p.visible) continue;
-    drawPlayer(ctx, "offense", p.position, p.x * EXPORT_W, cy(p.y), PLAYER_R);
+    const { x, y } = pos(p);
+    drawPlayer(ctx, "offense", p.position, x, y, playerR);
   }
 
   // Ball
   const ball = scene.ball;
   if (ball) {
-    let bx = ball.x * EXPORT_W;
-    let by = cy(ball.y);
+    let b = pos(ball);
 
-    // If attached to a player, float it above them
+    // If attached to a player, float it above them (screen space — never
+    // negated when flipped, exactly as in the editor)
     if (ball.attachedTo) {
       const pool = ball.attachedTo.side === "offense" ? scene.players.offense : scene.players.defense;
       const attached = pool.find((p) => p.position === ball.attachedTo!.position);
       if (attached) {
-        bx = attached.x * EXPORT_W;
-        // "above" means toward half-court regardless of flip direction
-        by = flipped ? cy(attached.y) + PLAYER_R * 1.2 : cy(attached.y) - PLAYER_R * 1.2;
+        const h = pos(attached);
+        b = { x: h.x, y: h.y + ballAttachOffsetY };
       }
     }
-    drawBall(ctx, bx, by, BALL_R);
+    drawBall(ctx, b.x, b.y, ballR);
   }
 
   // Annotations — cumulative reveal up to maxStep
@@ -460,10 +435,19 @@ function renderScene(
   for (const group of sortedGroups) {
     if (group.step > maxStep) break;
     for (const ann of group.annotations) {
-      drawAnnotation(ctx, ann, EXPORT_W, H, flipped);
+      drawAnnotation(ctx, ann, layout, flipped);
     }
   }
+}
 
+function renderScene(
+  scene: Scene,
+  courtType: CourtVariant,
+  flipped = false,
+  maxStep = Infinity,
+): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  drawPdfSceneOnCanvas(canvas, scene, courtType, flipped, maxStep);
   return canvas;
 }
 
@@ -523,11 +507,12 @@ export async function exportPlayToPdf(play: Play, options: ExportPdfOptions = {}
   const items: RenderItem[] = [];
   const scenes = [...play.scenes].sort((a, b) => a.order - b.order);
   for (const scene of scenes) {
+    const sceneIdx = scenes.indexOf(scene);
     const sortedGroups = [...scene.timingGroups].sort((a, b) => a.step - b.step);
     const steps = exportSteps ? sortedGroups.map((g) => g.step) : [Infinity];
     for (const maxStep of steps) {
       const stepLabel = exportSteps && maxStep !== Infinity ? ` · Step ${maxStep}` : "";
-      items.push({ scene, maxStep, label: `Scene ${scene.order}${stepLabel}` });
+      items.push({ scene, maxStep, label: `Scene ${sceneIdx + 1}${stepLabel}` });
     }
   }
 

@@ -18,6 +18,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useStore, selectEditorScene } from "@/lib/store";
 import type { Scene } from "@/lib/types";
+import { thumbnailDotRadius } from "@/lib/tokenSizing";
 import InfoTooltip from "./InfoTooltip";
 import { subscribeToComments } from "@/lib/comments";
 
@@ -49,6 +50,11 @@ function SceneThumbnail({
   // because H = W*(47/50), so (R_ft/47)*H = (R_ft/50)*W. Use px() for all arc radii.
   const px = (nx: number) => nx * W;
   const py = (ny: number) => ny * H;
+
+  // Player dots use the editor's radius-to-court-width ratio (W is the inner
+  // court width — thumbnails have no out-of-bounds margin), with a floor so
+  // they stay legible on tiny thumbnails.
+  const dotR = thumbnailDotRadius(W);
 
   // NBA court dimensions (normalised, matching courtDimensions.ts):
   //   y=0 = half-court line, y=1 = baseline
@@ -160,7 +166,7 @@ function SceneThumbnail({
             key={`o-${p.position}`}
             cx={px(p.x)}
             cy={py(p.y)}
-            r={4}
+            r={dotR}
             fill={offenseColor}
             stroke="#fff"
             strokeWidth={0.8}
@@ -175,7 +181,7 @@ function SceneThumbnail({
             key={`d-${p.position}`}
             cx={px(p.x)}
             cy={py(p.y)}
-            r={4}
+            r={dotR}
             fill={defenseColor}
             stroke="#fff"
             strokeWidth={0.8}

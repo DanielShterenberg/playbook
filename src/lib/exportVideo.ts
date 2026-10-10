@@ -27,7 +27,8 @@ import {
   RESOLUTION_WIDTH,
 } from "./exportGIF";
 import type { GifResolution } from "./exportGIF";
-import { computeCourtLayout } from "./exportGIF";
+import { computeCourtLayout } from "@/lib/courtLayout";
+import type { CourtVariant } from "@/lib/courtLayout";
 import type { PlayerDisplayMode } from "./store";
 
 export type VideoResolution = GifResolution;
@@ -43,6 +44,31 @@ export interface ExportVideoOptions {
 }
 
 // ---------------------------------------------------------------------------
+// Frame size (shared by both encoder paths)
+// ---------------------------------------------------------------------------
+
+/**
+ * Frame size for a resolution preset, from the shared court layout.
+ *
+ * `width` × `height` is the full frame (used by the MediaRecorder fallback);
+ * `encW` × `encH` is the same frame clamped down to even dimensions, which
+ * H.264 requires (used by the WebCodecs path — at most one row is cropped).
+ */
+export function videoFrameSize(
+  resolution: VideoResolution,
+  variant: CourtVariant = "half",
+): { width: number; height: number; encW: number; encH: number } {
+  const width  = RESOLUTION_WIDTH[resolution];
+  const height = computeCourtLayout(width, variant).totalHeight;
+  return {
+    width,
+    height,
+    encW: width  % 2 === 0 ? width  : width  - 1,
+    encH: height % 2 === 0 ? height : height - 1,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // WebCodecs H.264 export (primary path)
 // ---------------------------------------------------------------------------
 
@@ -53,11 +79,9 @@ async function exportViaWebCodecs(
 ): Promise<void> {
   const { speed = 1, resolution = "sd", onProgress, displayMode = "numbers", playerNames = {}, offenseColor, defenseColor } = options;
 
-  const width  = RESOLUTION_WIDTH[resolution];
-  const height = computeCourtLayout(width).totalHeight;
+  const variant: CourtVariant = play.courtType;
   // H.264 requires dimensions divisible by 2
-  const encW = width  % 2 === 0 ? width  : width  - 1;
-  const encH = height % 2 === 0 ? height : height - 1;
+  const { encW, encH } = videoFrameSize(resolution, variant);
 
   const canvas = document.createElement("canvas");
   canvas.width  = encW;
@@ -169,7 +193,7 @@ async function exportViaWebCodecs(
     for (let gi = 0; gi < sortedGroups.length; gi++) {
       const group = sortedGroups[gi];
       cumulativeAnnotations.push(...group.annotations);
-      renderFrame(canvas, scene, cumulativeAnnotations, encW, encH, sceneFlipped, displayMode, playerNames, offenseColor, defenseColor);
+      renderFrame(canvas, scene, cumulativeAnnotations, encW, encH, sceneFlipped, displayMode, playerNames, offenseColor, defenseColor, variant);
       encodeFrame(group.duration, si === 0 && gi === 0);
 
       stepsRendered++;
@@ -180,7 +204,7 @@ async function exportViaWebCodecs(
 
     // Hold frame
     const holdMs = si === scenes.length - 1 ? FINAL_HOLD_MS : SCENE_HOLD_MS;
-    renderFrame(canvas, scene, [...cumulativeAnnotations], encW, encH, sceneFlipped, displayMode, playerNames, offenseColor, defenseColor);
+    renderFrame(canvas, scene, [...cumulativeAnnotations], encW, encH, sceneFlipped, displayMode, playerNames, offenseColor, defenseColor, variant);
     encodeFrame(holdMs, false);
 
     stepsRendered++;
@@ -206,8 +230,8 @@ async function exportViaMediaRecorder(
 ): Promise<void> {
   const { speed = 1, resolution = "sd", onProgress } = options;
 
-  const width  = RESOLUTION_WIDTH[resolution];
-  const height = computeCourtLayout(width).totalHeight;
+  const variant: CourtVariant = play.courtType;
+  const { width, height } = videoFrameSize(resolution, variant);
 
   const canvas = document.createElement("canvas");
   canvas.width  = width;
@@ -236,14 +260,14 @@ async function exportViaMediaRecorder(
 
     for (const group of sortedGroups) {
       cumulativeAnnotations.push(...group.annotations);
-      renderFrame(canvas, scene, cumulativeAnnotations, width, height, sceneFlipped);
+      renderFrame(canvas, scene, cumulativeAnnotations, width, height, sceneFlipped, "numbers", {}, undefined, undefined, variant);
       await new Promise<void>((r) => setTimeout(r, group.duration / speed));
       stepsRendered++;
       onProgress?.(stepsRendered / totalSteps);
     }
 
     const holdMs = (si === scenes.length - 1 ? FINAL_HOLD_MS : SCENE_HOLD_MS) / speed;
-    renderFrame(canvas, scene, [...cumulativeAnnotations], width, height, sceneFlipped);
+    renderFrame(canvas, scene, [...cumulativeAnnotations], width, height, sceneFlipped, "numbers", {}, undefined, undefined, variant);
     await new Promise<void>((r) => setTimeout(r, holdMs));
     stepsRendered++;
     onProgress?.(stepsRendered / totalSteps);

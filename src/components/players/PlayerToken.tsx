@@ -14,13 +14,14 @@
 
 import { useRef, useCallback } from "react";
 import type { PlayerDisplayMode } from "@/lib/store";
+import { PLAYER_RADIUS, playerScale } from "@/lib/tokenSizing";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Default radius of the player token in CSS pixels (independent of DPR). */
-const PLAYER_RADIUS = 18;
+// Default radius (PLAYER_RADIUS, 18 CSS px) and proportional scaling live in
+// @/lib/tokenSizing, shared with every export path.
 
 /** Standard position abbreviations for offense (by 1-based position). */
 const OFFENSE_ABBRS: Record<number, string> = {
@@ -230,10 +231,12 @@ export default function PlayerToken({
     label = String(position);
   }
 
-  const scaledStrokeWidth = Math.max(1.5, strokeWidth * radius / PLAYER_RADIUS);
+  // Stroke and font are authored at PLAYER_RADIUS and scale with the token
+  const scale = playerScale(radius);
+  const scaledStrokeWidth = Math.max(1.5, strokeWidth * scale);
 
   // Shrink font for long names so they fit inside the token
-  const baseFontSize = Math.max(6, Math.round(11 * radius / PLAYER_RADIUS));
+  const baseFontSize = Math.max(6, Math.round(11 * scale));
   const fontSize = label.length > 2 ? Math.max(5, baseFontSize - (label.length - 2) * 1.5) : baseFontSize;
 
   return (
