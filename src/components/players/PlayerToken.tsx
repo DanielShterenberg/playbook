@@ -3,8 +3,9 @@
 /**
  * PlayerToken — a single draggable player circle rendered as an SVG element.
  *
- * Offensive players: filled solid circle (warm orange) with white position number.
- * Defensive players: hollow circle with an X mark and position number.
+ * Both sides are filled circles with the position label inside: offense in the
+ * offense colour, defense in the defense colour (team colours, else the active
+ * theme's palette). The label colour follows the fill (contrastText).
  *
  * Props are expressed in *CSS pixels* relative to the court canvas so that the
  * parent CourtWithPlayers can place them correctly.
@@ -14,7 +15,9 @@
 
 import { useRef, useCallback } from "react";
 import type { PlayerDisplayMode } from "@/lib/store";
-import { PLAYER_RADIUS, playerScale, playerLabelFontSize, DEFAULT_OFFENSE_COLOR, DEFAULT_DEFENSE_COLOR } from "@/lib/tokenSizing";
+import { PLAYER_RADIUS, playerScale, playerLabelFontSize } from "@/lib/tokenSizing";
+import { contrastText, customTeamColor } from "@/lib/courtPalette";
+import { useCourtPalette } from "@/hooks/useTheme";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -41,11 +44,8 @@ const DEFENSE_ABBRS: Record<number, string> = {
   5: "C",
 };
 
-// Default team colours (DEFAULT_OFFENSE_COLOR / DEFAULT_DEFENSE_COLOR) live in
-// @/lib/tokenSizing, shared with the exports, thumbnails and the colour picker.
-const COLOR_OFFENSE_STROKE = "#FFFFFF";
-const COLOR_DEFENSE_FILL = "#FFFFFF";
-const COLOR_TEXT_OFFENSE = "#FFFFFF";
+// Token colours come from the active theme's CourtPalette (useCourtPalette),
+// shared with the exports and thumbnails.
 
 // ---------------------------------------------------------------------------
 // Types
@@ -81,12 +81,12 @@ export interface PlayerTokenProps {
   /** Token radius in CSS pixels. Defaults to PLAYER_RADIUS (18). */
   radius?: number;
   /**
-   * Custom fill color for the offense token (overrides DEFAULT_OFFENSE_COLOR).
+   * Custom fill color for the offense token (overrides the palette's).
    * Only used when side === "offense".
    */
   offenseColor?: string;
   /**
-   * Custom accent color for the defense token (overrides DEFAULT_DEFENSE_COLOR).
+   * Custom fill color for the defense token (overrides the palette's).
    * Only used when side === "defense".
    */
   defenseColor?: string;
@@ -110,6 +110,7 @@ export default function PlayerToken({
   offenseColor,
   defenseColor,
 }: PlayerTokenProps) {
+  const palette = useCourtPalette();
   const isDragging = useRef(false);
   const dragStart = useRef<{ mouseX: number; mouseY: number; playerCx: number; playerCy: number }>({
     mouseX: 0,
@@ -212,12 +213,12 @@ export default function PlayerToken({
   );
 
   const isOffense = side === "offense";
-  const resolvedOffenseColor = offenseColor ?? DEFAULT_OFFENSE_COLOR;
-  const resolvedDefenseColor = defenseColor ?? DEFAULT_DEFENSE_COLOR;
-  const fillColor = isOffense ? resolvedOffenseColor : COLOR_DEFENSE_FILL;
-  const strokeColor = isOffense ? COLOR_OFFENSE_STROKE : resolvedDefenseColor;
-  const textColor = isOffense ? COLOR_TEXT_OFFENSE : resolvedDefenseColor;
-  const strokeWidth = isOffense ? 2 : 2.5;
+  const fillColor = isOffense
+    ? customTeamColor(offenseColor) ?? palette.offenseFill
+    : customTeamColor(defenseColor) ?? palette.defenseFill;
+  const strokeColor = palette.tokenStroke;
+  const textColor = contrastText(fillColor);
+  const strokeWidth = 2;
 
   // Build label based on display mode
   let label: string;

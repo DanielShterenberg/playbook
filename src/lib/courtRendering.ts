@@ -29,17 +29,17 @@ import {
 } from "@/components/court/courtDimensions";
 import type { CourtLayout } from "@/lib/courtLayout";
 
+import { LIGHT_COURT_PALETTE, type CourtPalette } from "@/lib/courtPalette";
+
 export type { CourtVariant } from "@/lib/courtLayout";
 
 // ---------------------------------------------------------------------------
 // Colours
 // ---------------------------------------------------------------------------
-/** Floor colour — also fills the out-of-bounds margins. */
-export const COLOR_COURT = "#F0C878"; // warm maple
-/** Default paint (free-throw lane) fill. */
-export const DEFAULT_COLOR_PAINT = "#E07B39"; // standard orange paint
-/** Court line colour. */
-export const COLOR_LINE = "#FFFFFF";  // white lines
+// Every colour comes from a CourtPalette (courtPalette.ts). The default is the
+// light palette, which is what the exports use.
+/** Out-of-bounds margin colour of the light (default) palette — the video exporter's padding. */
+export const COLOR_OOB = LIGHT_COURT_PALETTE.oob;
 /** Court line width in the context's current units (CSS px in the editor). */
 export const COLOR_LINE_WIDTH_PX = 2; // base line width — scaled by canvas resolution
 
@@ -55,7 +55,13 @@ export const COLOR_LINE_WIDTH_PX = 2; // base line width — scaled by canvas re
  * full court (the far end is drawn with an additional ctx.scale(1,-1) so it
  * appears mirrored / upside-down, which is the correct NBA full-court layout).
  */
-export function drawHalfCourtInner(ctx: CanvasRenderingContext2D, W: number, H: number, paintColor = DEFAULT_COLOR_PAINT): void {
+export function drawHalfCourtInner(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  paintColor?: string,
+  palette: CourtPalette = LIGHT_COURT_PALETTE,
+): void {
   const cx = (nx: number) => nx * W;
   const cy = (ny: number) => ny * H;
   const rx = (nr: number) => nr * W;
@@ -66,19 +72,19 @@ export function drawHalfCourtInner(ctx: CanvasRenderingContext2D, W: number, H: 
   // ------------------------------------------------------------------
   // 1. Court background
   // ------------------------------------------------------------------
-  ctx.fillStyle = COLOR_COURT;
+  ctx.fillStyle = palette.floor;
   ctx.fillRect(0, 0, W, H);
 
   // ------------------------------------------------------------------
   // 2. Paint (free-throw lane)
   // ------------------------------------------------------------------
-  ctx.fillStyle = paintColor;
+  ctx.fillStyle = paintColor ?? palette.paint;
   ctx.fillRect(cx(LANE_LEFT), cy(LANE_TOP), cx(LANE_RIGHT) - cx(LANE_LEFT), cy(1) - cy(LANE_TOP));
 
   // ------------------------------------------------------------------
   // Setup line style
   // ------------------------------------------------------------------
-  ctx.strokeStyle = COLOR_LINE;
+  ctx.strokeStyle = palette.line;
   ctx.lineWidth = COLOR_LINE_WIDTH_PX;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
@@ -123,7 +129,7 @@ export function drawHalfCourtInner(ctx: CanvasRenderingContext2D, W: number, H: 
   const leftCornerX_ft = CORNER_THREE_LEFT_X * 50;
   const rightCornerX_ft = CORNER_THREE_RIGHT_X * 50;
 
-  ctx.strokeStyle = COLOR_LINE;
+  ctx.strokeStyle = palette.line;
   ctx.lineWidth = COLOR_LINE_WIDTH_PX * FT_PER_PX_X;
 
   // Left corner straight
@@ -177,7 +183,7 @@ export function drawHalfCourtInner(ctx: CanvasRenderingContext2D, W: number, H: 
   const ftCenterY_ft = FT_CIRCLE_CENTER_Y * 47;
   const ftRadius_ft = 6;
 
-  ctx.strokeStyle = COLOR_LINE;
+  ctx.strokeStyle = palette.line;
   ctx.lineWidth = COLOR_LINE_WIDTH_PX * FT_PER_PX_X;
 
   // Upper semicircle (solid) — toward half court
@@ -209,7 +215,7 @@ export function drawHalfCourtInner(ctx: CanvasRenderingContext2D, W: number, H: 
   ctx.scale(1, scaleY);
   ctx.beginPath();
   ctx.arc(cx(BASKET_X), cy(BASKET_Y) / scaleY, rx(BASKET_RADIUS), 0, Math.PI * 2);
-  ctx.strokeStyle = COLOR_LINE;
+  ctx.strokeStyle = palette.line;
   ctx.stroke();
   ctx.restore();
 }
@@ -221,8 +227,10 @@ export function drawHalfCourtInner(ctx: CanvasRenderingContext2D, W: number, H: 
 export interface PaintCourtOptions {
   /** Flip vertically so the basket is at the top. Default false. */
   flipped?: boolean;
-  /** Paint (lane) fill colour. Default DEFAULT_COLOR_PAINT. */
+  /** Paint (lane) fill colour. Default: the palette's paint. */
   paintColor?: string;
+  /** Court colours. Default LIGHT_COURT_PALETTE (what the exports use). */
+  palette?: CourtPalette;
 }
 
 /**
@@ -253,7 +261,7 @@ export function paintCourt(
   layout: CourtLayout,
   options: PaintCourtOptions = {},
 ): void {
-  const { flipped = false, paintColor } = options;
+  const { flipped = false, paintColor, palette = LIGHT_COURT_PALETTE } = options;
   const { variant, totalWidth: cssWidth, totalHeight: cssHeight, oobLeft, innerW, innerH, oobBot } = layout;
 
   ctx.save();
@@ -265,25 +273,25 @@ export function paintCourt(
   }
 
   // Fill entire canvas with floor colour (covers OOB margins)
-  ctx.fillStyle = COLOR_COURT;
+  ctx.fillStyle = palette.oob;
   ctx.fillRect(0, 0, cssWidth, cssHeight);
 
   if (variant === "full") {
     // Near basket end (bottom half) — normal orientation
     ctx.save();
     ctx.translate(oobLeft, innerH + oobBot);
-    drawHalfCourtInner(ctx, innerW, innerH, paintColor);
+    drawHalfCourtInner(ctx, innerW, innerH, paintColor, palette);
     ctx.restore();
 
     // Far basket end (top half) — mirrored vertically
     ctx.save();
     ctx.translate(oobLeft, innerH + oobBot);
     ctx.scale(1, -1);
-    drawHalfCourtInner(ctx, innerW, innerH, paintColor);
+    drawHalfCourtInner(ctx, innerW, innerH, paintColor, palette);
     ctx.restore();
 
     // Centre line
-    ctx.strokeStyle = COLOR_LINE;
+    ctx.strokeStyle = palette.line;
     ctx.lineWidth = COLOR_LINE_WIDTH_PX;
     ctx.lineCap = "round";
     ctx.beginPath();
@@ -303,7 +311,7 @@ export function paintCourt(
     // Half court — translate right by OOB margin
     ctx.save();
     ctx.translate(oobLeft, 0);
-    drawHalfCourtInner(ctx, innerW, innerH, paintColor);
+    drawHalfCourtInner(ctx, innerW, innerH, paintColor, palette);
     ctx.restore();
   }
 

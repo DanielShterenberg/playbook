@@ -19,6 +19,8 @@
  * Like courtLayout.ts this module is free of React and browser APIs.
  */
 
+import { LIGHT_COURT_PALETTE } from "@/lib/courtPalette";
+
 // ---------------------------------------------------------------------------
 // Base (design-size) constants
 // ---------------------------------------------------------------------------
@@ -40,16 +42,13 @@ export const BALL_RADIUS = 12;
 // Token colours (the editor's — one source for tokens, exports and thumbnails)
 // ---------------------------------------------------------------------------
 
-/** Basketball fill. */
-export const COLOR_BALL = "#E05C00";
-/** Basketball highlight arc. */
-export const COLOR_BALL_HIGHLIGHT = "#F47B2A";
-/** Basketball seam lines. */
-export const COLOR_BALL_SEAM = "#FFFFFF";
+// Token colours come from a CourtPalette (courtPalette.ts), per theme. These
+// are the light (default) palette's team colours — what the team colour picker
+// offers as defaults.
 /** Offense token fill when the play has no custom team colours. */
-export const DEFAULT_OFFENSE_COLOR = "#E07B39";
-/** Defense token accent (outline / label) when the play has no custom team colours. */
-export const DEFAULT_DEFENSE_COLOR = "#1E3A5F";
+export const DEFAULT_OFFENSE_COLOR = LIGHT_COURT_PALETTE.offenseFill;
+/** Defense token fill when the play has no custom team colours. */
+export const DEFAULT_DEFENSE_COLOR = LIGHT_COURT_PALETTE.defenseFill;
 
 // ---------------------------------------------------------------------------
 // Ratios and minimums (the editor's current values)

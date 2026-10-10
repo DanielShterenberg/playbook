@@ -13,8 +13,8 @@
  *   - positions  → normToCanvasPx(x, y, layout, flipped)
  *   - sizes      → thumbnailDotRadius / thumbnailBallRadius /
  *                  thumbnailBallAttachOffsetY
- *   - colours    → courtRendering (floor, lines, lane) and tokenSizing (ball,
- *                  default team colours) — the editor's, no local copies
+ *   - colours    → the active theme's CourtPalette (useCourtPalette) — the
+ *                  editor's, no local copies
  *   - viewBox    → the play-area window, where normToCanvasPx puts [0,1]²
  *
  * Flipping is done ONLY by the group transform; the marking paths (and their
@@ -36,11 +36,9 @@
  */
 
 import { computeThumbnailLayout, normToCanvasPx, type CourtVariant } from "@/lib/courtLayout";
-import { COLOR_COURT, COLOR_LINE, DEFAULT_COLOR_PAINT } from "@/lib/courtRendering";
+import { useCourtPalette } from "@/hooks/useTheme";
+import { customTeamColor } from "@/lib/courtPalette";
 import {
-  COLOR_BALL,
-  DEFAULT_OFFENSE_COLOR,
-  DEFAULT_DEFENSE_COLOR,
   thumbnailBallAttachOffsetY,
   thumbnailBallRadius,
   thumbnailDotRadius,
@@ -79,9 +77,9 @@ export interface CourtThumbnailProps {
    * Applied to half-court plays only (see FULL COURT above).
    */
   flipped?: boolean;
-  /** Offense dot fill — the play's team colour. Default: the editor's. */
+  /** Offense dot fill — the play's team colour. Default: the palette's. */
   offenseColor?: string;
-  /** Defense dot fill — the play's team colour. Default: the editor's. */
+  /** Defense dot fill — the play's team colour. Default: the palette's. */
   defenseColor?: string;
   /** Stroke width of court lines and the ball outline. */
   lineWidth?: number;
@@ -100,14 +98,17 @@ export default function CourtThumbnail({
   width,
   variant = "half",
   flipped: sceneFlipped = false,
-  offenseColor = DEFAULT_OFFENSE_COLOR,
-  defenseColor = DEFAULT_DEFENSE_COLOR,
+  offenseColor: offenseColorProp,
+  defenseColor: defenseColorProp,
   lineWidth = 1,
   outlineWidth = 1.5,
   basketRadius = 5,
   cornerRadius = 6,
   fluid = false,
 }: CourtThumbnailProps) {
+  const palette = useCourtPalette();
+  const offenseColor = customTeamColor(offenseColorProp) ?? palette.offenseFill;
+  const defenseColor = customTeamColor(defenseColorProp) ?? palette.defenseFill;
   const layout = computeThumbnailLayout(width);
   const flipped = variant === "half" && sceneFlipped;
   const W = layout.innerW;
@@ -131,20 +132,23 @@ export default function CourtThumbnail({
   const laneY = py(LANE_TOP);
   const laneW = px(LANE_RIGHT - LANE_LEFT);
   const laneH = py(1 - LANE_TOP);
-  const line = { fill: "none", stroke: COLOR_LINE, strokeWidth: lineWidth };
+  const line = { fill: "none", stroke: palette.line, strokeWidth: lineWidth };
 
   // One half court: y = 0 half-court line, y = H baseline. Verified arc flags
   // (y-down, chord left→right): "0 0 1" bows upward (toward the half-court
   // line), "0 0 0" bows downward. Do not edit them to flip — use a transform.
   const court = (
     <>
+      {/* Floor of the court itself; the frame behind it is out-of-bounds */}
+      <rect x={0} y={0} width={W} height={H} fill={palette.floor} />
+
       {/* Free-throw lane: the editor's paint (never a team colour) and its
           outline in one rect; its top edge is the free-throw line */}
-      <rect x={laneX} y={laneY} width={laneW} height={laneH} fill={DEFAULT_COLOR_PAINT} stroke={COLOR_LINE} strokeWidth={lineWidth} />
+      <rect x={laneX} y={laneY} width={laneW} height={laneH} fill={palette.paint} stroke={palette.line} strokeWidth={lineWidth} />
 
       {/* Half-court line and baseline (the sidelines are the frame) */}
-      <line x1={0} y1={0} x2={W} y2={0} stroke={COLOR_LINE} strokeWidth={lineWidth} />
-      <line x1={0} y1={H} x2={W} y2={H} stroke={COLOR_LINE} strokeWidth={lineWidth} />
+      <line x1={0} y1={0} x2={W} y2={0} stroke={palette.line} strokeWidth={lineWidth} />
+      <line x1={0} y1={H} x2={W} y2={H} stroke={palette.line} strokeWidth={lineWidth} />
 
       {/* Centre-circle arc — bows into the court */}
       <path
@@ -170,7 +174,7 @@ export default function CourtThumbnail({
         y1={py(BACKBOARD_Y)}
         x2={px(BASKET_X + BACKBOARD_HALF_WIDTH)}
         y2={py(BACKBOARD_Y)}
-        stroke={COLOR_LINE}
+        stroke={palette.line}
         strokeWidth={outlineWidth}
       />
 
@@ -217,30 +221,30 @@ export default function CourtThumbnail({
           : { display: "block", borderRadius: cornerRadius }
       }
     >
-      {/* Floor (also the out-of-bounds band a flipped court shows) */}
-      <rect x={0} y={0} width={W} height={H} fill={COLOR_COURT} rx={cornerRadius} />
+      {/* Out-of-bounds colour — what shows in the band of a flipped court, as in paintCourt */}
+      <rect x={0} y={0} width={W} height={H} fill={palette.oob} rx={cornerRadius} />
 
       {flipped ? <g transform={`translate(0 ${layout.totalHeight}) scale(1 -1)`}>{court}</g> : court}
 
       {/* Frame */}
-      <rect x={0} y={0} width={W} height={H} fill="none" stroke={COLOR_LINE} strokeWidth={outlineWidth} rx={cornerRadius} />
+      <rect x={0} y={0} width={W} height={H} fill="none" stroke={palette.line} strokeWidth={outlineWidth} rx={cornerRadius} />
 
       {/* Players — defense under offense, as in the editor */}
       {scene.players.defense
         .filter((p) => p.visible)
         .map((p) => {
           const { x, y } = pos(p);
-          return <circle key={`d-${p.position}`} cx={x} cy={y} r={dotR} fill={defenseColor} stroke={COLOR_LINE} strokeWidth={dotOutline} />;
+          return <circle key={`d-${p.position}`} cx={x} cy={y} r={dotR} fill={defenseColor} stroke={palette.tokenStroke} strokeWidth={dotOutline} />;
         })}
       {scene.players.offense
         .filter((p) => p.visible)
         .map((p) => {
           const { x, y } = pos(p);
-          return <circle key={`o-${p.position}`} cx={x} cy={y} r={dotR} fill={offenseColor} stroke={COLOR_LINE} strokeWidth={dotOutline} />;
+          return <circle key={`o-${p.position}`} cx={x} cy={y} r={dotR} fill={offenseColor} stroke={palette.tokenStroke} strokeWidth={dotOutline} />;
         })}
 
       {/* Ball — on top of all players */}
-      {ballPos && <circle cx={ballPos.x} cy={ballPos.y} r={ballR} fill={COLOR_BALL} stroke={COLOR_LINE} strokeWidth={lineWidth} />}
+      {ballPos && <circle cx={ballPos.x} cy={ballPos.y} r={ballR} fill={palette.ball} stroke={palette.ballSeam} strokeWidth={lineWidth} />}
     </svg>
   );
 }

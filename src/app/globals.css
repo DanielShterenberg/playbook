@@ -2,16 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Theme tokens. The theme is the data-theme attribute on <html> (src/lib/theme.ts),
+ * never the device setting directly — a user who picks light on a dark device
+ * must get light.
+ */
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  --color-app: #F3F5F8;
+  --color-surface: #FFFFFF;
+  --color-line: #DCE1E8;
+  --color-ink: #141A23;
+  --color-muted: #5B6675;
+  --color-accent: #FF7A1A;
+  --color-accent-ink: #0E1116;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+[data-theme="dark"] {
+  --background: #0E1116;
+  --foreground: #E8ECF1;
+
+  --color-app: #0E1116;
+  --color-surface: #161B22;
+  --color-line: #262D38;
+  --color-ink: #E8ECF1;
+  --color-muted: #9AA5B4;
 }
 
 body {
@@ -19,3 +36,21 @@ body {
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/*
+ * Annotations on the dark court. AnnotationLayer.tsx draws with the light
+ * theme's colours as SVG attributes (the export painter is tested against
+ * those literals); on the dark floor each one is swapped for a lighter tint.
+ */
+[data-theme="dark"] .annotation-layer [stroke="#1E3A5F"] { stroke: #E8ECF1; }
+[data-theme="dark"] .annotation-layer [fill="#1E3A5F"] { fill: #E8ECF1; }
+[data-theme="dark"] .annotation-layer [stroke="#059669"] { stroke: #34D399; }
+[data-theme="dark"] .annotation-layer [fill="#059669"] { fill: #34D399; }
+[data-theme="dark"] .annotation-layer [stroke="#7C3AED"] { stroke: #A78BFA; }
+[data-theme="dark"] .annotation-layer [fill="#7C3AED"] { fill: #A78BFA; }
+[data-theme="dark"] .annotation-layer [stroke="#DC2626"] { stroke: #F87171; }
+[data-theme="dark"] .annotation-layer [fill="#DC2626"] { fill: #F87171; }
+[data-theme="dark"] .annotation-layer [stroke="#D97706"] { stroke: #FBBF24; }
+[data-theme="dark"] .annotation-layer [fill="#D97706"] { fill: #FBBF24; }
+[data-theme="dark"] .annotation-layer [stroke="#0369A1"] { stroke: #38BDF8; }
+[data-theme="dark"] .annotation-layer [fill="#0369A1"] { fill: #38BDF8; }

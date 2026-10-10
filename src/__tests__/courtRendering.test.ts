@@ -17,9 +17,7 @@
 import { describe, it, expect } from "vitest";
 import { createHash } from "node:crypto";
 import {
-  COLOR_COURT,
-  DEFAULT_COLOR_PAINT,
-  COLOR_LINE,
+  COLOR_OOB,
   COLOR_LINE_WIDTH_PX,
   drawHalfCourtInner,
   paintCourt,
@@ -27,6 +25,11 @@ import {
 import { computeCourtLayout, normToCanvasPx, type CourtVariant } from "@/lib/courtLayout";
 import { CENTRE_CIRCLE_RADIUS, LANE_TOP, LANE_LEFT, LANE_RIGHT } from "@/components/court/courtDimensions";
 import * as courtRenderingModule from "@/lib/courtRendering";
+import { DARK_COURT_PALETTE, LIGHT_COURT_PALETTE } from "@/lib/courtPalette";
+
+const COLOR_COURT = LIGHT_COURT_PALETTE.floor;
+const DEFAULT_COLOR_PAINT = LIGHT_COURT_PALETTE.paint;
+const COLOR_LINE = LIGHT_COURT_PALETTE.line;
 
 // ---------------------------------------------------------------------------
 // Recording mock context
@@ -102,10 +105,10 @@ describe("recording ctx", () => {
 // ---------------------------------------------------------------------------
 
 describe("colours", () => {
-  it("are the editor's", () => {
-    expect(COLOR_COURT).toBe("#F0C878");
-    expect(DEFAULT_COLOR_PAINT).toBe("#E07B39");
-    expect(COLOR_LINE).toBe("#FFFFFF");
+  it("are the light palette's", () => {
+    expect(COLOR_OOB).toBe(LIGHT_COURT_PALETTE.oob);
+    expect(LIGHT_COURT_PALETTE).toMatchObject({ floor: "#FFFFFF", oob: "#DCE1E8", line: "#2A3442" });
+    expect(DARK_COURT_PALETTE).toMatchObject({ floor: "#1B2330", oob: "#141A23", line: "#C9D2DE" });
     expect(COLOR_LINE_WIDTH_PX).toBe(2);
   });
 });
@@ -158,7 +161,7 @@ describe("drawHalfCourtInner", () => {
   });
 
   it("pinned digest", () => {
-    expect(digest(log)).toMatchInlineSnapshot(`"91692997bec5569d"`);
+    expect(digest(log)).toMatchInlineSnapshot(`"d5f53b7a6787dadb"`);
     expect(log.length).toMatchInlineSnapshot(`67`);
   });
 });
@@ -193,7 +196,7 @@ describe("paintCourt", () => {
     if (flipped) {
       out.push(["translate", 0, cssHeight], ["scale", 1, -1]);
     }
-    out.push(["set fillStyle", COLOR_COURT], ["fillRect", 0, 0, cssWidth, cssHeight]);
+    out.push(["set fillStyle", COLOR_OOB], ["fillRect", 0, 0, cssWidth, cssHeight]);
     if (variant === "full") {
       const scaleY = innerH / innerW;
       out.push(
@@ -247,7 +250,7 @@ describe("paintCourt", () => {
       ["save"],
       ["translate", 0, layout.innerH + layout.oobBot],
       ["scale", 1, -1],
-      ["set fillStyle", COLOR_COURT],
+      ["set fillStyle", COLOR_OOB],
       ["fillRect", 0, 0, 800, layout.innerH + layout.oobBot],
     ]);
     expect(log.slice(5, 7)).toEqual([["save"], ["translate", layout.oobLeft, 0]]);
@@ -270,7 +273,7 @@ describe("paintCourt", () => {
     const log = paint(800, "half", false);
     expect(log.slice(0, 3)).toEqual([
       ["save"],
-      ["set fillStyle", COLOR_COURT],
+      ["set fillStyle", COLOR_OOB],
       ["fillRect", 0, 0, 800, 759],
     ]);
     expect(log.filter((e) => e[0] === "scale" && e[1] === 1 && e[2] === -1)).toEqual([]);
@@ -294,6 +297,23 @@ describe("paintCourt", () => {
       const paints = log.filter((e) => e[0] === "set fillStyle" && e[1] === "#0055AA");
       expect(paints.length).toBe(variant === "full" ? 2 : 1);
       expect(log.some((e) => e[0] === "set fillStyle" && e[1] === DEFAULT_COLOR_PAINT)).toBe(false);
+    }
+  });
+
+  it("palette: defaults to light; a given palette recolours every fill and stroke, nothing else", () => {
+    const strip = (log: LogEntry[]) => log.map((e) => (e[0] === "set fillStyle" || e[0] === "set strokeStyle" ? [e[0]] : e));
+    const colours = (log: LogEntry[]) =>
+      Array.from(new Set(log.filter((e) => e[0] === "set fillStyle" || e[0] === "set strokeStyle").map((e) => String(e[1]))));
+    for (const variant of ["half", "full"] as const) {
+      for (const flipped of [false, true]) {
+        const layout = computeCourtLayout(800, variant);
+        const light = record((ctx) => paintCourt(ctx, layout, { flipped, palette: LIGHT_COURT_PALETTE }));
+        const dark = record((ctx) => paintCourt(ctx, layout, { flipped, palette: DARK_COURT_PALETTE }));
+        expect(light).toEqual(paint(800, variant, flipped));
+        expect(strip(dark)).toEqual(strip(light));
+        const d = DARK_COURT_PALETTE;
+        expect(colours(dark).sort()).toEqual([d.oob, d.floor, d.paint, d.line].sort());
+      }
     }
   });
 
@@ -323,9 +343,9 @@ describe("paintCourt", () => {
   });
 
   it("pinned digests", () => {
-    expect(digest(paint(800, "half", false))).toMatchInlineSnapshot(`"90e715875e3a1b2f"`);
-    expect(digest(paint(800, "half", true))).toMatchInlineSnapshot(`"90aaf4633968afde"`);
-    expect(digest(paint(800, "full", false))).toMatchInlineSnapshot(`"430a4f62b2cb595b"`);
-    expect(digest(paint(800, "full", true))).toMatchInlineSnapshot(`"4499c41c009306d2"`);
+    expect(digest(paint(800, "half", false))).toMatchInlineSnapshot(`"14044ba4288af01d"`);
+    expect(digest(paint(800, "half", true))).toMatchInlineSnapshot(`"a365c558afa7c98c"`);
+    expect(digest(paint(800, "full", false))).toMatchInlineSnapshot(`"39d5fe6852fc508b"`);
+    expect(digest(paint(800, "full", true))).toMatchInlineSnapshot(`"4cde18bc4f3ea157"`);
   });
 });

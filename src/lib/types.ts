@@ -96,9 +96,9 @@ export interface Team {
 }
 
 export interface PlayColors {
-  /** Fill color for offensive player tokens (defaults to "#E07B39"). */
+  /** Fill color for offensive player tokens. A stored default means "none" — see customTeamColor. */
   offense: string;
-  /** Stroke/X color for defensive player tokens (defaults to "#1E3A5F"). */
+  /** Fill color for defensive player tokens. A stored default means "none" — see customTeamColor. */
   defense: string;
 }
 

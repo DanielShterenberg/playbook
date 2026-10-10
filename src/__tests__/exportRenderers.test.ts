@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { computeCourtLayout, normToCanvasPx, type CourtLayout, type CourtVariant } from "@/lib/courtLayout";
 import { FT_CIRCLE_CENTER_Y } from "@/components/court/courtDimensions";
-import { paintCourt, COLOR_COURT } from "@/lib/courtRendering";
+import { paintCourt, COLOR_OOB } from "@/lib/courtRendering";
 import { computeTokenSizes } from "@/lib/tokenSizing";
 import { renderSceneToCtx, renderFrame, annotationScale, RESOLUTION_WIDTH } from "@/lib/frameRenderer";
 import { renderPNGToCanvas } from "@/lib/exportPNG";
@@ -299,7 +299,7 @@ describe("video frame (renderVideoFrame)", () => {
         renderVideoFrame(fakeCanvas(ctx, size.encW, size.encH), size, scene, ANNOTATIONS, flipped, variant, style);
 
         const padded = size.encW !== size.width || size.encH !== size.height;
-        const pad: LogEntry[] = padded ? [["set fillStyle", COLOR_COURT], ["fillRect", 0, 0, size.encW, size.encH]] : [];
+        const pad: LogEntry[] = padded ? [["set fillStyle", COLOR_OOB], ["fillRect", 0, 0, size.encW, size.encH]] : [];
         expect(log).toEqual([...pad, ...frame]);
         // The court floor still covers the whole layout: no row of it is lost.
         expect(log.some((e) => e[0] === "fillRect" && e[3] === layout.totalWidth && e[4] === layout.totalHeight)).toBe(true);
@@ -620,7 +620,7 @@ describe("frame style", () => {
 describe("scene without a ball", () => {
   const noBall = (): Scene => ({ ...makeScene(false), ball: undefined } as unknown as Scene);
   const nullBall = (): Scene => ({ ...makeScene(false), ball: null } as unknown as Scene);
-  const BALL = "#E05C00";
+  const BALL = "#F2B33D";
   const hasBall = (log: LogEntry[]) => log.some((e) => e[0] === "set fillStyle" && e[1] === BALL);
 
   for (const make of [noBall, nullBall]) {
