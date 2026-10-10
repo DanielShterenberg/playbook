@@ -1146,6 +1146,7 @@ export default function AnnotationLayer({
   return (
     <svg
       ref={svgRef}
+      className="annotation-layer"
       style={{
         position: "absolute",
         top: 0,

@@ -37,13 +37,9 @@ import {
   ballScale,
   PLAYER_RADIUS,
   PLAYER_RADIUS_RATIO,
-  COLOR_BALL,
-  COLOR_BALL_HIGHLIGHT,
-  COLOR_BALL_SEAM,
-  DEFAULT_OFFENSE_COLOR,
-  DEFAULT_DEFENSE_COLOR,
   playerLabelFontSize,
 } from "@/lib/tokenSizing";
+import { LIGHT_COURT_PALETTE, contrastText, type CourtPalette } from "@/lib/courtPalette";
 
 // ---------------------------------------------------------------------------
 // Animation frame presets (shared by the GIF and video encoders)
@@ -78,19 +74,20 @@ export interface FrameStyle {
   displayMode?: PlayerDisplayMode;
   /** Names keyed "offense-1" / "defense-4". Default none. */
   playerNames?: Record<string, string>;
-  /** Offense token fill. Default the editor's orange. */
+  /** Offense token fill. Default the palette's. */
   offenseColor?: string;
-  /** Defense token accent. Default the editor's navy. */
+  /** Defense token fill. Default the palette's. */
   defenseColor?: string;
+  /**
+   * Court, token and ball colours. Default LIGHT_COURT_PALETTE — the exports
+   * never set it, so they are drawn on the light court in either theme.
+   */
+  palette?: CourtPalette;
 }
 
 // ---------------------------------------------------------------------------
 // Player drawing
 // ---------------------------------------------------------------------------
-
-const COLOR_OFFENSE_STROKE = "#FFFFFF";
-const COLOR_DEFENSE_FILL = "#FFFFFF";
-const COLOR_TEXT_OFFENSE = "#FFFFFF";
 
 const POSITION_ABBRS: Record<number, string> = { 1: "PG", 2: "SG", 3: "SF", 4: "PF", 5: "C" };
 
@@ -103,13 +100,14 @@ function drawPlayer(
   r: number,
   style: FrameStyle,
 ): void {
-  const { displayMode = "numbers", playerNames = {}, offenseColor, defenseColor } = style;
+  const { displayMode = "numbers", playerNames = {}, offenseColor, defenseColor, palette = LIGHT_COURT_PALETTE } = style;
   const isOffense = side === "offense";
   // Scale all size-based values proportionally to the token radius.
   const s = playerScale(r);
 
-  const offenseFill   = offenseColor ?? DEFAULT_OFFENSE_COLOR;
-  const defenseStroke = defenseColor ?? DEFAULT_DEFENSE_COLOR;
+  // Colours mirror PlayerToken.tsx: team colour else the palette's fill, the
+  // palette's outline, and a label that contrasts with the fill.
+  const fill = isOffense ? offenseColor ?? palette.offenseFill : defenseColor ?? palette.defenseFill;
 
   ctx.save();
   ctx.globalAlpha = 0.25;
@@ -121,10 +119,10 @@ function drawPlayer(
 
   ctx.beginPath();
   ctx.arc(px, py, r, 0, Math.PI * 2);
-  ctx.fillStyle = isOffense ? offenseFill : COLOR_DEFENSE_FILL;
+  ctx.fillStyle = fill;
   ctx.fill();
-  ctx.strokeStyle = isOffense ? COLOR_OFFENSE_STROKE : defenseStroke;
-  ctx.lineWidth = Math.max(1.5, (isOffense ? 2 : 2.5) * s);
+  ctx.strokeStyle = palette.tokenStroke;
+  ctx.lineWidth = Math.max(1.5, 2 * s);
   ctx.stroke();
 
   // Label rules mirror PlayerToken.tsx so a taped play reads like the editor.
@@ -140,7 +138,7 @@ function drawPlayer(
   }
   const fontSize = playerLabelFontSize(label.length, r);
 
-  ctx.fillStyle = isOffense ? COLOR_TEXT_OFFENSE : defenseStroke;
+  ctx.fillStyle = contrastText(fill);
   ctx.font = `700 ${fontSize}px system-ui, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -151,7 +149,7 @@ function drawPlayer(
 // Ball drawing
 // ---------------------------------------------------------------------------
 
-function drawBall(ctx: CanvasRenderingContext2D, px: number, py: number, r: number): void {
+function drawBall(ctx: CanvasRenderingContext2D, px: number, py: number, r: number, palette: CourtPalette): void {
   const s = ballScale(r);
 
   ctx.save();
@@ -164,13 +162,16 @@ function drawBall(ctx: CanvasRenderingContext2D, px: number, py: number, r: numb
 
   ctx.beginPath();
   ctx.arc(px, py, r, 0, Math.PI * 2);
-  ctx.fillStyle = COLOR_BALL;
+  ctx.fillStyle = palette.ball;
   ctx.fill();
+  ctx.strokeStyle = palette.ballSeam;
+  ctx.lineWidth = 1.5 * s;
+  ctx.stroke();
 
   ctx.beginPath();
   ctx.moveTo(px - r * 0.5, py - r * 0.6);
   ctx.arc(px, py, r * 0.7, Math.PI + 0.6, Math.PI * 2 - 0.4, false);
-  ctx.strokeStyle = COLOR_BALL_HIGHLIGHT;
+  ctx.strokeStyle = palette.ballHighlight;
   ctx.lineWidth = 1.5 * s;
   ctx.lineCap = "round";
   ctx.globalAlpha = 0.5;
@@ -180,7 +181,7 @@ function drawBall(ctx: CanvasRenderingContext2D, px: number, py: number, r: numb
   const vPath = new Path2D(
     `M ${px} ${py - r} C ${px + r * 0.55} ${py - r * 0.5} ${px + r * 0.55} ${py + r * 0.5} ${px} ${py + r}`,
   );
-  ctx.strokeStyle = COLOR_BALL_SEAM;
+  ctx.strokeStyle = palette.ballSeam;
   ctx.lineWidth = 1.2 * s;
   ctx.lineCap = "round";
   ctx.stroke(vPath);
@@ -451,7 +452,8 @@ export function renderSceneToCtx(
   const pos = (p: { x: number; y: number }) => normToCanvasPx(p.x, p.y, layout, flipped);
 
   // Court floor (incl. OOB margins) + markings
-  paintCourt(ctx, layout, { flipped });
+  const palette = style.palette ?? LIGHT_COURT_PALETTE;
+  paintCourt(ctx, layout, { flipped, palette });
 
   ctx.save();
 
@@ -486,7 +488,7 @@ export function renderSceneToCtx(
         ballPx = { x: h.x, y: h.y + ballAttachOffsetY };
       }
     }
-    drawBall(ctx, ballPx.x, ballPx.y, ballR);
+    drawBall(ctx, ballPx.x, ballPx.y, ballR, palette);
   }
 
   // Annotations — on top of the tokens and the ball, as in the editor

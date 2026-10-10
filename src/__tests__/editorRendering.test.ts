@@ -244,7 +244,7 @@ describe("on-screen components import the shared contracts (no local copies)", (
   it("Court.tsx draws through paintCourt and has no drawing code of its own", () => {
     const src = source("src/components/court/Court.tsx");
     expect(src).toMatch(/computeCourtLayout\(cssWidth, variant\)/);
-    expect(src).toMatch(/paintCourt\(ctx, layout, \{ flipped \}\)/);
+    expect(src).toMatch(/paintCourt\(ctx, layout, \{ flipped, palette \}\)/);
     expect(src).toMatch(/normToCanvasPx\(/);
     expect(src).not.toMatch(/function drawHalfCourtInner/);
     expect(src).not.toMatch(/function drawCourt/);
@@ -260,7 +260,7 @@ describe("on-screen components import the shared contracts (no local copies)", (
 
   it("Court.tsx only imports React and the shared court modules", () => {
     const src = source("src/components/court/Court.tsx");
-    const allowed = new Set(["react", "./courtDimensions", "@/lib/courtLayout", "@/lib/courtRendering", "@/lib/tokenSizing"]);
+    const allowed = new Set(["react", "./courtDimensions", "@/lib/courtLayout", "@/lib/courtRendering", "@/lib/tokenSizing", "@/hooks/useTheme"]);
     const specifiers = Array.from(src.matchAll(/from\s+"([^"]+)"/g)).map((m) => m[1]);
     expect(specifiers.length).toBeGreaterThan(0);
     for (const s of specifiers) expect(allowed.has(s), `unexpected import ${s}`).toBe(true);

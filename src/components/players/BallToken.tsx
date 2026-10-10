@@ -16,11 +16,13 @@
  *   - Only one ball exists on the court at a time (enforced by the parent).
  *
  * Visual design:
- *   - Orange circle with white curved seam lines mimicking a basketball.
+ *   - Outlined circle with curved seam lines mimicking a basketball, in the
+ *     active theme's palette.
  */
 
 import { useRef, useCallback } from "react";
-import { BALL_RADIUS, COLOR_BALL, COLOR_BALL_HIGHLIGHT, COLOR_BALL_SEAM } from "@/lib/tokenSizing";
+import { BALL_RADIUS, ballScale } from "@/lib/tokenSizing";
+import { useCourtPalette } from "@/hooks/useTheme";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -41,7 +43,8 @@ const SNAP_RADIUS = BALL_RADIUS * 2.5;
  */
 const DETACH_RADIUS = BALL_RADIUS * 3.5;
 
-// The ball colours live in @/lib/tokenSizing, shared with the exports and thumbnails.
+// The ball colours come from the active theme's CourtPalette, shared with the
+// exports and thumbnails.
 
 // ---------------------------------------------------------------------------
 // Exported constants for use by the parent
@@ -122,6 +125,7 @@ export default function BallToken({
   courtBounds,
   radius = BALL_RADIUS,
 }: BallTokenProps) {
+  const palette = useCourtPalette();
   const isDragging = useRef(false);
   const dragStart = useRef<{ mouseX: number; mouseY: number; ballCx: number; ballCy: number }>({
     mouseX: 0,
@@ -251,13 +255,13 @@ export default function BallToken({
       <circle r={r} cx={1} cy={2} fill="rgba(0,0,0,0.3)" />
 
       {/* Ball body */}
-      <circle r={r} fill={COLOR_BALL} />
+      <circle r={r} fill={palette.ball} stroke={palette.ballSeam} strokeWidth={1.5 * ballScale(r)} />
 
       {/* Highlight arc (upper-left quadrant) */}
       <path
         d={`M ${-r * 0.5} ${-r * 0.6} A ${r * 0.7} ${r * 0.7} 0 0 1 ${r * 0.4} ${-r * 0.5}`}
         fill="none"
-        stroke={COLOR_BALL_HIGHLIGHT}
+        stroke={palette.ballHighlight}
         strokeWidth={1.5}
         strokeLinecap="round"
         opacity={0.5}
@@ -267,7 +271,7 @@ export default function BallToken({
       <path
         d={`M 0 ${-r} C ${r * 0.55} ${-r * 0.5} ${r * 0.55} ${r * 0.5} 0 ${r}`}
         fill="none"
-        stroke={COLOR_BALL_SEAM}
+        stroke={palette.ballSeam}
         strokeWidth={1.2}
         strokeLinecap="round"
       />
@@ -276,7 +280,7 @@ export default function BallToken({
       <path
         d={`M ${-r} 0 C ${-r * 0.5} ${r * 0.4} ${r * 0.5} ${r * 0.4} ${r} 0`}
         fill="none"
-        stroke={COLOR_BALL_SEAM}
+        stroke={palette.ballSeam}
         strokeWidth={1.2}
         strokeLinecap="round"
       />

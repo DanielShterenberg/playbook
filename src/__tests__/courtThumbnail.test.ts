@@ -20,6 +20,7 @@ import ts from "typescript";
 import * as courtLayoutModule from "@/lib/courtLayout";
 import * as tokenSizingModule from "@/lib/tokenSizing";
 import * as courtRenderingModule from "@/lib/courtRendering";
+import * as useThemeModule from "@/hooks/useTheme";
 import * as courtDimensions from "@/components/court/courtDimensions";
 import {
   computeCourtLayout,
@@ -73,6 +74,7 @@ function loadComponent(): (props: ThumbnailProps) => unknown {
     if (id === "@/lib/courtLayout") return courtLayoutModule;
     if (id === "@/lib/tokenSizing") return tokenSizingModule;
     if (id === "@/lib/courtRendering") return courtRenderingModule;
+    if (id === "@/hooks/useTheme") return useThemeModule;
     if (id === "./courtDimensions" || id === "@/components/court/courtDimensions") return courtDimensions;
     if (id.startsWith(".") || id.startsWith("@/")) throw new Error(`unmapped import ${id}`);
     return nodeRequire(id);
@@ -113,9 +115,9 @@ const transforms = (svg: string) => tags(svg, "g").map((g) => g.transform).filte
 // Fixture
 // ---------------------------------------------------------------------------
 
-const OFF = "#E07B39";
-const DEF = "#1E3A5F";
-const BALL = "#E05C00";
+const OFF = "#FF7A1A";
+const DEF = "#141A23";
+const BALL = "#F2B33D";
 
 function makeScene(attachedTo: Scene["ball"]["attachedTo"] = null): Scene {
   return {
@@ -140,7 +142,7 @@ function makeScene(attachedTo: Scene["ball"]["attachedTo"] = null): Scene {
 }
 
 const base = { offenseColor: OFF, defenseColor: DEF };
-const PAINT = "#E07B39";
+const PAINT = "rgba(255, 122, 26, 0.16)";
 const VARIANTS: CourtVariant[] = ["half", "full"];
 const CASES = VARIANTS.flatMap((variant) => [false, true].map((flipped) => ({ variant, flipped })));
 const WIDTHS = [200, 120, 80];
@@ -410,7 +412,7 @@ describe("CourtThumbnail", () => {
     const svg = render({ scene: makeScene(), width: 120, offenseColor: "#3B82F6", defenseColor: "#0F766E", lineWidth: 0.8, outlineWidth: 1, basketRadius: 3, cornerRadius: 3 });
     expect(circlesFilled(svg, "#3B82F6").length).toBe(2);
     expect(circlesFilled(svg, "#0F766E").length).toBe(2);
-    expect(tags(svg, "rect").some((r) => r.fill === "#F0C878")).toBe(true);
+    expect(tags(svg, "rect").some((r) => r.fill === "#FFFFFF")).toBe(true);
     expect(tags(svg, "path").every((p) => p["stroke-width"] === "0.8")).toBe(true);
     expect(tags(svg, "circle").some((c) => c.fill === "none" && c.r === "3")).toBe(true);
   });
@@ -428,10 +430,10 @@ describe("CourtThumbnail", () => {
     expect(circlesFilled(svg, "#7C3AED").length).toBe(2);
   });
 
-  it("defaults to the editor's team colours (#E07B39 offense, #1E3A5F defense)", () => {
+  it("defaults to the light palette's team colours (#FF7A1A offense, #141A23 defense)", () => {
     const svg = render({ scene: makeScene(), width: 120 });
-    expect(circlesFilled(svg, "#E07B39").length).toBe(2);
-    expect(circlesFilled(svg, "#1E3A5F").length).toBe(2);
+    expect(circlesFilled(svg, "#FF7A1A").length).toBe(2);
+    expect(circlesFilled(svg, "#141A23").length).toBe(2);
     expect(svg).not.toMatch(/#3B82F6/i);
   });
 
@@ -493,8 +495,8 @@ describe("CourtThumbnail", () => {
   it("takes court and token colours from the shared modules (no hex literals of its own)", () => {
     const src = readFileSync(FILE, "utf8");
     expect(src).not.toMatch(/["'`]#[0-9A-Fa-f]{3,8}["'`]/);
-    expect(src).toMatch(/import \{[^}]*COLOR_COURT[^}]*\} from "@\/lib\/courtRendering"/);
-    expect(src).toMatch(/COLOR_LINE/);
-    expect(src).toMatch(/DEFAULT_COLOR_PAINT/);
+    expect(src).toMatch(/import \{[^}]*useCourtPalette[^}]*\} from "@\/hooks\/useTheme"/);
+    expect(src).toMatch(/palette\.line/);
+    expect(src).toMatch(/palette\.paint/);
   });
 });

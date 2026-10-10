@@ -21,6 +21,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { computeCourtLayout, normToCanvasPx, type CourtLayout, type CourtVariant } from "@/lib/courtLayout";
 import { paintCourt } from "@/lib/courtRendering";
+import { useCourtPalette } from "@/hooks/useTheme";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -96,6 +97,8 @@ export { OOB_SIDE_FRAC, OOB_BOTTOM_FRAC } from "@/lib/courtLayout";
 export default function Court({ variant = "half", onReady, className, flipped = false }: CourtProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Theme colours — a dependency of draw(), so toggling the theme repaints
+  const palette = useCourtPalette();
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -124,7 +127,7 @@ export default function Court({ variant = "half", onReady, className, flipped = 
 
     // Floor, OOB margins and all markings (the flip is purely visual —
     // courtToCanvas compensates)
-    paintCourt(ctx, layout, { flipped });
+    paintCourt(ctx, layout, { flipped, palette });
 
     // Notify parent with coordinate conversion helper and play-area metadata
     if (onReady) {
@@ -142,7 +145,7 @@ export default function Court({ variant = "half", onReady, className, flipped = 
         layout,
       });
     }
-  }, [variant, onReady, flipped]);
+  }, [variant, onReady, flipped, palette]);
 
   useEffect(() => {
     draw();

@@ -30,7 +30,7 @@ import type { FrameResolution, FrameStyle } from "./frameRenderer";
 import { computeCourtLayout } from "@/lib/courtLayout";
 import { stepDurationMs } from "./playback";
 import type { CourtVariant } from "@/lib/courtLayout";
-import { COLOR_COURT } from "@/lib/courtRendering";
+import { COLOR_OOB } from "@/lib/courtRendering";
 
 export type VideoResolution = FrameResolution;
 
@@ -101,7 +101,7 @@ export function renderVideoFrame(
   if (encW !== width || encH !== height) {
     const ctx = canvas.getContext("2d");
     if (ctx) {
-      ctx.fillStyle = COLOR_COURT;
+      ctx.fillStyle = COLOR_OOB;
       ctx.fillRect(0, 0, encW, encH);
     }
   }
