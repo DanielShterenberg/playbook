@@ -42,6 +42,7 @@ import {
   COLOR_BALL_SEAM,
   DEFAULT_OFFENSE_COLOR,
   DEFAULT_DEFENSE_COLOR,
+  playerLabelFontSize,
 } from "@/lib/tokenSizing";
 
 // ---------------------------------------------------------------------------
@@ -137,8 +138,7 @@ function drawPlayer(
     // "numbers"
     label = String(position);
   }
-  const baseFontSize = Math.max(6, Math.round(11 * s));
-  const fontSize = label.length > 2 ? Math.max(5, baseFontSize - (label.length - 2) * 1.5) : baseFontSize;
+  const fontSize = playerLabelFontSize(label.length, r);
 
   ctx.fillStyle = isOffense ? COLOR_TEXT_OFFENSE : defenseStroke;
   ctx.font = `700 ${fontSize}px system-ui, sans-serif`;

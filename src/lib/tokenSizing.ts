@@ -122,6 +122,18 @@ export function playerScale(radius: number): number {
   return tokenScale(radius, PLAYER_RADIUS);
 }
 
+/**
+ * Font size of a player token's label. Authored at PLAYER_RADIUS (11px, shrinking
+ * 1.5px per character beyond two, floor 5px) and scaled with the token, so a
+ * long name fills the same share of the token on screen and in every export.
+ */
+export function playerLabelFontSize(labelLength: number, radius: number): number {
+  const s = playerScale(radius);
+  const base = Math.max(6, Math.round(11 * s));
+  if (labelLength <= 2) return base;
+  return Math.max(5, 5 * s, base - (labelLength - 2) * 1.5 * s);
+}
+
 /** tokenScale relative to BALL_RADIUS. */
 export function ballScale(radius: number): number {
   return tokenScale(radius, BALL_RADIUS);

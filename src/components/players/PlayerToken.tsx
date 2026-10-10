@@ -14,7 +14,7 @@
 
 import { useRef, useCallback } from "react";
 import type { PlayerDisplayMode } from "@/lib/store";
-import { PLAYER_RADIUS, playerScale, DEFAULT_OFFENSE_COLOR, DEFAULT_DEFENSE_COLOR } from "@/lib/tokenSizing";
+import { PLAYER_RADIUS, playerScale, playerLabelFontSize, DEFAULT_OFFENSE_COLOR, DEFAULT_DEFENSE_COLOR } from "@/lib/tokenSizing";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -236,8 +236,7 @@ export default function PlayerToken({
   const scaledStrokeWidth = Math.max(1.5, strokeWidth * scale);
 
   // Shrink font for long names so they fit inside the token
-  const baseFontSize = Math.max(6, Math.round(11 * scale));
-  const fontSize = label.length > 2 ? Math.max(5, baseFontSize - (label.length - 2) * 1.5) : baseFontSize;
+  const fontSize = playerLabelFontSize(label.length, radius);
 
   return (
     <g

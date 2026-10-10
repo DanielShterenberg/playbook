@@ -25,6 +25,7 @@ import {
   playerScale,
   ballScale,
   computeTokenSizes,
+  playerLabelFontSize,
 } from "@/lib/tokenSizing";
 import { computeCourtLayout } from "@/lib/courtLayout";
 
@@ -236,5 +237,25 @@ describe("thumbnailBallAttachOffsetY — the editor's gap scaled to the dot", ()
       expect(-off).toBeGreaterThan(dot + ball);
       expect(-off - (dot + ball)).toBeLessThan(1);
     }
+  });
+});
+
+describe("playerLabelFontSize", () => {
+  it("is the authored size at the base radius", () => {
+    expect(playerLabelFontSize(1, PLAYER_RADIUS)).toBe(11);
+    expect(playerLabelFontSize(4, PLAYER_RADIUS)).toBe(8);
+    expect(playerLabelFontSize(12, PLAYER_RADIUS)).toBe(5);
+  });
+
+  it("keeps a long name the same share of the token at export sizes", () => {
+    for (const len of [3, 6, 12]) {
+      const atBase = playerLabelFontSize(len, PLAYER_RADIUS) / PLAYER_RADIUS;
+      const atPdf = playerLabelFontSize(len, 36) / 36;
+      expect(atPdf).toBeCloseTo(atBase, 5);
+    }
+  });
+
+  it("never drops below 5px", () => {
+    expect(playerLabelFontSize(20, 10)).toBeGreaterThanOrEqual(5);
   });
 });
