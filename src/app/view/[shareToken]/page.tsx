@@ -20,7 +20,7 @@
  *     [ / ] (prev/next scene)
  */
 
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { loadSharedPlay } from "@/lib/team";
 import type { Play, Scene } from "@/lib/types";
 import CourtWithPlayers from "@/components/players/CourtWithPlayers";
@@ -112,12 +112,9 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   }, [shareToken]);
 
   // Sort scenes once
-  const scenes = useMemo(
-    () => (play ? [...play.scenes].sort((a, b) => a.order - b.order) : []),
-    [play],
-  );
+  const scenes = play ? [...play.scenes].sort((a, b) => a.order - b.order) : [];
   const scene = scenes[sceneIndex] ?? null;
-  const steps = useMemo(() => (scene ? getSortedSteps(scene) : []), [scene]);
+  const steps = scene ? getSortedSteps(scene) : [];
   const currentStep = steps[stepIndex] ?? steps[0] ?? 1;
 
   // Sync playStateRef
