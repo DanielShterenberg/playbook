@@ -171,7 +171,7 @@ export default function PlaybackControls() {
 
       {/* Timeline scrubber — one segment per scene, filled up to the current one */}
       <div
-        className="flex min-w-0 flex-1 items-center gap-0.5 md:basis-14"
+        className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto md:basis-14"
         role="group"
         aria-label="Scene timeline"
       >

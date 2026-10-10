@@ -328,7 +328,7 @@ export default function EditorHeader({ playId }: EditorHeaderProps) {
             <ThemeToggle />
           </div>
 
-          {/* Undo / Redo buttons (issue #83) — in the tool bar on mobile */}
+          {/* Undo / Redo buttons (issue #83) — hidden on mobile (viewer mode) */}
           <div className="hidden md:block">
             <UndoRedoButtons />
           </div>

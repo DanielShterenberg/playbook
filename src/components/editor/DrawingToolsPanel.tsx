@@ -227,7 +227,7 @@ export default function DrawingToolsPanel() {
 
   return (
     <nav
-      className={`${RAIL} gap-1.5 py-4 transition-all duration-200 ${collapsed ? "w-11" : "px-2.5"}`}
+      className={`${RAIL} gap-1.5 overflow-y-auto py-4 transition-all duration-200 ${collapsed ? "w-11" : "px-2.5"}`}
       aria-label="Drawing tools"
     >
       {/* Tool buttons — hidden when collapsed */}

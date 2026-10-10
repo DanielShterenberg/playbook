@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * TimingStripPanel — horizontal strip beside the scene strip (above it below
+ * TimingStripPanel — horizontal strip beside the scene strip (below it below
  * lg) showing timing groups (steps) for the active scene.
  *
  * Implements issue #64: Timing groups — assign steps to annotations.

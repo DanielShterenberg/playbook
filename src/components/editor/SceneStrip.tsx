@@ -171,6 +171,8 @@ function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, vari
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
+    // Phones are viewer-only: a long-press must not open Duplicate / Move / Delete.
+    if (!window.matchMedia("(min-width: 768px)").matches) return;
     setMenu({ x: e.clientX, y: e.clientY });
   };
 
