@@ -11,6 +11,7 @@ import UndoRedoButtons from "@/components/editor/UndoRedoButtons";
 import ExportMenu from "@/components/editor/ExportMenu";
 import MobileViewerBanner from "@/components/editor/MobileViewerBanner";
 import EditorHeader from "./EditorHeader";
+import PlaybackEngine from "./PlaybackEngine";
 import SaveIndicator from "@/components/editor/SaveIndicator";
 import EditorCoachMark from "@/components/editor/EditorCoachMark";
 
@@ -28,6 +29,9 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
        * Delete, and the ? shortcuts overlay. Renders the overlay when active.
        */}
       <EditorKeyboardManager />
+
+      {/* The single playback timer (issue #160) — drives both the playback bar and presentation mode. */}
+      <PlaybackEngine />
 
       {/*
        * Mobile viewer-only banner (<768px).

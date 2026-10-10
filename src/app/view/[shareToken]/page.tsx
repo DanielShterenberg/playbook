@@ -20,9 +20,12 @@
  *     [ / ] (prev/next scene)
  */
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { loadSharedPlay } from "@/lib/team";
-import type { Play, Scene } from "@/lib/types";
+import type { Play } from "@/lib/types";
+import { tickPlayback, sortedSteps } from "@/lib/playback";
+import type { PlaybackPosition } from "@/lib/playback";
+import { usePlaybackClock } from "@/hooks/usePlaybackEngine";
 import CourtWithPlayers from "@/components/players/CourtWithPlayers";
 import type { CourtVariant } from "@/components/court/Court";
 
@@ -68,20 +71,6 @@ function ChevronRightIcon({ size = 16 }: { size?: number }) {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function getSortedSteps(scene: Scene): number[] {
-  return [...scene.timingGroups]
-    .sort((a, b) => a.step - b.step)
-    .map((g) => g.step);
-}
-
-function getStepDuration(scene: Scene, step: number): number {
-  return scene.timingGroups.find((g) => g.step === step)?.duration ?? 1000;
-}
-
-// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -96,7 +85,6 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState<0.5 | 1 | 1.5 | 2>(1);
 
-  const rafRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playStateRef = useRef(false);
   const speedRef = useRef(speed);
   useEffect(() => { speedRef.current = speed; }, [speed]);
@@ -111,47 +99,52 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
       .finally(() => setLoading(false));
   }, [shareToken]);
 
-  // Sort scenes once
-  const scenes = play ? [...play.scenes].sort((a, b) => a.order - b.order) : [];
+  // Sort scenes once per loaded play. `sceneIndex` indexes this sorted array.
+  const scenes = useMemo(
+    () => (play ? [...play.scenes].sort((a, b) => a.order - b.order) : []),
+    [play],
+  );
   const scene = scenes[sceneIndex] ?? null;
-  const steps = scene ? getSortedSteps(scene) : [];
+  const steps = useMemo(() => sortedSteps(scene ?? undefined), [scene]);
   const currentStep = steps[stepIndex] ?? steps[0] ?? 1;
 
   // Sync playStateRef
   useEffect(() => { playStateRef.current = isPlaying; }, [isPlaying]);
 
-  // Auto-advance through steps when playing
-  const scheduleNext = useCallback(() => {
-    if (!scene || !playStateRef.current) return;
-    const duration = getStepDuration(scene, steps[stepIndex]) / speedRef.current;
-    rafRef.current = setTimeout(() => {
-      if (!playStateRef.current) return;
-      setStepIndex((si) => {
-        const nextSi = si + 1;
-        if (nextSi < steps.length) {
-          return nextSi;
-        }
-        // Advance to next scene or stop
-        setSceneIndex((sci) => {
-          const nextSci = sci + 1;
-          if (nextSci < scenes.length) {
-            setStepIndex(0);
-            return nextSci;
-          }
-          // End of play — stop
-          setIsPlaying(false);
-          playStateRef.current = false;
-          return sci;
-        });
-        return 0;
-      });
-    }, duration);
-  }, [scene, steps, stepIndex, scenes.length]);
+  // Auto-advance while playing: local state, advanced by the shared pure
+  // playback reducer (src/lib/playback.ts, issue #160) on a rAF clock.
+  // posRef is the reducer's view of the position plus the time spent in the
+  // current step; it is re-seeded whenever the rendered position was changed
+  // by something other than the tick (buttons, keyboard) or play is pressed.
+  const posRef = useRef<PlaybackPosition>({ sceneIndex: 0, step: 1, accMs: 0 });
 
   useEffect(() => {
-    if (isPlaying) scheduleNext();
-    return () => { if (rafRef.current) clearTimeout(rafRef.current); };
-  }, [isPlaying, stepIndex, sceneIndex, scheduleNext]);
+    const pos = posRef.current;
+    if (pos.sceneIndex !== sceneIndex || pos.step !== currentStep) {
+      posRef.current = { sceneIndex, step: currentStep, accMs: 0 };
+    }
+  }, [sceneIndex, currentStep]);
+
+  useEffect(() => {
+    if (isPlaying) posRef.current = { ...posRef.current, accMs: 0 };
+  }, [isPlaying]);
+
+  const tick = useCallback((dtMs: number) => {
+    if (!playStateRef.current) return;
+    const result = tickPlayback(posRef.current, dtMs, { scenes, speed: speedRef.current, loop: false });
+    posRef.current = result.state;
+    if (result.ended) {
+      // End of play — stop
+      playStateRef.current = false;
+      setIsPlaying(false);
+    } else if (result.changed) {
+      const { sceneIndex: nextSceneIndex, step: nextStep } = result.state;
+      setSceneIndex(nextSceneIndex);
+      setStepIndex(Math.max(0, sortedSteps(scenes[nextSceneIndex]).indexOf(nextStep)));
+    }
+  }, [scenes]);
+
+  usePlaybackClock(isPlaying, tick);
 
   // Reset step when scene changes
   useEffect(() => { setStepIndex(0); }, [sceneIndex]);

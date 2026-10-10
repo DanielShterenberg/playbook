@@ -16,6 +16,7 @@ import type {
   BallState,
 } from "./types";
 import { useHistoryStore } from "./history";
+import { firstStepOf } from "./playback";
 
 // ---------------------------------------------------------------------------
 // Tool types
@@ -139,6 +140,13 @@ export interface AppStore {
   stepForward: () => void;
   stepBack: () => void;
   setCurrentSceneIndex: (index: number) => void;
+  /**
+   * Move playback to a scene (and optionally a step) WITHOUT touching
+   * `isPlaying`, keeping `selectedSceneId` in sync. `sceneIndex` indexes
+   * `currentPlay.scenes`; `step` defaults to the scene's first timing step.
+   * Used by the playback engine and by presentation-mode navigation.
+   */
+  setPlaybackPosition: (sceneIndex: number, step?: number) => void;
   setCurrentStep: (step: number) => void;
   setSpeed: (speed: PlaybackSpeed) => void;
   setLoop: (loop: boolean) => void;
@@ -947,6 +955,17 @@ export const useStore = create<AppStore>()(
         isPlaying: false,
         selectedSceneId: state.currentPlay?.scenes[index]?.id ?? state.selectedSceneId,
       })),
+
+    setPlaybackPosition: (sceneIndex, step) =>
+      set((state) => {
+        const scene = state.currentPlay?.scenes[sceneIndex];
+        if (!scene) return state;
+        return {
+          currentSceneIndex: sceneIndex,
+          currentStep: step ?? firstStepOf(scene),
+          selectedSceneId: scene.id,
+        };
+      }),
 
     setCurrentStep: (step) => set({ currentStep: step }),
     setSpeed: (speed) => set({ speed }),
