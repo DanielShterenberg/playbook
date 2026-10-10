@@ -20,9 +20,22 @@
  *     [ / ] (prev/next scene)
  */
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { loadSharedPlay } from "@/lib/team";
-import type { Play, Scene } from "@/lib/types";
+import type { Play } from "@/lib/types";
+import {
+  tickPlayback,
+  sortedTimingGroups,
+  nextStepAfter,
+  prevStepBefore,
+  firstStepOf,
+  startPosition,
+  isAtStart,
+  isAtEnd,
+  normalizePlayForPlayback,
+} from "@/lib/playback";
+import type { PlaybackPosition } from "@/lib/playback";
+import { usePlaybackClock } from "@/hooks/usePlaybackEngine";
 import CourtWithPlayers from "@/components/players/CourtWithPlayers";
 import type { CourtVariant } from "@/components/court/Court";
 
@@ -68,20 +81,6 @@ function ChevronRightIcon({ size = 16 }: { size?: number }) {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function getSortedSteps(scene: Scene): number[] {
-  return [...scene.timingGroups]
-    .sort((a, b) => a.step - b.step)
-    .map((g) => g.step);
-}
-
-function getStepDuration(scene: Scene, step: number): number {
-  return scene.timingGroups.find((g) => g.step === step)?.duration ?? 1000;
-}
-
-// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -91,103 +90,144 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  const [sceneIndex, setSceneIndex] = useState(0);
-  const [stepIndex, setStepIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  // Read through a ref so two quick toggles before a re-render do not both
+  // see the same stale value.
+  const isPlayingRef = useRef(false);
+  const setPlaying = useCallback((playing: boolean) => {
+    isPlayingRef.current = playing;
+    setIsPlaying(playing);
+  }, []);
   const [speed, setSpeed] = useState<0.5 | 1 | 1.5 | 2>(1);
 
-  const rafRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const playStateRef = useRef(false);
-  const speedRef = useRef(speed);
-  useEffect(() => { speedRef.current = speed; }, [speed]);
+  // The one playback position (scene, step, time spent in the step). It lives
+  // in a ref because the time changes on every animation frame; `shown` is the
+  // snapshot of it that is rendered. Both are only ever written by `moveTo`,
+  // together, so there is nothing to reconcile — everything else is derived.
+  const positionRef = useRef<PlaybackPosition>({ sceneIndex: 0, step: 1, accMs: 0 });
+  const [shown, setShown] = useState({ sceneIndex: 0, step: 1 });
+  const moveTo = useCallback((next: PlaybackPosition) => {
+    const prev = positionRef.current;
+    positionRef.current = next;
+    // Most ticks only add time; re-render only when the scene or step changes.
+    if (prev.sceneIndex !== next.sceneIndex || prev.step !== next.step) {
+      setShown({ sceneIndex: next.sceneIndex, step: next.step });
+    }
+  }, []);
 
   useEffect(() => {
     loadSharedPlay(shareToken)
       .then((p) => {
-        if (p) setPlay(p);
+        // Same normalisation as the editor store applies on load: scenes in
+        // `order` order, timing steps renumbered 1..n (legacy snapshots can
+        // carry gaps or duplicate step numbers).
+        if (p) setPlay(normalizePlayForPlayback(p));
         else setNotFound(true);
       })
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
   }, [shareToken]);
 
-  // Sort scenes once
-  const scenes = play ? [...play.scenes].sort((a, b) => a.order - b.order) : [];
+  const scenes = useMemo(() => play?.scenes ?? [], [play]);
+  const { sceneIndex, step: currentStep } = shown;
   const scene = scenes[sceneIndex] ?? null;
-  const steps = scene ? getSortedSteps(scene) : [];
-  const currentStep = steps[stepIndex] ?? steps[0] ?? 1;
+  const steps = sortedTimingGroups(scene);
+  const stepIndex = Math.max(steps.findIndex((g) => g.step === currentStep), 0);
+  // One derivation for the step buttons' disabled state and for stepBy.
+  const prevStep = prevStepBefore(scene, currentStep);
+  const nextStep = nextStepAfter(scene, currentStep);
+  const atStart = isAtStart(shown, scenes);
 
-  // Sync playStateRef
-  useEffect(() => { playStateRef.current = isPlaying; }, [isPlaying]);
+  // Auto-advance while playing: the shared pure playback reducer
+  // (src/lib/playback.ts, issue #160) on a rAF clock. No loop in the viewer.
+  const tick = useCallback((dtMs: number) => {
+    const result = tickPlayback(positionRef.current, dtMs, { scenes, speed, loop: false });
+    moveTo(result.state);
+    if (result.ended) setPlaying(false);
+  }, [scenes, speed, moveTo, setPlaying]);
 
-  // Auto-advance through steps when playing
-  const scheduleNext = useCallback(() => {
-    if (!scene || !playStateRef.current) return;
-    const duration = getStepDuration(scene, steps[stepIndex]) / speedRef.current;
-    rafRef.current = setTimeout(() => {
-      if (!playStateRef.current) return;
-      setStepIndex((si) => {
-        const nextSi = si + 1;
-        if (nextSi < steps.length) {
-          return nextSi;
-        }
-        // Advance to next scene or stop
-        setSceneIndex((sci) => {
-          const nextSci = sci + 1;
-          if (nextSci < scenes.length) {
-            setStepIndex(0);
-            return nextSci;
-          }
-          // End of play — stop
-          setIsPlaying(false);
-          playStateRef.current = false;
-          return sci;
-        });
-        return 0;
-      });
-    }, duration);
-  }, [scene, steps, stepIndex, scenes.length]);
+  usePlaybackClock(isPlaying, tick);
 
+  // ---------------------------------------------------------------------------
+  // Controls (shared by buttons and keyboard)
+  // ---------------------------------------------------------------------------
+
+  const togglePlay = useCallback(() => {
+    if (isPlayingRef.current) {
+      setPlaying(false);
+      return;
+    }
+    // Play pressed on the final step restarts the play instead of replaying
+    // only the final hold. Either way the current step starts from zero.
+    const position = positionRef.current;
+    moveTo(isAtEnd(position, scenes) ? startPosition(scenes) : { ...position, accMs: 0 });
+    setPlaying(true);
+  }, [scenes, moveTo, setPlaying]);
+
+  /**
+   * Pause and move one step back / forward within the current scene. The
+   * target comes from the same prevStepBefore / nextStepAfter the buttons'
+   * disabled state is derived from (`prevStep` / `nextStep` below).
+   */
+  const stepBy = useCallback((delta: 1 | -1) => {
+    setPlaying(false);
+    const position = positionRef.current;
+    const scene = scenes[position.sceneIndex];
+    const target = delta > 0 ? nextStepAfter(scene, position.step) : prevStepBefore(scene, position.step);
+    if (target !== undefined) moveTo({ sceneIndex: position.sceneIndex, step: target, accMs: 0 });
+  }, [scenes, moveTo, setPlaying]);
+
+  /** Pause and go to the first step of a scene (no-op move if already on that scene). */
+  const goToScene = useCallback((index: number) => {
+    setPlaying(false);
+    const target = Math.min(Math.max(index, 0), scenes.length - 1);
+    if (target < 0 || target === positionRef.current.sceneIndex) return;
+    moveTo({ sceneIndex: target, step: firstStepOf(scenes[target]), accMs: 0 });
+  }, [scenes, moveTo, setPlaying]);
+
+  const sceneBy = useCallback(
+    (delta: 1 | -1) => goToScene(positionRef.current.sceneIndex + delta),
+    [goToScene],
+  );
+
+  const goToBeginning = useCallback(() => {
+    setPlaying(false);
+    moveTo(startPosition(scenes));
+  }, [scenes, moveTo, setPlaying]);
+
+  // Keyboard shortcuts. The window listener is registered once; it reaches the
+  // current handlers through a ref so play/pause does not re-register it.
+  const handlersRef = useRef({ togglePlay, stepBy, sceneBy, goToBeginning });
   useEffect(() => {
-    if (isPlaying) scheduleNext();
-    return () => { if (rafRef.current) clearTimeout(rafRef.current); };
-  }, [isPlaying, stepIndex, sceneIndex, scheduleNext]);
+    handlersRef.current = { togglePlay, stepBy, sceneBy, goToBeginning };
+  }, [togglePlay, stepBy, sceneBy, goToBeginning]);
 
-  // Reset step when scene changes
-  useEffect(() => { setStepIndex(0); }, [sceneIndex]);
-
-  // Keyboard shortcuts
   useEffect(() => {
     function handler(e: KeyboardEvent) {
+      const handlers = handlersRef.current;
       if (e.code === "Space") {
         e.preventDefault();
-        setIsPlaying((v) => !v);
+        handlers.togglePlay();
       } else if (e.code === "ArrowRight") {
         e.preventDefault();
-        setIsPlaying(false);
-        setStepIndex((si) => Math.min(si + 1, steps.length - 1));
+        handlers.stepBy(1);
       } else if (e.code === "ArrowLeft") {
         e.preventDefault();
-        setIsPlaying(false);
-        setStepIndex((si) => Math.max(si - 1, 0));
+        handlers.stepBy(-1);
       } else if (e.code === "Home") {
         e.preventDefault();
-        setIsPlaying(false);
-        setSceneIndex(0);
-        setStepIndex(0);
+        handlers.goToBeginning();
       } else if (e.code === "BracketLeft") {
         e.preventDefault();
-        setIsPlaying(false);
-        setSceneIndex((i) => Math.max(0, i - 1));
+        handlers.sceneBy(-1);
       } else if (e.code === "BracketRight") {
         e.preventDefault();
-        setIsPlaying(false);
-        setSceneIndex((i) => Math.min(scenes.length - 1, i + 1));
+        handlers.sceneBy(1);
       }
     }
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [steps.length, scenes.length]);
+  }, []);
 
   // Effective flip: scene override > play default
   const effectiveFlipped = ((scene?.flipped ?? play?.flipped) === true);
@@ -275,16 +315,16 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
         {hasMultipleSteps && (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button
-              onClick={() => { setIsPlaying(false); setStepIndex((i) => Math.max(0, i - 1)); }}
-              disabled={stepIndex === 0}
+              onClick={() => stepBy(-1)}
+              disabled={prevStep === undefined}
               aria-label="Previous step"
-              style={{ padding: "5px 10px", borderRadius: 6, border: "1.5px solid #E5E7EB", background: "#fff", color: stepIndex === 0 ? "#D1D5DB" : "#374151", cursor: stepIndex === 0 ? "default" : "pointer", display: "flex", alignItems: "center", gap: 4 }}
+              style={{ padding: "5px 10px", borderRadius: 6, border: "1.5px solid #E5E7EB", background: "#fff", color: prevStep === undefined ? "#D1D5DB" : "#374151", cursor: prevStep === undefined ? "default" : "pointer", display: "flex", alignItems: "center", gap: 4 }}
             >
               <ChevronLeftIcon size={14} /> Step
             </button>
 
             <button
-              onClick={() => setIsPlaying((v) => !v)}
+              onClick={togglePlay}
               aria-label={isPlaying ? "Pause" : "Play steps"}
               style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: "#1E3A5F", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
             >
@@ -293,10 +333,10 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
             </button>
 
             <button
-              onClick={() => { setIsPlaying(false); setStepIndex((i) => Math.min(i + 1, steps.length - 1)); }}
-              disabled={stepIndex >= steps.length - 1}
+              onClick={() => stepBy(1)}
+              disabled={nextStep === undefined}
               aria-label="Next step"
-              style={{ padding: "5px 10px", borderRadius: 6, border: "1.5px solid #E5E7EB", background: "#fff", color: stepIndex >= steps.length - 1 ? "#D1D5DB" : "#374151", cursor: stepIndex >= steps.length - 1 ? "default" : "pointer", display: "flex", alignItems: "center", gap: 4 }}
+              style={{ padding: "5px 10px", borderRadius: 6, border: "1.5px solid #E5E7EB", background: "#fff", color: nextStep === undefined ? "#D1D5DB" : "#374151", cursor: nextStep === undefined ? "default" : "pointer", display: "flex", alignItems: "center", gap: 4 }}
             >
               Step <ChevronRightIcon size={14} />
             </button>
@@ -312,17 +352,17 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {/* Go to beginning */}
             <button
-              onClick={() => { setIsPlaying(false); setSceneIndex(0); setStepIndex(0); }}
-              disabled={sceneIndex === 0 && stepIndex === 0}
+              onClick={goToBeginning}
+              disabled={atStart}
               aria-label="Go to beginning"
               title="Go to beginning"
-              style={{ padding: "6px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", background: "#fff", fontSize: 13, fontWeight: 500, color: sceneIndex === 0 && stepIndex === 0 ? "#D1D5DB" : "#374151", cursor: sceneIndex === 0 && stepIndex === 0 ? "default" : "pointer" }}
+              style={{ padding: "6px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", background: "#fff", fontSize: 13, fontWeight: 500, color: atStart ? "#D1D5DB" : "#374151", cursor: atStart ? "default" : "pointer" }}
             >
               ⏮
             </button>
 
             <button
-              onClick={() => { setIsPlaying(false); setSceneIndex((i) => Math.max(0, i - 1)); }}
+              onClick={() => sceneBy(-1)}
               disabled={sceneIndex === 0}
               aria-label="Previous scene"
               style={{ padding: "6px 16px", borderRadius: 8, border: "1.5px solid #E5E7EB", background: "#fff", fontSize: 13, fontWeight: 500, color: sceneIndex === 0 ? "#D1D5DB" : "#374151", cursor: sceneIndex === 0 ? "default" : "pointer" }}
@@ -335,7 +375,7 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
               {scenes.map((s, i) => (
                 <button
                   key={s.id}
-                  onClick={() => { setIsPlaying(false); setSceneIndex(i); }}
+                  onClick={() => goToScene(i)}
                   aria-label={`Scene ${i + 1}${s.note ? ` — ${s.note}` : ""}`}
                   style={{ width: i === sceneIndex ? 22 : 8, height: 8, borderRadius: 4, background: i === sceneIndex ? "#1E3A5F" : "#D1D5DB", border: "none", cursor: "pointer", padding: 0, transition: "width 0.2s, background 0.2s" }}
                 />
@@ -343,7 +383,7 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
             </div>
 
             <button
-              onClick={() => { setIsPlaying(false); setSceneIndex((i) => Math.min(scenes.length - 1, i + 1)); }}
+              onClick={() => sceneBy(1)}
               disabled={sceneIndex >= scenes.length - 1}
               aria-label="Next scene"
               style={{ padding: "6px 16px", borderRadius: 8, border: "1.5px solid #E5E7EB", background: "#fff", fontSize: 13, fontWeight: 500, color: sceneIndex >= scenes.length - 1 ? "#D1D5DB" : "#374151", cursor: sceneIndex >= scenes.length - 1 ? "default" : "pointer" }}

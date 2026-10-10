@@ -102,31 +102,8 @@ export default function TimingStripPanel() {
   const isPlaying = useStore((s) => s.isPlaying);
   const currentStep = useStore((s) => s.currentStep);
 
-  // We need to write duration updates directly into the scene.
-  // Expose via store's generic setCurrentPlay — we write a targeted scene update.
-  const setCurrentPlay = useStore((s) => s.setCurrentPlay);
-  const currentPlay = useStore((s) => s.currentPlay);
-
-  const handleDurationChange = useCallback(
-    (step: number, ms: number) => {
-      if (!currentPlay || !sceneId) return;
-      const updated = {
-        ...currentPlay,
-        updatedAt: new Date(),
-        scenes: currentPlay.scenes.map((sc) => {
-          if (sc.id !== sceneId) return sc;
-          return {
-            ...sc,
-            timingGroups: sc.timingGroups.map((g) =>
-              g.step === step ? { ...g, duration: ms } : g,
-            ),
-          };
-        }),
-      };
-      setCurrentPlay(updated);
-    },
-    [currentPlay, sceneId, setCurrentPlay],
-  );
+  // Duration edits go through a dedicated, undoable store action.
+  const setTimingStepDuration = useStore((s) => s.setTimingStepDuration);
 
   if (!scene || !sceneId) return null;
 
@@ -193,7 +170,7 @@ export default function TimingStripPanel() {
               {!isPlaying && (
                 <DurationEditor
                   stepDuration={group.duration}
-                  onChange={(ms) => handleDurationChange(group.step, ms)}
+                  onChange={(ms) => setTimingStepDuration(sceneId, group.step, ms)}
                 />
               )}
 

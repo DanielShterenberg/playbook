@@ -77,7 +77,6 @@ export function useKeyboardShortcuts({
   const stepForward = useStore((s) => s.stepForward);
   const stepBack = useStore((s) => s.stepBack);
   const setLoop = useStore((s) => s.setLoop);
-  const setSelectedSceneId = useStore((s) => s.setSelectedSceneId);
   const removeAnnotation = useStore((s) => s.removeAnnotation);
   const removeScene = useStore((s) => s.removeScene);
 
@@ -192,23 +191,6 @@ export function useKeyboardShortcuts({
         onToggleHelp?.();
         return;
       }
-
-      // Explicit scene navigation via setSelectedSceneId
-      if (e.code === "ArrowRight" || e.code === "ArrowLeft") {
-        const state = useStore.getState();
-        const scenes = (state.currentPlay?.scenes ?? []).sort(
-          (a, b) => a.order - b.order,
-        );
-        const currentIdx = scenes.findIndex(
-          (s) => s.id === state.selectedSceneId,
-        );
-        if (currentIdx === -1) return;
-        const nextIdx =
-          e.code === "ArrowRight"
-            ? Math.min(currentIdx + 1, scenes.length - 1)
-            : Math.max(currentIdx - 1, 0);
-        setSelectedSceneId(scenes[nextIdx].id);
-      }
     },
     [
       enabled,
@@ -218,7 +200,6 @@ export function useKeyboardShortcuts({
       stepForward,
       stepBack,
       setLoop,
-      setSelectedSceneId,
       removeAnnotation,
       removeScene,
       onSave,

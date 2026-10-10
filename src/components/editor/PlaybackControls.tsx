@@ -16,14 +16,14 @@
  *
  * Architecture:
  *   - Reads/writes Zustand playback state.
- *   - Uses requestAnimationFrame to auto-advance through scenes while isPlaying.
- *   - On each frame, advances the selectedTimingStep within a scene, then
- *     moves to the next scene when all timing groups are exhausted.
+ *   - Owns no timer: auto-advance is done by the single playback engine
+ *     (src/hooks/usePlaybackEngine.ts, issue #160).
  */
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect } from "react";
 import { useStore, selectEditorScene, selectSceneCount } from "@/lib/store";
 import type { PlaybackSpeed } from "@/lib/store";
+import { sortedTimingGroups } from "@/lib/playback";
 
 // ---------------------------------------------------------------------------
 // Speed options
@@ -96,14 +96,11 @@ export default function PlaybackControls() {
   const sceneCount = useStore(selectSceneCount);
   const scene = useStore(selectEditorScene);
 
-  const isPresentationMode = useStore((s) => s.isPresentationMode);
-
   const togglePlayback = useStore((s) => s.togglePlayback);
   const pausePlayback = useStore((s) => s.pausePlayback);
   const stepForward = useStore((s) => s.stepForward);
   const stepBack = useStore((s) => s.stepBack);
-  const setCurrentSceneIndex = useStore((s) => s.setCurrentSceneIndex);
-  const setCurrentStep = useStore((s) => s.setCurrentStep);
+  const setPlaybackPosition = useStore((s) => s.setPlaybackPosition);
   const setSpeed = useStore((s) => s.setSpeed);
   const setLoop = useStore((s) => s.setLoop);
   const setSelectedTool = useStore((s) => s.setSelectedTool);
@@ -115,95 +112,8 @@ export default function PlaybackControls() {
     }
   }, [isPlaying, setSelectedTool]);
 
-  // Playback timer — auto-advance timing steps, then scenes
-  const rafRef = useRef<number | null>(null);
-  const lastTimestampRef = useRef<number | null>(null);
-  const msAccRef = useRef<number>(0); // accumulated ms in current step
-
-  const advancePlayback = useCallback(
-    (timestamp: number) => {
-      if (!lastTimestampRef.current) {
-        lastTimestampRef.current = timestamp;
-      }
-      const dt = (timestamp - lastTimestampRef.current) * useStore.getState().speed;
-      lastTimestampRef.current = timestamp;
-      msAccRef.current += dt;
-
-      const state = useStore.getState();
-      const scenes = state.currentPlay?.scenes ?? [];
-      if (scenes.length === 0) return;
-
-      const sceneIdx = state.currentSceneIndex;
-      const curScene = scenes[sceneIdx];
-      if (!curScene) return;
-
-      const sortedGroups = [...curScene.timingGroups].sort((a, b) => a.step - b.step);
-      const stepIndex = sortedGroups.findIndex((g) => g.step === state.currentStep);
-      const group = sortedGroups[stepIndex];
-      const stepDuration = group?.duration ?? 1000;
-
-      if (msAccRef.current >= stepDuration) {
-        msAccRef.current -= stepDuration;
-
-        // Move to next step in scene
-        if (stepIndex < sortedGroups.length - 1) {
-          state.setCurrentStep(sortedGroups[stepIndex + 1].step);
-        } else {
-          // End of last step — move to next scene.
-          // Use useStore.setState directly (not setCurrentSceneIndex) to avoid
-          // the action's isPlaying:false side-effect which would kill the loop.
-          const nextSceneIdx = sceneIdx + 1;
-          if (nextSceneIdx < scenes.length) {
-            const nextScene = scenes[nextSceneIdx];
-            const nextSteps = [...nextScene.timingGroups].sort((a, b) => a.step - b.step);
-            useStore.setState({
-              currentSceneIndex: nextSceneIdx,
-              currentStep: nextSteps[0]?.step ?? 1,
-              selectedSceneId: nextScene.id,
-            });
-          } else if (state.loop) {
-            const firstScene = scenes[0];
-            const firstSteps = [...firstScene.timingGroups].sort((a, b) => a.step - b.step);
-            useStore.setState({
-              currentSceneIndex: 0,
-              currentStep: firstSteps[0]?.step ?? 1,
-              selectedSceneId: firstScene.id,
-            });
-          } else {
-            // Playback complete
-            state.pausePlayback();
-            return;
-          }
-        }
-      }
-
-      if (useStore.getState().isPlaying) {
-        rafRef.current = requestAnimationFrame(advancePlayback);
-      }
-    },
-    [],
-  );
-
-  useEffect(() => {
-    // Don't run this loop in presentation mode — PresentationOverlay has its own.
-    // Running both simultaneously causes double-advancement (step skipping).
-    if (isPlaying && !isPresentationMode) {
-      lastTimestampRef.current = null;
-      msAccRef.current = 0;
-      rafRef.current = requestAnimationFrame(advancePlayback);
-    } else {
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
-    }
-    return () => {
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
-    };
-  }, [isPlaying, isPresentationMode, advancePlayback]);
+  // The playback timer lives in usePlaybackEngine (mounted once by
+  // PlaybackEngine, issue #160). This component owns no rAF / timer.
 
   // Keyboard shortcut registration (Space, Left/Right, L, Ctrl+Left/Right) is
   // handled centrally by EditorKeyboardManager (useKeyboardShortcuts, issue #82).
@@ -211,11 +121,16 @@ export default function PlaybackControls() {
 
   if (!currentPlay) return null;
 
-  const sortedScenes = [...currentPlay.scenes].sort((a, b) => a.order - b.order);
-  const totalSteps = scene?.timingGroups.length ?? 1;
+  // currentSceneIndex indexes currentPlay.scenes directly — the store keeps
+  // that array in `order` order, so it must not be re-sorted here.
+  const scenes = currentPlay.scenes;
+  const stepGroups = sortedTimingGroups(scene);
+  const totalSteps = Math.max(stepGroups.length, 1);
+  // Position of the active step in playback order (1-based), not its raw number.
+  const stepNumber = Math.max(stepGroups.findIndex((g) => g.step === currentStep), 0) + 1;
 
   // Build step indicator string
-  const stepLabel = `Scene ${currentSceneIndex + 1} / ${sceneCount}  ·  Step ${currentStep} / ${totalSteps}`;
+  const stepLabel = `Scene ${currentSceneIndex + 1} / ${sceneCount}  ·  Step ${stepNumber} / ${totalSteps}`;
 
   return (
     <div
@@ -269,16 +184,14 @@ export default function PlaybackControls() {
         role="group"
         aria-label="Scene timeline"
       >
-        {sortedScenes.map((s, i) => {
+        {scenes.map((s, i) => {
           const isActive = i === currentSceneIndex;
           return (
             <button
               key={s.id}
               onClick={() => {
                 pausePlayback();
-                setCurrentSceneIndex(i);
-                const steps = [...s.timingGroups].sort((a, b) => a.step - b.step);
-                setCurrentStep(steps[0]?.step ?? 1);
+                setPlaybackPosition(i);
               }}
               aria-label={`Scene ${i + 1}`}
               aria-pressed={isActive}
