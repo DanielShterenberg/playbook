@@ -24,7 +24,14 @@ import {
   selectSceneCount,
 } from "@/lib/store";
 import type { PlaybackSpeed } from "@/lib/store";
-import { sortedTimingGroups, nextStepAfter, lastStepOf } from "@/lib/playback";
+import {
+  sortedTimingGroups,
+  nextStepAfter,
+  prevStepBefore,
+  lastStepOf,
+  isAtStart,
+  isAtEnd,
+} from "@/lib/playback";
 import CourtWithPlayers from "@/components/players/CourtWithPlayers";
 import type { CourtVariant } from "@/components/court/Court";
 
@@ -184,10 +191,9 @@ export default function PresentationOverlay() {
     const scenes = state.currentPlay?.scenes ?? [];
     const curScene = scenes[state.currentSceneIndex];
     if (!curScene) return;
-    const groups = sortedTimingGroups(curScene);
-    const stepIdx = groups.findIndex((g) => g.step === state.currentStep);
-    if (stepIdx > 0) {
-      state.setCurrentStep(groups[stepIdx - 1].step);
+    const prevStep = prevStepBefore(curScene, state.currentStep);
+    if (prevStep !== undefined) {
+      state.setCurrentStep(prevStep);
     } else if (state.currentSceneIndex > 0) {
       // Go to last step of previous scene
       const prevIdx = state.currentSceneIndex - 1;
@@ -264,8 +270,11 @@ export default function PresentationOverlay() {
   const currentStepIndex = sortedSteps.findIndex((g) => g.step === currentStep);
   const hasMultipleSteps = sortedSteps.length > 1;
 
-  const atStart = currentSceneIndex === 0 && currentStepIndex <= 0;
-  const atEnd   = currentSceneIndex >= sceneCount - 1 && currentStepIndex >= sortedSteps.length - 1;
+  // Same definitions the store and the step handlers use (restart-on-play,
+  // goNextStep / goPrevStep), so button state and behaviour cannot diverge.
+  const position = { sceneIndex: currentSceneIndex, step: currentStep };
+  const atStart = isAtStart(position, scenes);
+  const atEnd   = isAtEnd(position, scenes);
 
   return (
     <div

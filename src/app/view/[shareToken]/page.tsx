@@ -26,8 +26,11 @@ import type { Play } from "@/lib/types";
 import {
   tickPlayback,
   sortedTimingGroups,
+  nextStepAfter,
+  prevStepBefore,
   firstStepOf,
   startPosition,
+  isAtStart,
   isAtEnd,
   normalizePlayForPlayback,
 } from "@/lib/playback";
@@ -123,6 +126,10 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   const scene = scenes[sceneIndex] ?? null;
   const steps = sortedTimingGroups(scene);
   const stepIndex = Math.max(steps.findIndex((g) => g.step === currentStep), 0);
+  // One derivation for the step buttons' disabled state and for stepBy.
+  const prevStep = prevStepBefore(scene, currentStep);
+  const nextStep = nextStepAfter(scene, currentStep);
+  const atStart = isAtStart(shown, scenes);
 
   // Auto-advance while playing: the shared pure playback reducer
   // (src/lib/playback.ts, issue #160) on a rAF clock. No loop in the viewer.
@@ -150,14 +157,17 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
     setIsPlaying(true);
   }, [isPlaying, scenes, moveTo]);
 
-  /** Pause and move one step back / forward within the current scene. */
+  /**
+   * Pause and move one step back / forward within the current scene. The
+   * target comes from the same prevStepBefore / nextStepAfter the buttons'
+   * disabled state is derived from (`prevStep` / `nextStep` below).
+   */
   const stepBy = useCallback((delta: 1 | -1) => {
     setIsPlaying(false);
     const position = positionRef.current;
-    const groups = sortedTimingGroups(scenes[position.sceneIndex]);
-    const index = groups.findIndex((g) => g.step === position.step);
-    const target = groups[Math.min(Math.max(index + delta, 0), groups.length - 1)];
-    if (target) moveTo({ sceneIndex: position.sceneIndex, step: target.step, accMs: 0 });
+    const scene = scenes[position.sceneIndex];
+    const target = delta > 0 ? nextStepAfter(scene, position.step) : prevStepBefore(scene, position.step);
+    if (target !== undefined) moveTo({ sceneIndex: position.sceneIndex, step: target, accMs: 0 });
   }, [scenes, moveTo]);
 
   /** Pause and go to the first step of a scene (no-op move if already on that scene). */
@@ -178,32 +188,39 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
     moveTo(startPosition(scenes));
   }, [scenes, moveTo]);
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts. The window listener is registered once; it reaches the
+  // current handlers through a ref so play/pause does not re-register it.
+  const handlersRef = useRef({ togglePlay, stepBy, sceneBy, goToBeginning });
+  useEffect(() => {
+    handlersRef.current = { togglePlay, stepBy, sceneBy, goToBeginning };
+  }, [togglePlay, stepBy, sceneBy, goToBeginning]);
+
   useEffect(() => {
     function handler(e: KeyboardEvent) {
+      const handlers = handlersRef.current;
       if (e.code === "Space") {
         e.preventDefault();
-        togglePlay();
+        handlers.togglePlay();
       } else if (e.code === "ArrowRight") {
         e.preventDefault();
-        stepBy(1);
+        handlers.stepBy(1);
       } else if (e.code === "ArrowLeft") {
         e.preventDefault();
-        stepBy(-1);
+        handlers.stepBy(-1);
       } else if (e.code === "Home") {
         e.preventDefault();
-        goToBeginning();
+        handlers.goToBeginning();
       } else if (e.code === "BracketLeft") {
         e.preventDefault();
-        sceneBy(-1);
+        handlers.sceneBy(-1);
       } else if (e.code === "BracketRight") {
         e.preventDefault();
-        sceneBy(1);
+        handlers.sceneBy(1);
       }
     }
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [togglePlay, stepBy, sceneBy, goToBeginning]);
+  }, []);
 
   // Effective flip: scene override > play default
   const effectiveFlipped = ((scene?.flipped ?? play?.flipped) === true);
@@ -292,9 +309,9 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button
               onClick={() => stepBy(-1)}
-              disabled={stepIndex === 0}
+              disabled={prevStep === undefined}
               aria-label="Previous step"
-              style={{ padding: "5px 10px", borderRadius: 6, border: "1.5px solid #E5E7EB", background: "#fff", color: stepIndex === 0 ? "#D1D5DB" : "#374151", cursor: stepIndex === 0 ? "default" : "pointer", display: "flex", alignItems: "center", gap: 4 }}
+              style={{ padding: "5px 10px", borderRadius: 6, border: "1.5px solid #E5E7EB", background: "#fff", color: prevStep === undefined ? "#D1D5DB" : "#374151", cursor: prevStep === undefined ? "default" : "pointer", display: "flex", alignItems: "center", gap: 4 }}
             >
               <ChevronLeftIcon size={14} /> Step
             </button>
@@ -310,9 +327,9 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
 
             <button
               onClick={() => stepBy(1)}
-              disabled={stepIndex >= steps.length - 1}
+              disabled={nextStep === undefined}
               aria-label="Next step"
-              style={{ padding: "5px 10px", borderRadius: 6, border: "1.5px solid #E5E7EB", background: "#fff", color: stepIndex >= steps.length - 1 ? "#D1D5DB" : "#374151", cursor: stepIndex >= steps.length - 1 ? "default" : "pointer", display: "flex", alignItems: "center", gap: 4 }}
+              style={{ padding: "5px 10px", borderRadius: 6, border: "1.5px solid #E5E7EB", background: "#fff", color: nextStep === undefined ? "#D1D5DB" : "#374151", cursor: nextStep === undefined ? "default" : "pointer", display: "flex", alignItems: "center", gap: 4 }}
             >
               Step <ChevronRightIcon size={14} />
             </button>
@@ -329,10 +346,10 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
             {/* Go to beginning */}
             <button
               onClick={goToBeginning}
-              disabled={sceneIndex === 0 && stepIndex === 0}
+              disabled={atStart}
               aria-label="Go to beginning"
               title="Go to beginning"
-              style={{ padding: "6px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", background: "#fff", fontSize: 13, fontWeight: 500, color: sceneIndex === 0 && stepIndex === 0 ? "#D1D5DB" : "#374151", cursor: sceneIndex === 0 && stepIndex === 0 ? "default" : "pointer" }}
+              style={{ padding: "6px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", background: "#fff", fontSize: 13, fontWeight: 500, color: atStart ? "#D1D5DB" : "#374151", cursor: atStart ? "default" : "pointer" }}
             >
               ⏮
             </button>

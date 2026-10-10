@@ -94,11 +94,6 @@ export function sortedTimingGroups<G extends PlaybackTimingGroup>(
   return sorted;
 }
 
-/** Step numbers of a scene in playback order. */
-export function sortedSteps(scene: PlaybackScene | null | undefined): number[] {
-  return sortedTimingGroups(scene).map((g) => g.step);
-}
-
 /** The step a scene starts on (1 when it has no timing groups). */
 export function firstStepOf(scene: PlaybackScene | null | undefined): number {
   return sortedTimingGroups(scene)[0]?.step ?? 1;
@@ -124,6 +119,18 @@ export function nextStepAfter(scene: PlaybackScene | null | undefined, step: num
   return undefined;
 }
 
+/**
+ * The step that precedes `step` in a scene: the highest step number strictly
+ * below it, or undefined at the start of the scene. Mirror of `nextStepAfter`.
+ */
+export function prevStepBefore(scene: PlaybackScene | null | undefined, step: number): number | undefined {
+  const groups = sortedTimingGroups(scene);
+  for (let i = groups.length - 1; i >= 0; i--) {
+    if (groups[i].step < step) return groups[i].step;
+  }
+  return undefined;
+}
+
 /** Where a play starts: first step of the first scene, no time elapsed. */
 export function startPosition(scenes: readonly PlaybackScene[]): PlaybackPosition {
   return { sceneIndex: 0, step: firstStepOf(scenes[0]), accMs: 0 };
@@ -136,6 +143,15 @@ export function isAtEnd(
 ): boolean {
   if (scenes.length === 0 || position.sceneIndex !== scenes.length - 1) return false;
   return nextStepAfter(scenes[position.sceneIndex], position.step) === undefined;
+}
+
+/** True on the first step of the first scene — nothing to step back to. */
+export function isAtStart(
+  position: { sceneIndex: number; step: number },
+  scenes: readonly PlaybackScene[],
+): boolean {
+  if (scenes.length === 0 || position.sceneIndex !== 0) return false;
+  return prevStepBefore(scenes[0], position.step) === undefined;
 }
 
 // ---------------------------------------------------------------------------

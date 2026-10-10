@@ -14,10 +14,11 @@ import {
   DEFAULT_STEP_DURATION_MS,
   stepDurationMs,
   sortedTimingGroups,
-  sortedSteps,
   firstStepOf,
   lastStepOf,
   nextStepAfter,
+  prevStepBefore,
+  isAtStart,
   startPosition,
   isAtEnd,
   normalizeTimingSteps,
@@ -59,12 +60,6 @@ describe("stepDurationMs", () => {
 });
 
 describe("step helpers", () => {
-  it("sortedSteps orders by step number without mutating the scene", () => {
-    const s = scene([3, 100], [1, 100], [2, 100]);
-    expect(sortedSteps(s)).toEqual([1, 2, 3]);
-    expect(s.timingGroups.map((g) => g.step)).toEqual([3, 1, 2]);
-  });
-
   it("firstStepOf / lastStepOf default to 1 for an empty or missing scene", () => {
     expect(firstStepOf(scene([4, 100], [2, 100]))).toBe(2);
     expect(lastStepOf(scene([4, 100], [2, 100]))).toBe(4);
@@ -104,6 +99,32 @@ describe("position helpers", () => {
     expect(nextStepAfter(s, 1)).toBe(4);
     expect(nextStepAfter(s, 4)).toBeUndefined();
     expect(nextStepAfter(undefined, 1)).toBeUndefined();
+  });
+
+  it("prevStepBefore is the highest step strictly below the given one", () => {
+    const s = scene([1, 100], [4, 100], [4, 100]);
+    expect(prevStepBefore(s, 9)).toBe(4);
+    expect(prevStepBefore(s, 4)).toBe(1);
+    expect(prevStepBefore(s, 1)).toBeUndefined();
+    expect(prevStepBefore(undefined, 3)).toBeUndefined();
+  });
+
+  it("isAtStart is true only on the first step of the first scene", () => {
+    expect(isAtStart(at(0, 1), SCENES)).toBe(true);
+    expect(isAtStart(at(0, 2), SCENES)).toBe(false);
+    expect(isAtStart(at(1, 1), SCENES)).toBe(false);
+    expect(isAtStart(at(0, 1), [])).toBe(false);
+  });
+
+  it("start / end agree with prev / next for an unknown step, so buttons and moves cannot diverge", () => {
+    // Step 9 does not exist in the last scene: nothing above it -> at end, but a step below -> not at start.
+    expect(isAtEnd(at(1, 9), SCENES)).toBe(true);
+    expect(nextStepAfter(SCENES[1], 9)).toBeUndefined();
+    expect(isAtStart(at(0, 9), SCENES)).toBe(false);
+    expect(prevStepBefore(SCENES[0], 9)).toBe(2);
+    // Step 0 in the first scene: at start, and "next" is the first real step.
+    expect(isAtStart(at(0, 0), SCENES)).toBe(true);
+    expect(nextStepAfter(SCENES[0], 0)).toBe(1);
   });
 
   it("startPosition is the first step of the first scene", () => {

@@ -16,7 +16,13 @@ import type {
   BallState,
 } from "./types";
 import { useHistoryStore } from "./history";
-import { firstStepOf, isAtEnd, normalizePlayForPlayback, normalizeTimingSteps } from "./playback";
+import {
+  firstStepOf,
+  isAtEnd,
+  normalizePlayForPlayback,
+  normalizeTimingSteps,
+  sortedTimingGroups,
+} from "./playback";
 
 // ---------------------------------------------------------------------------
 // Tool types
@@ -91,6 +97,8 @@ export interface AppStore {
   updateAnnotation: (sceneId: string, annotation: Annotation) => void;
   moveAnnotationToStep: (sceneId: string, annotationId: string, newStep: number) => void;
   addTimingStep: (sceneId: string) => void;
+  /** Set how long a timing step is held (ms). Undoable like any other scene edit. */
+  setTimingStepDuration: (sceneId: string, step: number, durationMs: number) => void;
   removeTimingStep: (sceneId: string, step: number) => void;
   /** Merge step N and step N+1 into one step (combined annotations, summed duration). */
   mergeTimingSteps: (sceneId: string, step: number) => void;
@@ -226,11 +234,6 @@ function createEmptyScene(order: number): Scene {
   };
 }
 
-/** Re-number timing group steps starting from 1, sorted by original step order. */
-function normalizeSteps(groups: TimingGroup[]): TimingGroup[] {
-  return normalizeTimingSteps(groups);
-}
-
 /**
  * The one place that turns "go to scene N (step S)" into a store patch:
  * `currentSceneIndex`, `currentStep` (default: the scene's first timing step)
@@ -249,6 +252,73 @@ function playbackPositionPatch(
     currentStep: step ?? firstStepOf(scene),
     selectedSceneId: scene.id,
   };
+}
+
+type PositionKey = "currentSceneIndex" | "currentStep" | "selectedSceneId";
+
+/**
+ * Keep "which scene" a single piece of state in effect.
+ *
+ * `selectedSceneId` (what the editor shows) and `currentSceneIndex` (what the
+ * playback engine times) must always name the same scene, and `currentStep`
+ * must be a step of that scene. Every store action's patch passes through
+ * here (see the `set` wrapper in the store creator), so no action — present or
+ * future — can move one without the other:
+ *   - a patch that sets `selectedSceneId` moves the index to that scene;
+ *   - a patch that sets only `currentSceneIndex` selects that scene;
+ *   - a patch that changes the play (load, undo/redo, remove/reorder scene)
+ *     follows the selected scene to its new index, or clamps if it is gone;
+ *   - landing on a different scene without an explicit step goes to that
+ *     scene's first step; a step that no longer exists falls back to it too.
+ *
+ * Returns only the keys that need correcting, or null.
+ */
+function reconcilePlaybackPosition(
+  prev: Pick<AppStore, "currentPlay" | PositionKey>,
+  patch: Partial<AppStore>,
+): Partial<Pick<AppStore, PositionKey>> | null {
+  const has = (key: "currentPlay" | PositionKey) => Object.prototype.hasOwnProperty.call(patch, key);
+  if (!has("currentPlay") && !has("selectedSceneId") && !has("currentSceneIndex") && !has("currentStep")) {
+    return null;
+  }
+  const next = { ...prev, ...patch };
+  const scenes = next.currentPlay?.scenes ?? [];
+
+  let want: Pick<AppStore, PositionKey>;
+  if (scenes.length === 0) {
+    want = {
+      currentSceneIndex: 0,
+      currentStep: 1,
+      selectedSceneId: next.currentPlay ? null : next.selectedSceneId,
+    };
+  } else {
+    const selectedIndex = scenes.findIndex((sc) => sc.id === next.selectedSceneId);
+    const rawIndex = next.currentSceneIndex;
+    const indexValid = Number.isInteger(rawIndex) && rawIndex >= 0 && rawIndex < scenes.length;
+    let index: number;
+    if (selectedIndex !== -1 && (has("selectedSceneId") || !has("currentSceneIndex") || !indexValid)) {
+      index = selectedIndex;
+    } else if (indexValid) {
+      index = rawIndex;
+    } else {
+      index = Math.min(Math.max(Number.isFinite(rawIndex) ? Math.trunc(rawIndex) : 0, 0), scenes.length - 1);
+    }
+    const scene = scenes[index];
+    const previousSceneId = prev.currentPlay?.scenes[prev.currentSceneIndex]?.id;
+    const movedScene = scene.id !== previousSceneId && !has("currentStep");
+    const stepExists = sortedTimingGroups(scene).some((g) => g.step === next.currentStep);
+    want = {
+      currentSceneIndex: index,
+      currentStep: movedScene || !stepExists ? firstStepOf(scene) : next.currentStep,
+      selectedSceneId: scene.id,
+    };
+  }
+
+  const fix: Partial<Pick<AppStore, PositionKey>> = {};
+  if (want.currentSceneIndex !== next.currentSceneIndex) fix.currentSceneIndex = want.currentSceneIndex;
+  if (want.currentStep !== next.currentStep) fix.currentStep = want.currentStep;
+  if (want.selectedSceneId !== next.selectedSceneId) fix.selectedSceneId = want.selectedSceneId;
+  return Object.keys(fix).length > 0 ? fix : null;
 }
 
 /**
@@ -282,7 +352,23 @@ function withUpdatedScene(play: Play, sceneId: string, updater: (s: Scene) => Sc
 // ---------------------------------------------------------------------------
 
 export const useStore = create<AppStore>()(
-  subscribeWithSelector((set, get) => ({
+  subscribeWithSelector((rawSet, get) => {
+    type StatePatch = AppStore | Partial<AppStore>;
+
+    /**
+     * Every action writes through this wrapper, which appends whatever
+     * `reconcilePlaybackPosition` says is needed to keep the selected scene and
+     * the playback scene the same scene.
+     */
+    const set = (partial: StatePatch | ((state: AppStore) => StatePatch)) =>
+      rawSet((state) => {
+        const patch = typeof partial === "function" ? partial(state) : partial;
+        if (patch === state) return state;
+        const fix = reconcilePlaybackPosition(state, patch);
+        return fix ? { ...patch, ...fix } : patch;
+      });
+
+    return {
     // =======================================================================
     // Playbook list (issue #67 / #69)
     // =======================================================================
@@ -347,7 +433,23 @@ export const useStore = create<AppStore>()(
       // same scene to playback, the scene strip, exports and the share viewer)
       // and timing steps renumbered 1..n (so legacy plays with gaps or
       // duplicates, e.g. steps 1,3, don't skip or stall in playback).
-      set({ currentPlay: normalizePlayForPlayback(play) });
+      const currentPlay = normalizePlayForPlayback(play);
+      set((state) => {
+        // Same play set again (e.g. refreshed from the server): keep the
+        // position; the `set` wrapper clamps it if the scene / step is gone.
+        if (state.currentPlay?.id === currentPlay.id) return { currentPlay };
+        // A different play: the old play's position means nothing here. Start
+        // paused on its first scene and step.
+        return {
+          currentPlay,
+          isPlaying: false,
+          selectedAnnotationId: null,
+          selectedTimingStep: 1,
+          currentSceneIndex: 0,
+          currentStep: firstStepOf(currentPlay.scenes[0]),
+          selectedSceneId: currentPlay.scenes[0]?.id ?? null,
+        };
+      });
     },
 
     clearCurrentPlay: () => {
@@ -576,11 +678,10 @@ export const useStore = create<AppStore>()(
           s.selectedSceneId === sceneId
             ? (filtered[0]?.id ?? null)
             : s.selectedSceneId;
-        const newSceneIndex = Math.min(s.currentSceneIndex, filtered.length - 1);
+        // currentSceneIndex follows selectedSceneId (see reconcilePlaybackPosition).
         return {
           currentPlay: { ...play, updatedAt: new Date(), scenes: filtered },
           selectedSceneId: newSelectedId,
-          currentSceneIndex: newSceneIndex,
         };
       });
     },
@@ -704,7 +805,7 @@ export const useStore = create<AppStore>()(
                   ...sc.timingGroups,
                   { step: timingStep, duration: 1000, annotations: [annotation] },
                 ];
-            return { ...sc, timingGroups: normalizeSteps(timingGroups) };
+            return { ...sc, timingGroups: normalizeTimingSteps(timingGroups) };
           }),
         };
       });
@@ -720,7 +821,7 @@ export const useStore = create<AppStore>()(
         return {
           currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => ({
             ...sc,
-            timingGroups: normalizeSteps(
+            timingGroups: normalizeTimingSteps(
               sc.timingGroups
                 .map((g) => ({
                   ...g,
@@ -786,7 +887,7 @@ export const useStore = create<AppStore>()(
               : [...stripped, { step: newStep, duration: 1000, annotations: [moved as Annotation] }];
             return {
               ...sc,
-              timingGroups: normalizeSteps(
+              timingGroups: normalizeTimingSteps(
                 timingGroups.filter((g) => g.annotations.length > 0 || g.step === 1),
               ),
             };
@@ -846,6 +947,27 @@ export const useStore = create<AppStore>()(
       });
     },
 
+    setTimingStepDuration: (sceneId, step, durationMs) => {
+      const state = get();
+      const group = state.currentPlay?.scenes
+        .find((sc) => sc.id === sceneId)
+        ?.timingGroups.find((g) => g.step === step);
+      if (!group || group.duration === durationMs) return;
+      const snapshot = captureSnapshot(state);
+      if (snapshot) useHistoryStore.getState().pushSnapshot(snapshot);
+      set((s) => {
+        if (!s.currentPlay) return s;
+        return {
+          currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => ({
+            ...sc,
+            timingGroups: sc.timingGroups.map((g) =>
+              g.step === step ? { ...g, duration: durationMs } : g,
+            ),
+          })),
+        };
+      });
+    },
+
     removeTimingStep: (sceneId, step) => {
       const state = get();
       const snapshot = captureSnapshot(state);
@@ -857,7 +979,7 @@ export const useStore = create<AppStore>()(
           currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => {
             if (sc.timingGroups.length <= 1) return sc;
             const filtered = sc.timingGroups.filter((g) => g.step !== step);
-            return { ...sc, timingGroups: normalizeSteps(filtered) };
+            return { ...sc, timingGroups: normalizeTimingSteps(filtered) };
           }),
           selectedTimingStep: currentSelectedStep === step ? 1 : currentSelectedStep,
         };
@@ -881,7 +1003,7 @@ export const useStore = create<AppStore>()(
               annotations: [...a.annotations, ...b.annotations],
             };
             const rest = sc.timingGroups.filter((g) => g.step !== step && g.step !== step + 1);
-            return { ...sc, timingGroups: normalizeSteps([...rest, merged]) };
+            return { ...sc, timingGroups: normalizeTimingSteps([...rest, merged]) };
           }),
         };
       });
@@ -897,6 +1019,8 @@ export const useStore = create<AppStore>()(
     selectedAnnotationId: null,
     playerDisplayMode: "numbers",
 
+    // Selecting a scene also moves playback to it (currentSceneIndex, first
+    // step) — the `set` wrapper derives that from selectedSceneId.
     setSelectedSceneId: (id) => set({ selectedSceneId: id, selectedAnnotationId: null }),
     setSelectedTool: (tool) => set({ selectedTool: tool }),
     setSelectedTimingStep: (step) => set({ selectedTimingStep: step }),
@@ -986,7 +1110,8 @@ export const useStore = create<AppStore>()(
     enterPresentationMode: () => set({ isPresentationMode: true }),
 
     exitPresentationMode: () => set({ isPresentationMode: false, isPlaying: false }),
-  })),
+    };
+  }),
 );
 
 // ---------------------------------------------------------------------------
