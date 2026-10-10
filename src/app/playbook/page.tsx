@@ -203,7 +203,7 @@ export default function PlaybookPage() {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={user.photoURL} alt="" width={44} height={44} className="h-full w-full rounded-full object-cover" />
             ) : (
-              initials(user.displayName ?? user.email ?? "?")
+              initials(user.displayName?.trim() || user.email || "?")
             )}
           </button>
 
@@ -260,7 +260,7 @@ export default function PlaybookPage() {
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search plays"
                 aria-label="Search plays"
-                className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm text-ink outline-none placeholder:text-muted"
+                className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm text-ink outline-none placeholder:text-muted dark:[color-scheme:dark]"
               />
             </label>
           )}

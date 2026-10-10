@@ -16,7 +16,7 @@
  * Clicking the card opens /play/[id] and sets the play as currentPlay.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
 import type { Play, Role } from "@/lib/types";
@@ -63,6 +63,11 @@ interface PlayCardProps {
   role?: Role | null;
 }
 
+/** How long "Sure?" stays armed before it resets to "Delete". */
+const CONFIRM_DELETE_MS = 4000;
+/** Minimum time between arming and confirming, so a double-tap does not delete. */
+const CONFIRM_DELETE_MIN_GAP_MS = 400;
+
 export default function PlayCard({ play, teamId, role }: PlayCardProps) {
   const setCurrentPlay = useStore((s) => s.setCurrentPlay);
   const removePlay = useStore((s) => s.removePlay);
@@ -80,11 +85,23 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
   const sceneCount = play.scenes.length;
   const categoryBadge = CATEGORY_BADGE[play.category] ?? CATEGORY_BADGE.oob;
 
+  // The confirmation disarms by itself: on touch there is no blur or
+  // mouse-leave to reset it, and an armed card must not wait for a stray tap.
+  const armedAt = useRef(0);
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const timer = setTimeout(() => setConfirmDelete(false), CONFIRM_DELETE_MS);
+    return () => clearTimeout(timer);
+  }, [confirmDelete]);
+
   function handleDelete() {
     if (!confirmDelete) {
+      armedAt.current = Date.now();
       setConfirmDelete(true);
       return;
     }
+    // A double-tap must not delete: the second tap has to be a separate decision.
+    if (Date.now() - armedAt.current < CONFIRM_DELETE_MIN_GAP_MS) return;
     removePlay(play.id);
     // Fire-and-forget Firestore delete
     deletePlay(play.id).catch(() => {});
@@ -116,7 +133,11 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
       {/* The card itself: thumbnail + title + meta, one link to the editor */}
       <Link
         href={`/play/${play.id}`}
-        onClick={() => setCurrentPlay(play)}
+        prefetch={false}
+        onClick={(e) => {
+          // Only a plain click navigates this tab; new-tab / new-window clicks must not touch the store.
+          if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) setCurrentPlay(play);
+        }}
         aria-label={`Open play: ${play.title}`}
         className="flex flex-1 flex-col text-ink no-underline focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-text"
       >
