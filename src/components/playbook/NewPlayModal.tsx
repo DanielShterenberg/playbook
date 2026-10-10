@@ -23,6 +23,21 @@ import type { Category, CourtType } from "@/lib/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeam } from "@/contexts/TeamContext";
 import { savePlay } from "@/lib/db";
+import {
+  BTN_PRIMARY,
+  BTN_SECONDARY,
+  CHOICE,
+  CHOICE_OFF,
+  CHOICE_ON,
+  FIELD,
+  FIELD_BORDER,
+  FIELD_BORDER_ERROR,
+  FIELD_ERROR,
+  FIELD_LABEL,
+  MODAL_OVERLAY,
+  MODAL_PANEL,
+  MODAL_TITLE,
+} from "./modalStyles";
 
 interface NewPlayModalProps {
   onClose: () => void;
@@ -110,52 +125,24 @@ export default function NewPlayModal({ onClose }: NewPlayModalProps) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="new-play-title"
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 100,
-        background: "rgba(0,0,0,0.45)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "16px",
-      }}
+      className={MODAL_OVERLAY}
     >
-      <div
-        style={{
-          background: "#fff",
-          borderRadius: 12,
-          boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
-          width: "100%",
-          maxWidth: 460,
-          padding: "28px 28px 24px",
-        }}
-      >
-        <h2
-          id="new-play-title"
-          style={{
-            margin: "0 0 20px",
-            fontSize: 20,
-            fontWeight: 700,
-            color: "#111827",
-          }}
-        >
+      <div className={`${MODAL_PANEL} max-w-[460px]`}>
+        <h2 id="new-play-title" className={`${MODAL_TITLE} mb-5`}>
           New Play
         </h2>
 
         <form onSubmit={handleSubmit} noValidate>
           {/* Title */}
-          <div style={{ marginBottom: 16 }}>
-            <label
-              htmlFor="play-title"
-              style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}
-            >
-              Title <span style={{ color: "#EF4444" }}>*</span>
+          <div className="mb-4">
+            <label htmlFor="play-title" className={FIELD_LABEL}>
+              Title <span className="text-danger">*</span>
             </label>
             <input
               id="play-title"
               ref={titleRef}
               type="text"
+              dir="auto"
               value={title}
               onChange={(e) => {
                 setTitle(e.target.value);
@@ -163,80 +150,45 @@ export default function NewPlayModal({ onClose }: NewPlayModalProps) {
               }}
               placeholder="e.g. Horns Set, Box Out, 1-3-1 Zone"
               maxLength={80}
-              style={{
-                width: "100%",
-                boxSizing: "border-box",
-                padding: "8px 12px",
-                border: error ? "1.5px solid #EF4444" : "1.5px solid #D1D5DB",
-                borderRadius: 8,
-                fontSize: 14,
-                color: "#111827",
-                outline: "none",
-              }}
+              aria-invalid={error ? true : undefined}
+              className={`${FIELD} h-11 ${error ? FIELD_BORDER_ERROR : FIELD_BORDER}`}
             />
             {error && (
-              <p role="alert" style={{ marginTop: 4, fontSize: 12, color: "#EF4444" }}>
+              <p role="alert" className={FIELD_ERROR}>
                 {error}
               </p>
             )}
           </div>
 
           {/* Description */}
-          <div style={{ marginBottom: 16 }}>
-            <label
-              htmlFor="play-description"
-              style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}
-            >
-              Description <span style={{ color: "#9CA3AF", fontWeight: 400 }}>(optional)</span>
+          <div className="mb-4">
+            <label htmlFor="play-description" className={FIELD_LABEL}>
+              Description <span className="font-normal text-muted">(optional)</span>
             </label>
             <textarea
               id="play-description"
+              dir="auto"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Brief notes about this play..."
               rows={2}
               maxLength={300}
-              style={{
-                width: "100%",
-                boxSizing: "border-box",
-                padding: "8px 12px",
-                border: "1.5px solid #D1D5DB",
-                borderRadius: 8,
-                fontSize: 14,
-                color: "#111827",
-                resize: "vertical",
-                outline: "none",
-                fontFamily: "inherit",
-              }}
+              className={`${FIELD} ${FIELD_BORDER} block resize-y py-2.5 font-[inherit]`}
             />
           </div>
 
           {/* Court type + Category row */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
+          <div className="mb-6 grid grid-cols-2 gap-3">
             {/* Court type */}
-            <div>
-              <label
-                htmlFor="play-court-type"
-                style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}
-              >
+            <div className="min-w-0">
+              <label htmlFor="play-court-type" className={FIELD_LABEL}>
                 Court
               </label>
               <select
                 id="play-court-type"
                 value={courtType}
                 onChange={(e) => setCourtType(e.target.value as CourtType)}
-                style={{
-                  width: "100%",
-                  boxSizing: "border-box",
-                  padding: "8px 10px",
-                  border: "1.5px solid #D1D5DB",
-                  borderRadius: 8,
-                  fontSize: 14,
-                  color: "#111827",
-                  background: "#fff",
-                  outline: "none",
-                  cursor: "pointer",
-                }}
+                className={`${FIELD} ${FIELD_BORDER} h-11 cursor-pointer`}
               >
                 <option value="half">Half Court</option>
                 <option value="full">Full Court</option>
@@ -244,29 +196,15 @@ export default function NewPlayModal({ onClose }: NewPlayModalProps) {
             </div>
 
             {/* Category */}
-            <div>
-              <label
-                htmlFor="play-category"
-                style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}
-              >
+            <div className="min-w-0">
+              <label htmlFor="play-category" className={FIELD_LABEL}>
                 Category
               </label>
               <select
                 id="play-category"
                 value={category}
                 onChange={(e) => setCategory(e.target.value as Category)}
-                style={{
-                  width: "100%",
-                  boxSizing: "border-box",
-                  padding: "8px 10px",
-                  border: "1.5px solid #D1D5DB",
-                  borderRadius: 8,
-                  fontSize: 14,
-                  color: "#111827",
-                  background: "#fff",
-                  outline: "none",
-                  cursor: "pointer",
-                }}
+                className={`${FIELD} ${FIELD_BORDER} h-11 cursor-pointer`}
               >
                 {CATEGORY_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -279,46 +217,25 @@ export default function NewPlayModal({ onClose }: NewPlayModalProps) {
 
           {/* Save to — only shown when the user is in a team */}
           {teamId && (
-            <div style={{ marginBottom: 24 }}>
-              <label
-                style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}
-              >
+            <div className="mb-6" role="group" aria-labelledby="play-save-to">
+              <span id="play-save-to" className={FIELD_LABEL}>
                 Save to
-              </label>
-              <div style={{ display: "flex", gap: 8 }}>
+              </span>
+              <div className="flex gap-2">
                 <button
                   type="button"
+                  dir="auto"
                   onClick={() => setSaveToTeam(true)}
-                  style={{
-                    flex: 1,
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    border: `1.5px solid ${saveToTeam ? "#4F46E5" : "#D1D5DB"}`,
-                    background: saveToTeam ? "#EEF2FF" : "#fff",
-                    color: saveToTeam ? "#4F46E5" : "#374151",
-                    fontSize: 13,
-                    fontWeight: saveToTeam ? 600 : 400,
-                    cursor: "pointer",
-                    transition: "all 0.15s",
-                  }}
+                  aria-pressed={saveToTeam}
+                  className={`${CHOICE} ${saveToTeam ? CHOICE_ON : CHOICE_OFF}`}
                 >
                   {team?.name ?? "Team"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setSaveToTeam(false)}
-                  style={{
-                    flex: 1,
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    border: `1.5px solid ${!saveToTeam ? "#4F46E5" : "#D1D5DB"}`,
-                    background: !saveToTeam ? "#EEF2FF" : "#fff",
-                    color: !saveToTeam ? "#4F46E5" : "#374151",
-                    fontSize: 13,
-                    fontWeight: !saveToTeam ? 600 : 400,
-                    cursor: "pointer",
-                    transition: "all 0.15s",
-                  }}
+                  aria-pressed={!saveToTeam}
+                  className={`${CHOICE} ${!saveToTeam ? CHOICE_ON : CHOICE_OFF}`}
                 >
                   Personal
                 </button>
@@ -327,36 +244,11 @@ export default function NewPlayModal({ onClose }: NewPlayModalProps) {
           )}
 
           {/* Actions */}
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                padding: "8px 18px",
-                borderRadius: 8,
-                border: "1.5px solid #D1D5DB",
-                background: "#fff",
-                fontSize: 14,
-                fontWeight: 500,
-                color: "#374151",
-                cursor: "pointer",
-              }}
-            >
+          <div className="flex justify-end gap-2.5">
+            <button type="button" onClick={onClose} className={BTN_SECONDARY}>
               Cancel
             </button>
-            <button
-              type="submit"
-              style={{
-                padding: "8px 22px",
-                borderRadius: 8,
-                border: "none",
-                background: "#4F46E5",
-                fontSize: 14,
-                fontWeight: 600,
-                color: "#fff",
-                cursor: "pointer",
-              }}
-            >
+            <button type="submit" className={BTN_PRIMARY}>
               Create Play
             </button>
           </div>

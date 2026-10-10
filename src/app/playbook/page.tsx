@@ -25,6 +25,7 @@ import { ensureInviteDoc } from "@/lib/team";
 import CreateTeamModal from "@/components/playbook/CreateTeamModal";
 import { useCourtPalette } from "@/hooks/useTheme";
 import Logo from "@/components/brand/Logo";
+import ThemeToggle from "@/components/brand/ThemeToggle";
 
 const CATEGORY_FILTERS: { value: Category | "all"; label: string }[] = [
   { value: "all", label: "All" },
@@ -36,6 +37,27 @@ const CATEGORY_FILTERS: { value: Category | "all"; label: string }[] = [
   { value: "oob", label: "OOB" },
   { value: "special", label: "Special" },
 ];
+
+const FOCUS_RING =
+  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text";
+
+/** Outlined 44px control — the header's secondary buttons. */
+const OUTLINE_BTN = `flex h-11 flex-none items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-line bg-transparent px-3.5 text-sm font-medium text-ink transition-colors hover:bg-app ${FOCUS_RING}`;
+
+/** Accent call-to-action ("New play"). */
+const ACCENT_BTN = `flex h-11 flex-none items-center justify-center gap-2 whitespace-nowrap rounded-lg border-0 bg-accent px-[18px] text-sm font-semibold text-accent-ink transition-opacity hover:opacity-90 ${FOCUS_RING}`;
+
+/** Text button ("Clear filters"), 44px tall. */
+const LINK_BTN = `h-11 rounded-lg border-0 bg-transparent px-2 text-[13px] font-medium text-accent-text underline-offset-2 hover:underline ${FOCUS_RING}`;
+
+/** Up to two initials for the account button. */
+function initials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  const first = Array.from(words[0])[0] ?? "?";
+  const second = words.length > 1 ? Array.from(words[words.length - 1])[0] ?? "" : "";
+  return (first + second).toUpperCase();
+}
 
 export default function PlaybookPage() {
   const plays = useStore((s) => s.plays);
@@ -109,467 +131,241 @@ export default function PlaybookPage() {
 
   if (loading || !user) return null;
 
-  return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#F9FAFB",
-      }}
-    >
-      {/* Header */}
-      <header
-        style={{
-          borderBottom: "1px solid #E5E7EB",
-          background: "#fff",
-          padding: "0 24px",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: 1280,
-            margin: "0 auto",
-            height: 60,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
-          }}
-        >
-          <h1 style={{ margin: 0, display: "flex" }}>
-            <Logo size={30} wordmarkColor="#141A23" />
-          </h1>
+  const hasFilters = Boolean(search) || categoryFilter !== "all";
+  const filteredPlays = [...plays]
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .filter((p) => {
+      const matchesSearch = !search || p.title.toLowerCase().includes(search.toLowerCase());
+      const matchesCategory = categoryFilter === "all" || p.category === categoryFilter;
+      return matchesSearch && matchesCategory;
+    });
 
-          {/* Team badge / Create Team button */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {team ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    padding: "4px 10px",
-                    borderRadius: 99,
-                    background: "#EEF2FF",
-                    color: "#4338CA",
-                    maxWidth: 160,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                  title={`Team: ${team.name} · Your role: ${role ?? "viewer"}`}
-                >
-                  {team.name}
-                </span>
-                {(role === "admin") && (
-                  <button
-                    onClick={() => {
-                      // Ensure invite doc exists for existing teams (backward compat)
-                      void ensureInviteDoc(team.inviteCode, team.id);
-                      navigator.clipboard.writeText(
-                        `${window.location.origin}/join/${team.inviteCode}`,
-                      ).catch(() => {});
-                    }}
-                    title="Copy invite link"
-                    style={{
-                      padding: "4px 10px",
-                      borderRadius: 99,
-                      border: "1.5px solid #E5E7EB",
-                      background: "#fff",
-                      fontSize: 11,
-                      fontWeight: 500,
-                      color: "#6B7280",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Copy invite
-                  </button>
-                )}
-              </div>
-            ) : (
+  function clearFilters() {
+    setSearch("");
+    setCategoryFilter("all");
+  }
+
+  return (
+    <div className="flex min-h-screen flex-col bg-app text-sm text-ink">
+      {/* Header */}
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-2.5 sm:px-6">
+        <div className="flex flex-[1_1_140px] items-center sm:basis-[200px]">
+          <Logo size={34} />
+        </div>
+
+        {/* Team badge + invite link / Create Team button */}
+        {team ? (
+          <div className="order-last flex min-w-0 basis-full items-center gap-2 sm:order-none sm:basis-auto">
+            <span
+              className="flex h-11 min-w-0 max-w-[220px] items-center rounded-lg border border-line px-3.5 text-sm font-medium text-ink"
+              title={`Team: ${team.name} · Your role: ${role ?? "viewer"}`}
+            >
+              <span dir="auto" className="truncate">
+                {team.name}
+              </span>
+            </span>
+            {role === "admin" && (
               <button
-                onClick={() => setShowCreateTeam(true)}
-                style={{
-                  padding: "6px 14px",
-                  borderRadius: 8,
-                  border: "1.5px solid #E5E7EB",
-                  background: "#fff",
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: "#374151",
-                  cursor: "pointer",
+                type="button"
+                onClick={() => {
+                  // Ensure invite doc exists for existing teams (backward compat)
+                  void ensureInviteDoc(team.inviteCode, team.id);
+                  navigator.clipboard.writeText(
+                    `${window.location.origin}/join/${team.inviteCode}`,
+                  ).catch(() => {});
                 }}
+                title="Copy invite link"
+                className={OUTLINE_BTN}
               >
-                + Create Team
+                Copy invite
               </button>
             )}
           </div>
+        ) : (
+          <button type="button" onClick={() => setShowCreateTeam(true)} className={`${OUTLINE_BTN} order-last sm:order-none`}>
+            + Create Team
+          </button>
+        )}
 
+        <ThemeToggle />
+
+        {/* User avatar + dropdown */}
+        <div ref={userMenuRef} className="relative flex-none">
           <button
-            onClick={() => setShowModal(true)}
-            aria-label="Create new play"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "8px 18px",
-              borderRadius: 8,
-              border: "none",
-              background: "#4F46E5",
-              color: "#fff",
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: "pointer",
-              transition: "background 0.15s",
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#4338CA"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "#4F46E5"; }}
+            type="button"
+            onClick={() => setShowUserMenu((v) => !v)}
+            aria-label="User menu"
+            aria-haspopup="menu"
+            aria-expanded={showUserMenu}
+            className={`flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border-0 bg-chip p-0 text-sm font-semibold text-ink ${FOCUS_RING}`}
           >
-            <span style={{ fontSize: 18, lineHeight: 1, marginTop: -1 }}>+</span>
-            New Play
+            {user.photoURL ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={user.photoURL} alt="" width={44} height={44} className="h-full w-full rounded-full object-cover" />
+            ) : (
+              initials(user.displayName ?? user.email ?? "?")
+            )}
           </button>
 
-          {/* User avatar + dropdown */}
-          <div ref={userMenuRef} style={{ position: "relative" }}>
-            <button
-              onClick={() => setShowUserMenu((v) => !v)}
-              aria-label="User menu"
-              aria-expanded={showUserMenu}
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: "50%",
-                border: "2px solid #E5E7EB",
-                background: "#4F46E5",
-                color: "#fff",
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-                overflow: "hidden",
-                padding: 0,
-              }}
+          {showUserMenu && (
+            <div
+              className="absolute right-0 top-[calc(100%+6px)] z-50 min-w-[220px] max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border border-line bg-surface shadow-[0_8px_24px_rgba(0,0,0,0.18)]"
+              role="menu"
             >
-              {user.photoURL ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={user.photoURL} alt="" width={34} height={34} style={{ borderRadius: "50%" }} />
-              ) : (
-                (user.displayName ?? user.email ?? "?")[0].toUpperCase()
-              )}
-            </button>
-
-            {showUserMenu && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "calc(100% + 6px)",
-                  right: 0,
-                  background: "#fff",
-                  border: "1px solid #E5E7EB",
-                  borderRadius: 10,
-                  boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
-                  minWidth: 200,
-                  zIndex: 50,
-                  padding: "6px 0",
-                }}
-                role="menu"
-              >
-                <div style={{ padding: "8px 14px 10px", borderBottom: "1px solid #F3F4F6" }}>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#111827" }}>
-                    {user.displayName ?? "User"}
-                  </p>
-                  <p style={{ margin: "1px 0 0", fontSize: 12, color: "#6B7280" }}>
-                    {user.email}
-                  </p>
-                </div>
-                <button
-                  onClick={handleSignOut}
-                  role="menuitem"
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "8px 14px",
-                    border: "none",
-                    background: "none",
-                    fontSize: 13,
-                    color: "#374151",
-                    cursor: "pointer",
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "#F9FAFB"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
-                >
-                  Sign out
-                </button>
+              <div className="border-b border-line px-3.5 py-3">
+                <p dir="auto" className="m-0 text-left text-sm font-semibold text-ink">
+                  {user.displayName ?? "User"}
+                </p>
+                <p className="m-0 mt-0.5 break-all text-[13px] text-muted">{user.email}</p>
               </div>
-            )}
-          </div>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                role="menuitem"
+                className="block h-11 w-full border-0 bg-transparent px-3.5 text-left text-sm font-medium text-ink hover:bg-app focus-visible:bg-app focus-visible:outline-none"
+              >
+                Sign out
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
       {/* Content */}
-      <div
-        style={{
-          maxWidth: 1280,
-          margin: "0 auto",
-          padding: "32px 24px",
-        }}
-      >
+      <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col gap-5 px-4 py-7 sm:px-6">
+        {/* Title + search + New play */}
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="m-0 flex-[1_1_240px] font-display text-[34px] font-bold uppercase leading-[1.2] tracking-[0.03em]">
+            {team ? "Team playbook" : "My playbook"}
+          </h1>
+          {plays.length > 0 && (
+            <label className="flex h-11 max-w-[320px] flex-[1_1_220px] items-center gap-2 rounded-lg border border-line bg-surface px-3 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent-text">
+              <svg
+                width={16}
+                height={16}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.2}
+                strokeLinecap="round"
+                aria-hidden="true"
+                className="flex-none text-muted"
+              >
+                <circle cx={11} cy={11} r={7} />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search plays"
+                aria-label="Search plays"
+                className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm text-ink outline-none placeholder:text-muted"
+              />
+            </label>
+          )}
+          <button type="button" onClick={() => setShowModal(true)} aria-label="Create new play" className={ACCENT_BTN}>
+            New play
+          </button>
+        </div>
+
         {plays.length === 0 ? (
           /* Empty state */
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              minHeight: 360,
-              gap: 16,
-              textAlign: "center",
-            }}
-          >
+          <div className="flex min-h-[360px] flex-col items-center justify-center gap-4 text-center">
             {/* Court illustration */}
-            <svg
-              width={100}
-              height={94}
-              viewBox="0 0 100 94"
-              aria-hidden="true"
-              style={{ opacity: 0.25 }}
-            >
+            <svg width={100} height={94} viewBox="0 0 100 94" aria-hidden="true" className="text-muted">
               <rect width={100} height={94} fill={palette.floor} rx={8} />
               <rect x={34} y={56} width={32} height={38} fill={palette.paint} />
-              <rect width={100} height={94} fill="none" stroke="#9CA3AF" strokeWidth={2} rx={8} />
-              <line x1={34} y1={56} x2={66} y2={56} stroke="#9CA3AF" strokeWidth={1.5} />
+              <rect width={100} height={94} fill="none" stroke="currentColor" strokeWidth={2} rx={8} />
+              <line x1={34} y1={56} x2={66} y2={56} stroke="currentColor" strokeWidth={1.5} />
               <path
                 d="M 6,70 L 6,56 A 47.5,47.5 0 1 1 94,56 L 94,70"
                 fill="none"
-                stroke="#9CA3AF"
+                stroke="currentColor"
                 strokeWidth={1.5}
               />
-              <circle cx={50} cy={83} r={4} fill="none" stroke="#9CA3AF" strokeWidth={1.5} />
+              <circle cx={50} cy={83} r={4} fill="none" stroke="currentColor" strokeWidth={1.5} />
             </svg>
 
-            <div>
-              <p
-                style={{
-                  margin: "0 0 6px",
-                  fontSize: 18,
-                  fontWeight: 600,
-                  color: "#374151",
-                }}
-              >
+            <div className="flex flex-col items-center">
+              <p className="m-0 mb-1.5 font-display text-2xl font-semibold tracking-[0.02em] text-ink">
                 No plays yet
               </p>
-              <p
-                style={{
-                  margin: "0 0 20px",
-                  fontSize: 14,
-                  color: "#9CA3AF",
-                }}
-              >
-                Create your first play to get started.
-              </p>
-              <button
-                onClick={() => setShowModal(true)}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  padding: "10px 22px",
-                  borderRadius: 8,
-                  border: "none",
-                  background: "#4F46E5",
-                  color: "#fff",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                <span style={{ fontSize: 18, lineHeight: 1, marginTop: -1 }}>+</span>
+              <p className="m-0 mb-5 text-sm text-muted">Create your first play to get started.</p>
+              <button type="button" onClick={() => setShowModal(true)} className={ACCENT_BTN}>
                 Create Play
               </button>
             </div>
           </div>
         ) : (
           <>
-            {/* Search + filter bar */}
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                alignItems: "center",
-                gap: 10,
-                marginBottom: 20,
-              }}
-            >
-              {/* Search input */}
-              <div style={{ position: "relative", flex: "1 1 200px", maxWidth: 320 }}>
-                <svg
-                  width={14}
-                  height={14}
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  aria-hidden="true"
-                  style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#9CA3AF", pointerEvents: "none" }}
+            {/* Category filter chips */}
+            <div role="group" aria-label="Filter by category" className="flex flex-wrap gap-2">
+              {CATEGORY_FILTERS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setCategoryFilter(value)}
+                  aria-pressed={categoryFilter === value}
+                  className={`h-11 whitespace-nowrap rounded-full border px-4 text-sm transition-colors ${FOCUS_RING} ${
+                    categoryFilter === value
+                      ? "border-ink bg-ink font-semibold text-app"
+                      : "border-line bg-transparent font-medium text-ink hover:bg-chip"
+                  }`}
                 >
-                  <circle cx={8} cy={8} r={6} stroke="currentColor" strokeWidth={1.8} />
-                  <path d="M13 13l4 4" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" />
-                </svg>
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search plays…"
-                  aria-label="Search plays"
-                  style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    padding: "7px 12px 7px 32px",
-                    border: "1.5px solid #E5E7EB",
-                    borderRadius: 8,
-                    fontSize: 13,
-                    color: "#111827",
-                    background: "#fff",
-                    outline: "none",
-                  }}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = "#6366F1"; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = "#E5E7EB"; }}
-                />
-              </div>
-
-              {/* Category filter chips */}
-              <div
-                role="group"
-                aria-label="Filter by category"
-                style={{ display: "flex", flexWrap: "wrap", gap: 6 }}
-              >
-                {CATEGORY_FILTERS.map(({ value, label }) => (
-                  <button
-                    key={value}
-                    onClick={() => setCategoryFilter(value)}
-                    aria-pressed={categoryFilter === value}
-                    style={{
-                      padding: "5px 12px",
-                      borderRadius: 99,
-                      border: "1.5px solid",
-                      borderColor: categoryFilter === value ? "#6366F1" : "#E5E7EB",
-                      background: categoryFilter === value ? "#EEF2FF" : "#fff",
-                      color: categoryFilter === value ? "#4338CA" : "#6B7280",
-                      fontSize: 12,
-                      fontWeight: categoryFilter === value ? 600 : 400,
-                      cursor: "pointer",
-                      transition: "all 0.12s",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+                  {label}
+                </button>
+              ))}
             </div>
 
             {/* Stats bar */}
-            {(() => {
-              const filteredPlays = [...plays]
-                .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-                .filter((p) => {
-                  const matchesSearch = !search || p.title.toLowerCase().includes(search.toLowerCase());
-                  const matchesCategory = categoryFilter === "all" || p.category === categoryFilter;
-                  return matchesSearch && matchesCategory;
-                });
+            <div className="-my-2 flex min-h-11 items-center justify-between gap-3">
+              <p className="m-0 text-[13px] text-muted">
+                {filteredPlays.length === plays.length
+                  ? `${plays.length} ${plays.length === 1 ? "play" : "plays"}`
+                  : `${filteredPlays.length} of ${plays.length} plays`}
+              </p>
+              {hasFilters && (
+                <button type="button" onClick={clearFilters} className={LINK_BTN}>
+                  Clear filters
+                </button>
+              )}
+            </div>
 
-              return (
-                <>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      marginBottom: 20,
-                    }}
-                  >
-                    <p style={{ margin: 0, fontSize: 13, color: "#6B7280" }}>
-                      {filteredPlays.length === plays.length
-                        ? `${plays.length} ${plays.length === 1 ? "play" : "plays"}`
-                        : `${filteredPlays.length} of ${plays.length} plays`}
-                    </p>
-                    {(search || categoryFilter !== "all") && (
-                      <button
-                        onClick={() => { setSearch(""); setCategoryFilter("all"); }}
-                        style={{
-                          fontSize: 12,
-                          color: "#6366F1",
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          padding: 0,
-                          fontWeight: 500,
-                        }}
-                      >
-                        Clear filters
-                      </button>
-                    )}
-                  </div>
-
-                  {filteredPlays.length === 0 ? (
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        minHeight: 200,
-                        gap: 8,
-                        textAlign: "center",
-                        color: "#9CA3AF",
-                      }}
-                    >
-                      <p style={{ margin: 0, fontSize: 15, fontWeight: 500, color: "#6B7280" }}>
-                        No plays match your filters
-                      </p>
-                      <button
-                        onClick={() => { setSearch(""); setCategoryFilter("all"); }}
-                        style={{
-                          fontSize: 13,
-                          color: "#6366F1",
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          padding: 0,
-                          fontWeight: 500,
-                        }}
-                      >
-                        Clear filters
-                      </button>
-                    </div>
-                  ) : (
-                    /* Grid */
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-                        gap: 20,
-                      }}
-                    >
-                      {filteredPlays.map((play) => (
-                        <PlayCard key={play.id} play={play} teamId={teamId} role={role} />
-                      ))}
-                    </div>
-                  )}
-                </>
-              );
-            })()}
+            {filteredPlays.length === 0 ? (
+              <div className="flex min-h-[200px] flex-col items-center justify-center gap-1 text-center">
+                <p className="m-0 text-[15px] font-medium text-muted">No plays match your filters</p>
+                <button type="button" onClick={clearFilters} className={LINK_BTN}>
+                  Clear filters
+                </button>
+              </div>
+            ) : (
+              /* Grid */
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-4">
+                {filteredPlays.map((play) => (
+                  <PlayCard key={play.id} play={play} teamId={teamId} role={role} />
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setShowModal(true)}
+                  className={`flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line-strong bg-transparent text-[15px] font-medium text-muted transition-colors hover:border-ink hover:text-ink ${FOCUS_RING}`}
+                >
+                  <svg width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  New play
+                </button>
+              </div>
+            )}
           </>
         )}
-      </div>
+      </main>
 
       {/* New Play Modal */}
       {showModal && <NewPlayModal onClose={() => setShowModal(false)} />}
 
       {/* Create Team Modal */}
       {showCreateTeam && <CreateTeamModal onClose={() => setShowCreateTeam(false)} />}
-    </main>
+    </div>
   );
 }
