@@ -6,7 +6,7 @@
  * Implements issue #132: Presentation mode.
  *
  * Features:
- *   - Full-screen fixed overlay (black background) that hides all editor chrome
+ *   - Full-screen fixed overlay (the theme's app background) that hides all editor chrome
  *   - Large court display with play title and scene note overlay
  *   - Step-by-step navigation within scenes (Left/Right arrows)
  *   - Scene navigation ([ / ] keys or dedicated buttons)
@@ -34,6 +34,13 @@ import {
 } from "@/lib/playback";
 import CourtWithPlayers from "@/components/players/CourtWithPlayers";
 import type { CourtVariant } from "@/components/court/Court";
+import { SEGMENT, SEGMENTED } from "./chrome";
+
+/** Round control button; `size` classes are added per button. */
+const ROUND =
+  "flex flex-none items-center justify-center rounded-full border border-line bg-surface text-ink transition-colors hover:bg-chip disabled:cursor-default disabled:opacity-40 disabled:hover:bg-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text";
+/** Fades with the auto-hiding controls. */
+const FADE = "transition-opacity duration-[400ms]";
 
 // ---------------------------------------------------------------------------
 // Icon helpers
@@ -283,37 +290,18 @@ export default function PresentationOverlay() {
       aria-label="Presentation mode"
       onMouseMove={showControls}
       onPointerDown={showControls}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 200,
-        background: "#000",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        cursor: controlsVisible ? "default" : "none",
-      }}
+      className={`fixed inset-0 z-[200] flex flex-col items-center justify-center bg-app text-ink ${controlsVisible ? "cursor-default" : "cursor-none"}`}
     >
       {/* Title + scene note — top left */}
       <div
         aria-live="polite"
-        style={{
-          position: "absolute",
-          top: 20,
-          left: 24,
-          right: 80,
-          zIndex: 10,
-          opacity: controlsVisible ? 1 : 0,
-          transition: "opacity 0.4s",
-          pointerEvents: "none",
-        }}
+        className={`pointer-events-none absolute left-6 right-20 top-5 z-10 ${FADE} ${controlsVisible ? "opacity-100" : "opacity-0"}`}
       >
-        <p style={{ margin: 0, fontSize: "clamp(15px, 2.2vw, 24px)", fontWeight: 700, color: "#fff", textShadow: "0 1px 6px rgba(0,0,0,0.7)", lineHeight: 1.3 }}>
+        <p className="font-display text-[clamp(18px,2.4vw,28px)] font-semibold leading-tight tracking-[0.02em] text-ink">
           {currentPlay.title}
         </p>
         {scene?.note && (
-          <p style={{ margin: "4px 0 0", fontSize: "clamp(12px, 1.6vw, 18px)", color: "rgba(255,255,255,0.75)", textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}>
+          <p className="mt-1 text-[clamp(12px,1.6vw,18px)] text-muted">
             {scene.note}
           </p>
         )}
@@ -321,27 +309,11 @@ export default function PresentationOverlay() {
 
       {/* Exit button — top right */}
       <button
+        type="button"
         onClick={exitPresentationMode}
         aria-label="Exit presentation mode (Esc)"
         title="Exit (Esc)"
-        style={{
-          position: "absolute",
-          top: 16,
-          right: 16,
-          zIndex: 10,
-          width: 40,
-          height: 40,
-          borderRadius: "50%",
-          background: "rgba(255,255,255,0.12)",
-          border: "1px solid rgba(255,255,255,0.2)",
-          color: "#fff",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: "pointer",
-          opacity: controlsVisible ? 1 : 0,
-          transition: "opacity 0.4s",
-        }}
+        className={`${ROUND} absolute right-4 top-4 z-10 h-11 w-11 ${FADE} ${controlsVisible ? "opacity-100" : "opacity-0"}`}
       >
         <XIcon />
       </button>
@@ -369,29 +341,18 @@ export default function PresentationOverlay() {
 
       {/* Bottom controls — auto-hides */}
       <div
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          padding: "16px 24px 20px",
-          background: "linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 100%)",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 10,
-          opacity: controlsVisible ? 1 : 0,
-          transition: "opacity 0.4s",
-          pointerEvents: controlsVisible ? "auto" : "none",
-        }}
+        className={`absolute inset-x-0 bottom-0 flex flex-col items-center gap-2.5 bg-[color-mix(in_srgb,var(--color-app)_88%,transparent)] px-6 pb-5 pt-4 ${FADE} ${
+          controlsVisible ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+        }`}
       >
         {/* Scene dots */}
-        <div role="group" aria-label="Scene timeline" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <div role="group" aria-label="Scene timeline" className="flex items-center gap-1.5">
           {scenes.map((s, i) => {
             const isActive = i === currentSceneIndex;
             return (
               <button
                 key={s.id}
+                type="button"
                 onClick={() => {
                   pausePlayback();
                   setPlaybackPosition(i);
@@ -400,205 +361,129 @@ export default function PresentationOverlay() {
                 aria-label={`Scene ${i + 1}${s.note ? ` — ${s.note}` : ""}`}
                 aria-pressed={isActive}
                 title={`Scene ${i + 1}${s.note ? ` — ${s.note}` : ""}`}
-                style={{
-                  width: isActive ? 28 : 8,
-                  height: 8,
-                  borderRadius: 4,
-                  background: isActive ? "#fff" : "rgba(255,255,255,0.3)",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: 0,
-                  transition: "width 0.25s, background 0.2s",
-                  flexShrink: 0,
-                }}
-              />
+                className="group flex h-6 flex-none items-center"
+              >
+                <span
+                  className={`block h-2 rounded transition-all duration-200 ${
+                    isActive ? "w-7 bg-accent" : "w-2 bg-line-strong group-hover:bg-muted"
+                  }`}
+                />
+              </button>
             );
           })}
         </div>
 
         {/* Step dots — only if current scene has multiple steps */}
         {hasMultipleSteps && (
-          <div role="group" aria-label="Step timeline" style={{ display: "flex", gap: 5, alignItems: "center" }}>
+          <div role="group" aria-label="Step timeline" className="flex items-center gap-[5px]">
             {sortedSteps.map((g, i) => {
               const isActive = i === currentStepIndex;
               return (
                 <button
                   key={g.step}
+                  type="button"
                   onClick={() => { pausePlayback(); setCurrentStep(g.step); showControls(); }}
                   aria-label={`Step ${i + 1}`}
                   aria-pressed={isActive}
-                  style={{
-                    width: isActive ? 20 : 6,
-                    height: 6,
-                    borderRadius: 3,
-                    background: isActive ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.2)",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: 0,
-                    transition: "width 0.2s, background 0.15s",
-                    flexShrink: 0,
-                  }}
-                />
+                  className="group flex h-5 flex-none items-center"
+                >
+                  <span
+                    className={`block h-1.5 rounded-sm transition-all duration-200 ${
+                      isActive ? "w-5 bg-ink" : "w-1.5 bg-line-strong group-hover:bg-muted"
+                    }`}
+                  />
+                </button>
               );
             })}
           </div>
         )}
 
         {/* Main controls row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div className="flex items-center gap-2">
           {/* Go to beginning */}
           <button
+            type="button"
             onClick={() => { goToBeginning(); showControls(); }}
             disabled={atStart}
             aria-label="Go to beginning (Home)"
             title="Go to beginning (Home)"
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: "50%",
-              background: "rgba(255,255,255,0.1)",
-              border: "1px solid rgba(255,255,255,0.15)",
-              color: atStart ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.7)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: atStart ? "default" : "pointer",
-            }}
+            className={`${ROUND} h-11 w-11`}
           >
             <RestartIcon />
           </button>
 
           {/* Prev scene */}
           <button
+            type="button"
             onClick={() => { pausePlayback(); goPrevScene(); showControls(); }}
             disabled={currentSceneIndex === 0}
             aria-label="Previous scene ([)"
             title="Previous scene ([)"
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: "50%",
-              background: "rgba(255,255,255,0.1)",
-              border: "1px solid rgba(255,255,255,0.15)",
-              color: currentSceneIndex === 0 ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.7)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: currentSceneIndex === 0 ? "default" : "pointer",
-            }}
+            className={`${ROUND} h-11 w-11`}
           >
             <SceneBackIcon />
           </button>
 
           {/* Prev step */}
           <button
+            type="button"
             onClick={() => { pausePlayback(); goPrevStep(); showControls(); }}
             disabled={atStart}
             aria-label="Previous step (←)"
             title="Previous step (←)"
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: "50%",
-              background: "rgba(255,255,255,0.15)",
-              border: "1px solid rgba(255,255,255,0.2)",
-              color: atStart ? "rgba(255,255,255,0.25)" : "#fff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: atStart ? "default" : "pointer",
-            }}
+            className={`${ROUND} h-12 w-12`}
           >
             <StepBackIcon />
           </button>
 
           {/* Play / Pause */}
           <button
+            type="button"
             onClick={() => { togglePlayback(); showControls(); }}
             aria-label={isPlaying ? "Pause (Space)" : "Play (Space)"}
             title={isPlaying ? "Pause (Space)" : "Play (Space)"}
-            style={{
-              width: 64,
-              height: 64,
-              borderRadius: "50%",
-              background: "#fff",
-              border: "none",
-              color: "#111",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              boxShadow: "0 2px 16px rgba(0,0,0,0.4)",
-            }}
+            className="flex h-16 w-16 flex-none items-center justify-center rounded-full bg-accent text-accent-ink transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text"
           >
             {isPlaying ? <PauseIcon /> : <PlayIcon />}
           </button>
 
           {/* Next step */}
           <button
+            type="button"
             onClick={() => { pausePlayback(); goNextStep(); showControls(); }}
             disabled={atEnd && !loop}
             aria-label="Next step (→)"
             title="Next step (→)"
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: "50%",
-              background: "rgba(255,255,255,0.15)",
-              border: "1px solid rgba(255,255,255,0.2)",
-              color: atEnd && !loop ? "rgba(255,255,255,0.25)" : "#fff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: atEnd && !loop ? "default" : "pointer",
-            }}
+            className={`${ROUND} h-12 w-12`}
           >
             <StepForwardIcon />
           </button>
 
           {/* Next scene */}
           <button
+            type="button"
             onClick={() => { pausePlayback(); goNextScene(); showControls(); }}
             disabled={currentSceneIndex >= sceneCount - 1}
             aria-label="Next scene (])"
             title="Next scene (])"
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: "50%",
-              background: "rgba(255,255,255,0.1)",
-              border: "1px solid rgba(255,255,255,0.15)",
-              color: currentSceneIndex >= sceneCount - 1 ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.7)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: currentSceneIndex >= sceneCount - 1 ? "default" : "pointer",
-            }}
+            className={`${ROUND} h-11 w-11`}
           >
             <SceneForwardIcon />
           </button>
         </div>
 
         {/* Speed + counter row */}
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
           {/* Speed pills */}
-          <div style={{ display: "flex", gap: 4 }}>
+          <div className={SEGMENTED} role="group" aria-label="Playback speed">
             {SPEED_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
+                type="button"
                 onClick={() => { setSpeed(opt.value); showControls(); }}
+                aria-label={`Speed ${opt.label}`}
                 aria-pressed={speed === opt.value}
-                style={{
-                  padding: "3px 9px",
-                  borderRadius: 99,
-                  border: speed === opt.value ? "1px solid rgba(255,255,255,0.7)" : "1px solid rgba(255,255,255,0.2)",
-                  background: speed === opt.value ? "rgba(255,255,255,0.2)" : "transparent",
-                  color: speed === opt.value ? "#fff" : "rgba(255,255,255,0.45)",
-                  fontSize: 11,
-                  fontWeight: speed === opt.value ? 700 : 400,
-                  cursor: "pointer",
-                  transition: "background 0.15s, border-color 0.15s, color 0.15s",
-                }}
+                className={`${SEGMENT} tabular-nums`}
               >
                 {opt.label}
               </button>
@@ -606,22 +491,13 @@ export default function PresentationOverlay() {
           </div>
 
           {/* Counter */}
-          <p
-            aria-live="polite"
-            aria-atomic="true"
-            style={{
-              margin: 0,
-              fontSize: 12,
-              color: "rgba(255,255,255,0.45)",
-              fontVariantNumeric: "tabular-nums",
-            }}
-          >
+          <p aria-live="polite" aria-atomic="true" className="text-[13px] tabular-nums text-muted">
             Scene {currentSceneIndex + 1}/{sceneCount}
             {hasMultipleSteps ? `  ·  Step ${currentStepIndex + 1}/${sortedSteps.length}` : ""}
           </p>
 
           {/* Keyboard hint */}
-          <p style={{ margin: 0, fontSize: 10, color: "rgba(255,255,255,0.2)" }}>
+          <p className="hidden text-xs text-muted sm:block">
             ← →: step  ·  [ ]: scene  ·  Home: restart
           </p>
         </div>

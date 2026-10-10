@@ -67,25 +67,7 @@ interface ShortcutsOverlayProps {
 
 function Kbd({ children }: { children: string }) {
   return (
-    <kbd
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minWidth: 26,
-        padding: "2px 6px",
-        background: "#F3F4F6",
-        border: "1px solid #D1D5DB",
-        borderRadius: 5,
-        boxShadow: "0 1px 0 #9CA3AF",
-        fontSize: 11,
-        fontFamily: "ui-monospace, monospace",
-        fontWeight: 600,
-        color: "#374151",
-        whiteSpace: "nowrap",
-        lineHeight: 1.5,
-      }}
-    >
+    <kbd className="inline-flex min-w-[26px] items-center justify-center whitespace-nowrap rounded-[5px] border border-line-strong bg-chip px-1.5 py-0.5 font-mono text-[11px] font-semibold leading-normal text-ink">
       {children}
     </kbd>
   );
@@ -111,156 +93,44 @@ export default function ShortcutsOverlay({ onClose }: ShortcutsOverlayProps) {
       aria-modal="true"
       aria-label="Keyboard shortcuts"
       onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 100,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "rgba(0,0,0,0.45)",
-        backdropFilter: "blur(2px)",
-      }}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-[2px]"
     >
       {/* Panel */}
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{
-          background: "#fff",
-          borderRadius: 12,
-          boxShadow: "0 8px 40px rgba(0,0,0,0.2)",
-          padding: "24px 28px",
-          width: "min(580px, 92vw)",
-          maxHeight: "80vh",
-          overflowY: "auto",
-        }}
+        className="max-h-[80vh] w-[min(580px,92vw)] overflow-y-auto rounded-xl border border-line bg-surface px-7 py-6 text-ink shadow-2xl"
       >
         {/* Header */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 20,
-          }}
-        >
-          <h2
-            style={{
-              margin: 0,
-              fontSize: 17,
-              fontWeight: 700,
-              color: "#111827",
-            }}
-          >
-            Keyboard Shortcuts
-          </h2>
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="font-display text-2xl font-semibold tracking-[0.02em] text-ink">Keyboard Shortcuts</h2>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close shortcuts panel"
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: 4,
-              color: "#6B7280",
-              fontSize: 20,
-              lineHeight: 1,
-              borderRadius: 6,
-            }}
+            className="flex h-11 w-11 items-center justify-center rounded-lg text-muted transition-colors hover:bg-app hover:text-ink"
           >
-            ×
+            <svg width={16} height={16} viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" />
+            </svg>
           </button>
         </div>
 
         {/* Sections */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-            gap: "20px 32px",
-          }}
-        >
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-x-8 gap-y-5">
           {SECTIONS.map((section) => (
             <div key={section.title}>
-              <h3
-                style={{
-                  margin: "0 0 10px",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: "#9CA3AF",
-                }}
-              >
+              <h3 className="mb-2.5 font-display text-sm font-semibold uppercase tracking-[0.08em] text-muted">
                 {section.title}
               </h3>
-              <ul
-                style={{
-                  margin: 0,
-                  padding: 0,
-                  listStyle: "none",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 7,
-                }}
-              >
+              <ul className="flex list-none flex-col gap-[7px]">
                 {section.entries.map((entry) => (
-                  <li
-                    key={entry.description}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 12,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 13,
-                        color: "#374151",
-                        flexShrink: 1,
-                        minWidth: 0,
-                      }}
-                    >
-                      {entry.description}
-                    </span>
-                    <span
-                      style={{
-                        display: "flex",
-                        gap: 3,
-                        alignItems: "center",
-                        flexShrink: 0,
-                      }}
-                    >
+                  <li key={entry.description} className="flex items-center justify-between gap-3">
+                    <span className="min-w-0 shrink text-[13px] text-ink">{entry.description}</span>
+                    <span className="flex shrink-0 items-center gap-[3px]">
                       {entry.keys.map((k, i) => (
-                        <span
-                          key={i}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 3,
-                          }}
-                        >
-                          {i > 0 && k !== "/" && (
-                            <span
-                              style={{
-                                color: "#D1D5DB",
-                                fontSize: 11,
-                                margin: "0 1px",
-                              }}
-                            >
-                              +
-                            </span>
-                          )}
-                          {k === "/" ? (
-                            <span
-                              style={{ color: "#9CA3AF", fontSize: 11, margin: "0 3px" }}
-                            >
-                              or
-                            </span>
-                          ) : (
-                            <Kbd>{k}</Kbd>
-                          )}
+                        <span key={i} className="flex items-center gap-[3px]">
+                          {i > 0 && k !== "/" && <span className="mx-px text-[11px] text-muted">+</span>}
+                          {k === "/" ? <span className="mx-[3px] text-[11px] text-muted">or</span> : <Kbd>{k}</Kbd>}
                         </span>
                       ))}
                     </span>
@@ -272,14 +142,7 @@ export default function ShortcutsOverlay({ onClose }: ShortcutsOverlayProps) {
         </div>
 
         {/* Footer hint */}
-        <p
-          style={{
-            margin: "20px 0 0",
-            fontSize: 12,
-            color: "#9CA3AF",
-            textAlign: "center",
-          }}
-        >
+        <p className="mt-5 text-center text-xs text-muted">
           Press <Kbd>?</Kbd> or <Kbd>Esc</Kbd> to dismiss
         </p>
       </div>

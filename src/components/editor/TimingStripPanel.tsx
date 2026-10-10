@@ -1,14 +1,14 @@
 "use client";
 
 /**
- * TimingStripPanel — horizontal strip above the scene strip showing timing
- * groups (steps) for the active scene.
+ * TimingStripPanel — horizontal strip beside the scene strip (below it below
+ * lg) showing timing groups (steps) for the active scene.
  *
  * Implements issue #64: Timing groups — assign steps to annotations.
  *
  * Features:
  *   - Numbered step buttons (Step 1, Step 2, ...).
- *   - Active step is highlighted in blue.
+ *   - Active step is highlighted in the accent colour.
  *   - [+] button to add a new step.
  *   - [×] button to remove a step (only if more than one step exists).
  *   - Step duration display (click to edit inline).
@@ -23,6 +23,7 @@ import {
   selectTimingStepCount,
 } from "@/lib/store";
 import InfoTooltip from "./InfoTooltip";
+import { SECTION_LABEL } from "./chrome";
 
 // ---------------------------------------------------------------------------
 // Step duration editor
@@ -66,7 +67,7 @@ function DurationEditor({ stepDuration, onChange }: DurationEditorProps) {
           e.stopPropagation();
         }}
         autoFocus
-        className="w-16 rounded border border-blue-400 px-1 py-0 text-center text-[10px] focus:outline-none focus:ring-1 focus:ring-blue-400"
+        className="w-16 rounded border border-accent-text bg-surface px-1 py-0 text-center text-[11px] text-ink focus:outline-none"
         aria-label="Step duration in milliseconds"
       />
     );
@@ -79,7 +80,7 @@ function DurationEditor({ stepDuration, onChange }: DurationEditorProps) {
         setEditing(true);
       }}
       title="Click to edit step duration"
-      className="text-[10px] text-gray-400 hover:text-gray-600"
+      className="text-[11px] tabular-nums text-muted hover:text-ink"
     >
       {stepDuration}ms
     </button>
@@ -114,14 +115,12 @@ export default function TimingStripPanel() {
 
   return (
     <div
-      className="flex items-center gap-2 border-t border-gray-100 bg-gray-50 px-4 py-1.5"
+      className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto px-5 py-2.5 lg:py-3.5"
       aria-label="Timing steps"
     >
       {/* Label */}
       <span className="flex shrink-0 items-center gap-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">
-          Steps
-        </span>
+        <span className={SECTION_LABEL}>Steps</span>
         <InfoTooltip tip="Steps play in order within a scene. Annotations in the same step animate simultaneously — useful for sequencing a screen before a cut." />
       </span>
 
@@ -132,7 +131,7 @@ export default function TimingStripPanel() {
         const hasNext = idx < sortedGroups.length - 1;
 
         return (
-          <div key={group.step} className="flex items-start gap-1">
+          <div key={group.step} className="flex shrink-0 items-start gap-1">
             {/* Step pill + controls */}
             <div className="flex flex-col items-center gap-0.5">
               <button
@@ -144,10 +143,10 @@ export default function TimingStripPanel() {
                 disabled={isPlaying}
                 title={`Step ${group.step} — ${group.duration}ms`}
                 className={[
-                  "relative flex h-7 min-w-[36px] items-center justify-center rounded-md px-2 text-xs font-semibold transition-colors",
+                  "relative flex h-8 min-w-[40px] items-center justify-center rounded-lg border px-2 text-[13px] font-semibold transition-colors",
                   isActive
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-100",
+                    ? "border-accent bg-accent text-accent-ink"
+                    : "border-line bg-surface text-ink hover:bg-chip dark:bg-app",
                   isPlaying ? "cursor-default" : "",
                 ].join(" ")}
               >
@@ -155,10 +154,7 @@ export default function TimingStripPanel() {
                 {/* Annotation count badge */}
                 {annCount > 0 && (
                   <span
-                    className={[
-                      "absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold",
-                      isActive ? "bg-white text-blue-600" : "bg-blue-600 text-white",
-                    ].join(" ")}
+                    className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-ink px-0.5 text-[10px] font-bold leading-none text-app"
                     aria-label={`${annCount} annotation${annCount !== 1 ? "s" : ""}`}
                   >
                     {annCount}
@@ -180,7 +176,7 @@ export default function TimingStripPanel() {
                   onClick={() => removeTimingStep(sceneId, group.step)}
                   aria-label={`Remove step ${group.step}`}
                   title={`Delete step ${group.step}`}
-                  className="text-[10px] leading-none text-gray-400 hover:text-red-500"
+                  className="text-[11px] leading-none text-muted hover:text-danger"
                 >
                   ✕
                 </button>
@@ -193,7 +189,7 @@ export default function TimingStripPanel() {
                 onClick={() => mergeTimingSteps(sceneId, group.step)}
                 aria-label={`Merge step ${group.step} and ${group.step + 1}`}
                 title={`Merge step ${group.step} + ${group.step + 1}`}
-                className="mt-1 flex h-5 w-5 items-center justify-center rounded text-[11px] text-gray-300 hover:bg-gray-100 hover:text-gray-600"
+                className="mt-1.5 flex h-5 w-5 items-center justify-center rounded text-xs text-muted hover:bg-chip hover:text-ink"
               >
                 ⊕
               </button>
@@ -204,7 +200,7 @@ export default function TimingStripPanel() {
 
       {/* Empty-state hint */}
       {sortedGroups.length === 1 && !isPlaying && (
-        <span className="ml-1 text-[11px] italic text-gray-400">
+        <span className="hidden shrink-0 text-xs text-muted xl:inline">
           Add a step to sequence actions one after another
         </span>
       )}
@@ -219,7 +215,7 @@ export default function TimingStripPanel() {
           }}
           aria-label="Add step"
           title="Add timing step"
-          className="flex h-7 w-7 items-center justify-center rounded-md border-2 border-dashed border-gray-300 text-gray-400 hover:border-blue-400 hover:text-blue-500"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 border-dashed border-line-strong text-base text-muted transition-colors hover:border-accent-text hover:text-accent-text"
         >
           +
         </button>

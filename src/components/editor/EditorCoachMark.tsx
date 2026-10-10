@@ -18,40 +18,34 @@ export default function EditorCoachMark() {
   if (dismissed) return null;
 
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "7px 16px",
-        borderTop: "1px solid #FDE68A",
-        background: "#FFFBEB",
-        fontSize: 12,
-        color: "#78350F",
-      }}
-    >
-      <span style={{ fontSize: 14, flexShrink: 0 }}>💡</span>
-      <span style={{ flex: 1, lineHeight: 1.5 }}>
+    <div className="flex items-center gap-3 border-t border-line bg-chip px-5 py-1.5 text-xs text-ink">
+      <svg
+        className="flex-none text-accent-text"
+        width={18}
+        height={18}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M9 18h6M10 21h4" />
+        <path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.3 1 2.5h6c0-1.2.3-1.8 1-2.5A6 6 0 0 0 12 3z" />
+      </svg>
+      <span className="flex-1 leading-normal">
         <strong>Scenes</strong> are the frames of your play — each one captures a moment on the court.{" "}
         <strong>Steps</strong> sequence actions <em>within</em> a scene (e.g. set the screen first,
         then cut). Right-click any scene thumbnail to duplicate or reorder it.
       </span>
       <button
+        type="button"
         onClick={() => {
           localStorage.setItem(COACH_KEY, "1");
           setDismissed(true);
         }}
-        style={{
-          flexShrink: 0,
-          padding: "3px 10px",
-          borderRadius: 6,
-          border: "1px solid #FCD34D",
-          background: "#FEF3C7",
-          color: "#92400E",
-          fontSize: 11,
-          fontWeight: 600,
-          cursor: "pointer",
-        }}
+        className="flex h-7 flex-none items-center rounded-lg border border-line-strong bg-surface px-3 text-xs font-semibold text-ink transition-colors hover:bg-app"
       >
         Got it
       </button>

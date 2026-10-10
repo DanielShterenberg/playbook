@@ -6,40 +6,29 @@ interface InfoTooltipProps {
   tip: string;
 }
 
+const TIP_WIDTH = 210;
+
 export default function InfoTooltip({ tip }: InfoTooltipProps) {
-  const [show, setShow] = useState(false);
+  // Viewport position of the bubble; fixed so the scrolling strips it sits in cannot clip it.
+  const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
   return (
     <span
-      style={{ position: "relative", display: "inline-flex", alignItems: "center" }}
-      onMouseEnter={() => setShow(true)}
-      onMouseLeave={() => setShow(false)}
+      className="relative inline-flex items-center"
+      onMouseEnter={(e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        const left = Math.min(Math.max(8, r.left + r.width / 2 - TIP_WIDTH / 2), window.innerWidth - TIP_WIDTH - 8);
+        setPos({ left, bottom: window.innerHeight - r.top + 6 });
+      }}
+      onMouseLeave={() => setPos(null)}
     >
-      <span
-        style={{ cursor: "default", color: "#9CA3AF", fontSize: 11, lineHeight: 1 }}
-        aria-label="Info"
-      >
+      <span className="cursor-default text-xs leading-none text-muted" aria-label="Info">
         ⓘ
       </span>
-      {show && (
+      {pos && (
         <span
           role="tooltip"
-          style={{
-            position: "absolute",
-            bottom: "calc(100% + 6px)",
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "#1F2937",
-            color: "#F9FAFB",
-            fontSize: 11,
-            borderRadius: 6,
-            padding: "6px 9px",
-            whiteSpace: "normal",
-            width: 210,
-            zIndex: 200,
-            lineHeight: 1.5,
-            pointerEvents: "none",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
-          }}
+          className="pointer-events-none fixed z-[200] whitespace-normal rounded-md bg-ink px-2.5 py-1.5 font-sans text-xs font-normal normal-case leading-normal tracking-normal text-app shadow-lg"
+          style={{ left: pos.left, bottom: pos.bottom, width: TIP_WIDTH }}
         >
           {tip}
         </span>

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * PlaybackControls — bottom bar for scene playback.
+ * PlaybackControls — playback row under the court.
  *
  * Implements issue #66: Playback controls UI.
  *
@@ -24,6 +24,7 @@ import { useEffect } from "react";
 import { useStore, selectEditorScene, selectSceneCount } from "@/lib/store";
 import type { PlaybackSpeed } from "@/lib/store";
 import { sortedTimingGroups } from "@/lib/playback";
+import { ROUND_BTN, SEGMENT, SEGMENTED } from "./chrome";
 
 // ---------------------------------------------------------------------------
 // Speed options
@@ -37,43 +38,39 @@ const SPEED_OPTIONS: PlaybackSpeed[] = [0.5, 1, 1.5, 2];
 
 function PlayIcon() {
   return (
-    <svg viewBox="0 0 20 20" width={18} height={18} fill="currentColor" aria-hidden="true">
-      <path d="M6.3 3.7a1 1 0 0 1 1.4 0l7 6a1 1 0 0 1 0 1.6l-7 6A1 1 0 0 1 6 16.5v-13a1 1 0 0 1 .3-.8z" />
+    <svg viewBox="0 0 24 24" width={20} height={20} fill="currentColor" aria-hidden="true">
+      <path d="M8 5v14l11-7z" />
     </svg>
   );
 }
 
 function PauseIcon() {
   return (
-    <svg viewBox="0 0 20 20" width={18} height={18} fill="currentColor" aria-hidden="true">
-      <rect x="5" y="3" width="4" height="14" rx="1.5" />
-      <rect x="11" y="3" width="4" height="14" rx="1.5" />
+    <svg viewBox="0 0 24 24" width={20} height={20} fill="currentColor" aria-hidden="true">
+      <path d="M7 5h4v14H7zM13 5h4v14h-4z" />
     </svg>
   );
 }
 
 function StepBackIcon() {
   return (
-    <svg viewBox="0 0 20 20" width={16} height={16} fill="currentColor" aria-hidden="true">
-      <rect x="4" y="3" width="2.5" height="14" rx="1" />
-      <path d="M14.5 3.7a1 1 0 0 0-1.4 0l-6 5.3a1 1 0 0 0 0 1.6l6 5a1 1 0 0 0 1.6-.8V4.5a1 1 0 0 0-.2-.8z" />
+    <svg viewBox="0 0 24 24" width={16} height={16} fill="currentColor" aria-hidden="true">
+      <path d="M6 5h2v14H6zM20 5v14L9 12z" />
     </svg>
   );
 }
 
 function StepForwardIcon() {
   return (
-    <svg viewBox="0 0 20 20" width={16} height={16} fill="currentColor" aria-hidden="true">
-      <rect x="13.5" y="3" width="2.5" height="14" rx="1" />
-      <path d="M5.5 3.7a1 1 0 0 1 1.4 0l6 5.3a1 1 0 0 1 0 1.6l-6 5A1 1 0 0 1 4.3 14.8V4.5a1 1 0 0 1 .2-.8z" />
+    <svg viewBox="0 0 24 24" width={16} height={16} fill="currentColor" aria-hidden="true">
+      <path d="M16 5h2v14h-2zM4 5v14l11-7z" />
     </svg>
   );
 }
 
-function LoopIcon({ active }: { active: boolean }) {
-  const c = active ? "#3B82F6" : "currentColor";
+function LoopIcon() {
   return (
-    <svg viewBox="0 0 20 20" width={16} height={16} fill="none" stroke={c} strokeWidth={1.8} aria-hidden="true">
+    <svg viewBox="0 0 20 20" width={16} height={16} fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
       <path d="M4 10a6 6 0 0 1 6-6h4" strokeLinecap="round" />
       <path d="M12 2l2.5 2L12 6" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M16 10a6 6 0 0 1-6 6H6" strokeLinecap="round" />
@@ -130,57 +127,51 @@ export default function PlaybackControls() {
   const stepNumber = Math.max(stepGroups.findIndex((g) => g.step === currentStep), 0) + 1;
 
   // Build step indicator string
-  const stepLabel = `Scene ${currentSceneIndex + 1} / ${sceneCount}  ·  Step ${stepNumber} / ${totalSteps}`;
+  const stepLabel = `Scene ${currentSceneIndex + 1} of ${sceneCount} · Step ${stepNumber} of ${totalSteps}`;
 
   return (
     <div
-      className="flex items-center gap-2 border-t border-gray-200 bg-white px-3 py-2 md:gap-3 md:px-4"
+      className="flex w-full flex-none items-center gap-2.5 px-3 py-2 md:max-w-3xl md:flex-wrap md:justify-center md:gap-2 md:p-0 xl:gap-3"
       aria-label="Playback controls"
     >
       {/* Step back — hidden on mobile */}
       <button
+        type="button"
         onClick={() => { pausePlayback(); stepBack(); }}
         title="Step back (Left Arrow)"
         aria-label="Step back"
         disabled={currentSceneIndex === 0}
-        className="hidden h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 disabled:opacity-30 md:flex"
+        className={`${ROUND_BTN} hidden md:flex`}
       >
         <StepBackIcon />
       </button>
 
       {/* Play / Pause — always visible */}
       <button
+        type="button"
         onClick={togglePlayback}
         title={isPlaying ? "Pause (Space)" : "Play (Space)"}
         aria-label={isPlaying ? "Pause" : "Play"}
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white shadow hover:bg-blue-700"
+        className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-accent text-accent-ink transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text md:h-[52px] md:w-[52px]"
       >
         {isPlaying ? <PauseIcon /> : <PlayIcon />}
       </button>
 
       {/* Step forward — hidden on mobile */}
       <button
+        type="button"
         onClick={() => { pausePlayback(); stepForward(); }}
         title="Step forward (Right Arrow)"
         aria-label="Step forward"
         disabled={currentSceneIndex >= sceneCount - 1}
-        className="hidden h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 disabled:opacity-30 md:flex"
+        className={`${ROUND_BTN} hidden md:flex`}
       >
         <StepForwardIcon />
       </button>
 
-      {/* Scene / step indicator — hidden on mobile */}
-      <span
-        className="hidden min-w-[140px] select-none text-center text-xs font-medium text-gray-500 md:block lg:min-w-[160px]"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        {stepLabel}
-      </span>
-
-      {/* Timeline scrubber — always visible, fills available space */}
+      {/* Timeline scrubber — one segment per scene, filled up to the current one */}
       <div
-        className="flex flex-1 items-center gap-1 overflow-x-auto"
+        className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto md:basis-14"
         role="group"
         aria-label="Scene timeline"
       >
@@ -189,6 +180,7 @@ export default function PlaybackControls() {
           return (
             <button
               key={s.id}
+              type="button"
               onClick={() => {
                 pausePlayback();
                 setPlaybackPosition(i);
@@ -196,29 +188,43 @@ export default function PlaybackControls() {
               aria-label={`Scene ${i + 1}`}
               aria-pressed={isActive}
               title={`Scene ${i + 1}${s.note ? ` — ${s.note}` : ""}`}
-              className={[
-                "h-2 min-w-[32px] flex-1 rounded-full transition-colors",
-                isActive ? "bg-blue-600" : "bg-gray-200 hover:bg-gray-300",
-              ].join(" ")}
-            />
+              className="group flex h-11 min-w-[6px] flex-1 items-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-text"
+            >
+              <span
+                className={[
+                  "block h-1.5 w-full transition-colors",
+                  i === 0 ? "rounded-l-full" : "",
+                  i === scenes.length - 1 ? "rounded-r-full" : "",
+                  i <= currentSceneIndex ? "bg-accent" : "bg-line group-hover:bg-line-strong",
+                ].join(" ")}
+              />
+            </button>
           );
         })}
       </div>
 
+      {/* Scene / step indicator — short form on mobile */}
+      <span
+        className="flex-none select-none text-[13px] tabular-nums text-muted"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <span className="hidden md:inline">{stepLabel}</span>
+        <span className="md:hidden">
+          {currentSceneIndex + 1} / {sceneCount}
+        </span>
+      </span>
+
       {/* Speed selector — hidden on mobile */}
-      <div className="hidden items-center gap-1 md:flex">
+      <div className={`${SEGMENTED} hidden md:flex`} role="group" aria-label="Playback speed">
         {SPEED_OPTIONS.map((s) => (
           <button
             key={s}
+            type="button"
             onClick={() => setSpeed(s)}
             aria-label={`Speed ${s}x`}
             aria-pressed={speed === s}
-            className={[
-              "rounded px-1.5 py-0.5 text-xs font-medium transition-colors",
-              speed === s
-                ? "bg-blue-100 text-blue-700"
-                : "text-gray-500 hover:bg-gray-100",
-            ].join(" ")}
+            className={`${SEGMENT} tabular-nums`}
           >
             {s}x
           </button>
@@ -227,16 +233,14 @@ export default function PlaybackControls() {
 
       {/* Loop toggle — hidden on mobile */}
       <button
+        type="button"
         onClick={() => setLoop(!loop)}
         title="Loop (L)"
         aria-label="Toggle loop"
         aria-pressed={loop}
-        className={[
-          "hidden h-8 w-8 items-center justify-center rounded-md transition-colors md:flex",
-          loop ? "bg-blue-100 text-blue-600" : "text-gray-400 hover:bg-gray-100",
-        ].join(" ")}
+        className={`${ROUND_BTN} hidden aria-pressed:text-accent-text md:flex`}
       >
-        <LoopIcon active={loop} />
+        <LoopIcon />
       </button>
     </div>
   );

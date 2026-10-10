@@ -9,29 +9,34 @@
  * already listens for, keeping a single source of truth for overlay state.
  */
 
-export default function ShortcutsButton() {
-  function handleClick() {
-    // Dispatch a synthetic "?" keydown so EditorKeyboardManager handles it.
-    // This avoids duplicating overlay state across two components.
-    window.dispatchEvent(
-      new KeyboardEvent("keydown", {
-        key: "?",
-        code: "Slash",
-        shiftKey: true,
-        bubbles: true,
-        cancelable: true,
-      }),
-    );
-  }
+import { ICON_BTN } from "./chrome";
 
+/**
+ * Toggle the shortcuts overlay: a synthetic "?" keydown that
+ * EditorKeyboardManager handles, so overlay state lives in one component.
+ */
+export function toggleShortcutsOverlay() {
+  window.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: "?",
+      code: "Slash",
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+}
+
+export default function ShortcutsButton({ className }: { className?: string }) {
   return (
     <button
-      onClick={handleClick}
-      className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+      type="button"
+      onClick={toggleShortcutsOverlay}
+      className={className ? `${ICON_BTN} ${className}` : ICON_BTN}
       title="Keyboard shortcuts (?)"
       aria-label="Keyboard shortcuts"
     >
-      ?
+      <span className="text-base font-semibold leading-none" aria-hidden="true">?</span>
     </button>
   );
 }

@@ -4,10 +4,10 @@ interface PlayViewPageProps {
 
 export default function PlayViewPage({ params }: PlayViewPageProps) {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-4">Viewing Play</h1>
-      <p className="text-gray-500">Play ID: {params.id}</p>
-      <p className="text-gray-400 mt-2">Read-only view for shared play links.</p>
+    <main className="flex min-h-screen flex-col items-center justify-center bg-app p-8 text-ink">
+      <h1 className="mb-4 font-display text-2xl font-semibold tracking-[0.02em] text-ink">Viewing Play</h1>
+      <p className="text-muted">Play ID: {params.id}</p>
+      <p className="mt-2 text-muted">Read-only view for shared play links.</p>
     </main>
   );
 }

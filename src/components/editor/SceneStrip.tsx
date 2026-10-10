@@ -5,6 +5,9 @@
  *
  * Implements issue #63: Scene management — add, remove, duplicate, reorder.
  *
+ * On mobile (<768px, viewer-only) the strip shows the thumbnails only: no
+ * labels and no add button.
+ *
  * Features:
  *   - Renders a mini SVG court thumbnail for each scene showing player dots and
  *     the ball, in the scene's orientation (shared CourtThumbnail).
@@ -12,7 +15,7 @@
  *   - [+] button to append a new scene.
  *   - Right-click context menu: Duplicate, Move Left, Move Right, Delete.
  *   - Keyboard: Delete/Backspace deletes the selected scene (when not focused on input).
- *   - Active scene is highlighted with a blue ring.
+ *   - Active scene is highlighted with an accent border.
  *   - First (and only) scene cannot be deleted.
  */
 
@@ -22,6 +25,7 @@ import type { Scene } from "@/lib/types";
 import type { CourtVariant } from "@/lib/courtLayout";
 import CourtThumbnail from "@/components/court/CourtThumbnail";
 import InfoTooltip from "./InfoTooltip";
+import { POPOVER, SECTION_LABEL } from "./chrome";
 import { subscribeToComments } from "@/lib/comments";
 
 // ---------------------------------------------------------------------------
@@ -84,18 +88,8 @@ function ContextMenu({
       ref={ref}
       role="menu"
       aria-label="Scene options"
-      style={{
-        position: "fixed",
-        top: y,
-        left: x,
-        zIndex: 50,
-        minWidth: 160,
-        background: "#fff",
-        border: "1px solid #E5E7EB",
-        borderRadius: 8,
-        boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-        padding: "4px 0",
-      }}
+      className={`${POPOVER} fixed z-50 min-w-[160px] py-1`}
+      style={{ top: y, left: x }}
     >
       {[
         {
@@ -132,27 +126,18 @@ function ContextMenu({
       ].map(({ label, disabled, danger, action }) => (
         <button
           key={label}
+          type="button"
           role="menuitem"
           disabled={disabled}
           onClick={disabled ? undefined : action}
-          style={{
-            display: "block",
-            width: "100%",
-            padding: "7px 16px",
-            textAlign: "left",
-            fontSize: 13,
-            fontWeight: 400,
-            background: "none",
-            border: "none",
-            cursor: disabled ? "default" : "pointer",
-            color: disabled ? "#9CA3AF" : danger ? "#DC2626" : "#111827",
-          }}
-          onMouseEnter={(e) => {
-            if (!disabled) (e.currentTarget as HTMLButtonElement).style.background = "#F3F4F6";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "none";
-          }}
+          className={[
+            "block w-full px-4 py-2 text-left text-[13px] transition-colors",
+            disabled
+              ? "cursor-default text-muted opacity-50"
+              : danger
+                ? "text-danger hover:bg-chip"
+                : "text-ink hover:bg-chip",
+          ].join(" ")}
         >
           {label}
         </button>
@@ -186,39 +171,27 @@ function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, vari
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
+    // Phones are viewer-only: a long-press must not open Duplicate / Move / Delete.
+    if (!window.matchMedia("(min-width: 768px)").matches) return;
     setMenu({ x: e.clientX, y: e.clientY });
   };
 
   return (
     <>
       <button
+        type="button"
         onClick={onClick}
         onContextMenu={handleContextMenu}
         title={`Scene ${index + 1}${scene.note ? ` — ${scene.note}` : ""}`}
         aria-label={`Scene ${index + 1}`}
         aria-pressed={isActive}
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 4,
-          padding: 4,
-          borderRadius: 8,
-          border: isActive ? "2px solid #3B82F6" : "2px solid transparent",
-          background: isActive ? "#EFF6FF" : "#F9FAFB",
-          cursor: "pointer",
-          outline: "none",
-          flexShrink: 0,
-          transition: "border-color 0.1s, background 0.1s",
-        }}
-        onMouseEnter={(e) => {
-          if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "#F3F4F6";
-        }}
-        onMouseLeave={(e) => {
-          if (!isActive) (e.currentTarget as HTMLButtonElement).style.background = "#F9FAFB";
-        }}
+        className={[
+          "flex flex-none flex-col items-center overflow-hidden rounded-lg border-2 bg-surface text-xs transition-colors dark:bg-app md:gap-0.5 md:p-1",
+          "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text",
+          isActive ? "border-accent text-ink" : "border-line text-muted hover:border-line-strong",
+        ].join(" ")}
       >
-        <div style={{ position: "relative", display: "inline-block" }}>
+        <div className="relative flex">
           <CourtThumbnail
             scene={scene}
             width={compact ? THUMBNAIL_W_COMPACT : THUMBNAIL_W}
@@ -234,37 +207,13 @@ function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, vari
           {commentCount > 0 && (
             <span
               title={`${commentCount} open comment${commentCount !== 1 ? "s" : ""}`}
-              style={{
-                position: "absolute",
-                top: -4,
-                right: -4,
-                minWidth: 14,
-                height: 14,
-                borderRadius: 7,
-                background: "#F59E0B",
-                color: "#fff",
-                fontSize: 9,
-                fontWeight: 700,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "0 3px",
-                boxShadow: "0 0 0 1.5px #fff",
-                lineHeight: 1,
-              }}
+              className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-accent-ink ring-2 ring-surface dark:ring-app"
             >
               {commentCount}
             </span>
           )}
         </div>
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: isActive ? 600 : 400,
-            color: isActive ? "#2563EB" : "#6B7280",
-            lineHeight: 1,
-          }}
-        >
+        <span className="hidden max-w-full truncate px-0.5 leading-[14px] md:block">
           {index + 1}
           {scene.note ? ` · ${scene.note.slice(0, 12)}${scene.note.length > 12 ? "…" : ""}` : ""}
         </span>
@@ -350,24 +299,13 @@ export default function SceneStrip() {
   if (!currentPlay) return null;
 
   return (
-    <footer
-      style={{
-        borderTop: "1px solid #E5E7EB",
-        background: "#fff",
-        padding: isTablet ? "6px 10px" : "8px 12px",
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        overflowX: "auto",
-        minHeight: isTablet ? 64 : 80,
-      }}
+    <div
+      className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto px-3 py-2 md:gap-3 md:px-5 md:py-3.5"
       aria-label="Scene strip"
     >
       {/* Label */}
-      <div style={{ display: "flex", alignItems: "center", gap: 4, paddingRight: 4, flexShrink: 0 }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: "#9CA3AF", letterSpacing: "0.05em", textTransform: "uppercase" }}>
-          Scenes
-        </span>
+      <div className="hidden flex-none items-center gap-1 md:flex">
+        <span className={SECTION_LABEL}>Scenes</span>
         <InfoTooltip tip="Each scene is a frame of your play. Click to edit it, right-click to duplicate or reorder." />
       </div>
 
@@ -391,46 +329,25 @@ export default function SceneStrip() {
 
       {/* Empty-state hint */}
       {scenes.length === 1 && (
-        <span style={{ fontSize: 11, color: "#9CA3AF", fontStyle: "italic", alignSelf: "center", flexShrink: 0 }}>
+        <span className="hidden flex-none self-center text-xs text-muted md:inline">
           Add a scene for the next moment →
         </span>
       )}
 
-      {/* Add scene button */}
+      {/* Add scene button — md+ only: the editor is viewer-only on mobile (issue #81) */}
       <button
+        type="button"
         onClick={addScene}
         aria-label="Add scene"
         title="Add scene"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: 36,
-          height: 36,
-          borderRadius: 8,
-          border: "2px dashed #D1D5DB",
-          background: "none",
-          cursor: "pointer",
-          color: "#9CA3AF",
-          fontSize: 22,
-          fontWeight: 300,
-          flexShrink: 0,
-          transition: "border-color 0.1s, color 0.1s",
-          lineHeight: 1,
-        }}
-        onMouseEnter={(e) => {
-          const btn = e.currentTarget;
-          btn.style.borderColor = "#3B82F6";
-          btn.style.color = "#3B82F6";
-        }}
-        onMouseLeave={(e) => {
-          const btn = e.currentTarget;
-          btn.style.borderColor = "#D1D5DB";
-          btn.style.color = "#9CA3AF";
-        }}
+        className={[
+          "hidden flex-none items-center justify-center self-stretch rounded-lg border-2 border-dashed border-line-strong text-[13px] text-muted transition-colors md:flex",
+          "hover:border-accent-text hover:text-accent-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text",
+          isTablet ? "w-20" : "w-[116px]",
+        ].join(" ")}
       >
-        +
+        Add scene
       </button>
-    </footer>
+    </div>
   );
 }

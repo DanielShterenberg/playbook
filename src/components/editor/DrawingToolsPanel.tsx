@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * DrawingToolsPanel — left-side toolbar for selecting drawing tools.
+ * DrawingToolsPanel — left-side icon rail for selecting drawing tools.
  *
  * Implements issue #56: Drawing tools panel UI.
- * Implements issue #81: Responsive layout — collapsible on tablet (md-lg).
+ * Implements issue #81: Responsive layout — collapsible rail (md+).
  *
  * Tools:
  *   Select / Move  (keyboard: V or Escape)
@@ -34,151 +34,106 @@ interface ToolDef {
   id: DrawingTool;
   label: string;
   shortcut: string;
-  /** SVG icon content rendered inside a 28×28 viewBox */
-  Icon: React.FC<{ active: boolean }>;
+  /** Icon drawn in a 24×24 viewBox with the button's text colour */
+  Icon: React.FC;
 }
 
-// Shared icon colours
-const ACTIVE_COLOR = "#3B82F6"; // blue-500
-const IDLE_COLOR = "#6B7280";   // gray-500
+/** Shared frame: 20px, 2px round strokes in currentColor (the button sets the colour). */
+function ToolSvg({ children }: { children: React.ReactNode }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={20}
+      height={20}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
+  );
+}
 
 /** Select / Move tool icon (arrow cursor shape) */
-function SelectIcon({ active }: { active: boolean }) {
-  const c = active ? ACTIVE_COLOR : IDLE_COLOR;
+function SelectIcon() {
   return (
-    <svg viewBox="0 0 28 28" width={22} height={22} aria-hidden="true">
-      <path
-        d="M6 4 L6 20 L10 16 L14 24 L16 23 L12 15 L18 15 Z"
-        fill={c}
-        stroke={c}
-        strokeWidth={0.5}
-        strokeLinejoin="round"
-      />
-    </svg>
+    <ToolSvg>
+      <path d="M5 3l14 8-6 2-2 6z" />
+    </ToolSvg>
   );
 }
 
 /** Movement tool icon (solid arrow line) */
-function MovementIcon({ active }: { active: boolean }) {
-  const c = active ? ACTIVE_COLOR : IDLE_COLOR;
+function MovementIcon() {
   return (
-    <svg viewBox="0 0 28 28" width={22} height={22} aria-hidden="true">
-      <line x1="4" y1="24" x2="22" y2="6" stroke={c} strokeWidth={2.5} strokeLinecap="round" />
-      <polygon points="22,6 14,8 20,14" fill={c} />
-    </svg>
+    <ToolSvg>
+      <path d="M4 20 20 4" />
+      <path d="M12 4h8v8" />
+    </ToolSvg>
   );
 }
 
-/** Dribble tool icon (wavy/zigzag arrow) */
-function DribbleIcon({ active }: { active: boolean }) {
-  const c = active ? ACTIVE_COLOR : IDLE_COLOR;
+/** Dribble tool icon (wavy line) */
+function DribbleIcon() {
   return (
-    <svg viewBox="0 0 28 28" width={22} height={22} aria-hidden="true">
-      <path
-        d="M4 22 Q7 16 10 19 Q13 22 16 16 Q19 10 22 6"
-        fill="none"
-        stroke={c}
-        strokeWidth={2.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <polygon points="22,6 15,9 19,14" fill={c} />
-    </svg>
+    <ToolSvg>
+      <path d="M3 20c3-1 1-5 4-6s2 3 5 2 1-5 4-6 2 2 4 1" />
+    </ToolSvg>
   );
 }
 
 /** Pass tool icon (straight line with solid arrowhead) */
-function PassIcon({ active }: { active: boolean }) {
-  const c = active ? ACTIVE_COLOR : IDLE_COLOR;
+function PassIcon() {
   return (
-    <svg viewBox="0 0 28 28" width={22} height={22} aria-hidden="true">
-      <line x1="4" y1="22" x2="22" y2="6" stroke={c} strokeWidth={2} strokeLinecap="round" />
-      {/* Filled equilateral triangle at tip */}
-      <polygon points="22,6 14,9 19,15" fill={c} />
-    </svg>
+    <ToolSvg>
+      <path d="M4 20 15 9" />
+      <path d="M20 4 11.5 6.5l6 6z" fill="currentColor" />
+    </ToolSvg>
   );
 }
 
-/** Screen / Pick tool icon (perpendicular line = L-shape) */
-function ScreenIcon({ active }: { active: boolean }) {
-  const c = active ? ACTIVE_COLOR : IDLE_COLOR;
+/** Screen / Pick tool icon (path ending in a perpendicular bar) */
+function ScreenIcon() {
   return (
-    <svg viewBox="0 0 28 28" width={22} height={22} aria-hidden="true">
-      {/* Vertical bar of the screen */}
-      <line x1="14" y1="8" x2="14" y2="22" stroke={c} strokeWidth={3} strokeLinecap="round" />
-      {/* Horizontal bar of the screen */}
-      <line x1="8" y1="8" x2="20" y2="8" stroke={c} strokeWidth={3} strokeLinecap="round" />
-      {/* Arrow showing player path */}
-      <line x1="6" y1="22" x2="14" y2="22" stroke={c} strokeWidth={2} strokeLinecap="round" strokeDasharray="2 2" />
-    </svg>
+    <ToolSvg>
+      <path d="M5 19 17 7" />
+      <path d="M13 3l8 8" />
+    </ToolSvg>
   );
 }
 
 /** Cut tool icon (dashed arrow line) */
-function CutIcon({ active }: { active: boolean }) {
-  const c = active ? ACTIVE_COLOR : IDLE_COLOR;
+function CutIcon() {
   return (
-    <svg viewBox="0 0 28 28" width={22} height={22} aria-hidden="true">
-      <line
-        x1="4"
-        y1="22"
-        x2="20"
-        y2="6"
-        stroke={c}
-        strokeWidth={2.5}
-        strokeLinecap="round"
-        strokeDasharray="4 3"
-      />
-      <polygon points="22,6 15,9 19,14" fill={c} />
-    </svg>
+    <ToolSvg>
+      <path d="M4 20 20 4" strokeDasharray="3 4" />
+      <path d="M12 4h8v8" />
+    </ToolSvg>
   );
 }
 
-/** Guard tool icon (dashed line with a small shield / target at the end) */
-function GuardIcon({ active }: { active: boolean }) {
-  const c = active ? ACTIVE_COLOR : IDLE_COLOR;
+/** Guard tool icon (dashed line from a defender ring to an offensive dot) */
+function GuardIcon() {
   return (
-    <svg viewBox="0 0 28 28" width={22} height={22} aria-hidden="true">
-      {/* Dashed line from defender to offensive player */}
-      <line
-        x1="6"
-        y1="22"
-        x2="20"
-        y2="8"
-        stroke={c}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeDasharray="3 3"
-      />
-      {/* Defender circle at start */}
-      <circle cx={6} cy={22} r={4} fill="none" stroke={c} strokeWidth={2} />
-      {/* Offensive player circle at end */}
-      <circle cx={20} cy={8} r={4} fill={c} />
-    </svg>
+    <ToolSvg>
+      <circle cx={6} cy={18} r={3} />
+      <path d="M9 15l5.5-5.5" strokeDasharray="2 3" />
+      <circle cx={18} cy={6} r={3} fill="currentColor" />
+    </ToolSvg>
   );
 }
 
-/** Hand-off (DHO) tool icon — short dashed line with double perpendicular tick marks */
-function HandoffIcon({ active }: { active: boolean }) {
-  const c = active ? ACTIVE_COLOR : IDLE_COLOR;
+/** Hand-off (DHO) tool icon — dashed line with double perpendicular tick marks */
+function HandoffIcon() {
   return (
-    <svg viewBox="0 0 28 28" width={22} height={22} aria-hidden="true">
-      {/* Dashed line from ball-handler to receiver */}
-      <line
-        x1="5"
-        y1="23"
-        x2="22"
-        y2="7"
-        stroke={c}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeDasharray="3 3"
-      />
-      {/* First perpendicular tick at delivery point */}
-      <line x1="17" y1="8" x2="21" y2="12" stroke={c} strokeWidth={2.5} strokeLinecap="round" />
-      {/* Second perpendicular tick (offset along line) */}
-      <line x1="14" y1="11" x2="18" y2="15" stroke={c} strokeWidth={2.5} strokeLinecap="round" />
-    </svg>
+    <ToolSvg>
+      <path d="M4 20 19 5" strokeDasharray="3 4" />
+      <path d="M14.5 6.5l4 4" />
+      <path d="M11.5 9.5l4 4" />
+    </ToolSvg>
   );
 }
 
@@ -213,12 +168,11 @@ function CollapseIcon({ collapsed }: { collapsed: boolean }) {
   return (
     <svg
       viewBox="0 0 20 20"
-      width={14}
-      height={14}
+      width={16}
+      height={16}
       fill="currentColor"
       aria-hidden="true"
-      className="transition-transform"
-      style={{ transform: collapsed ? "rotate(180deg)" : "none" }}
+      className={collapsed ? "rotate-180 transition-transform" : "transition-transform"}
     >
       {/* Left-pointing chevron; rotated 180° when collapsed to point right */}
       <path
@@ -230,6 +184,10 @@ function CollapseIcon({ collapsed }: { collapsed: boolean }) {
   );
 }
 
+const RAIL = "flex flex-col items-center border-r border-line bg-surface";
+const FOCUS =
+  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text";
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -240,9 +198,9 @@ export default function DrawingToolsPanel() {
   const { role } = useTeam();
 
   /**
-   * Collapse state — only meaningful at tablet breakpoint (md–lg).
-   * On desktop the panel is always expanded; on mobile it's not rendered at all
-   * (see the editor page layout). Default: expanded.
+   * Collapse state — the rail can be folded to a thin strip to give the court
+   * more room (issue #81). On mobile the rail is not rendered at all (see the
+   * editor page layout). Default: expanded.
    */
   const [collapsed, setCollapsed] = useState(false);
 
@@ -253,15 +211,12 @@ export default function DrawingToolsPanel() {
   if (role === "viewer") {
     return (
       <aside
-        className="flex flex-col items-center border-r border-gray-200 bg-gray-50 w-8"
+        className={`${RAIL} w-11 py-4`}
         aria-label="View only — drawing tools disabled"
         title="You have viewer access — editing is disabled"
       >
-        <div
-          className="mt-3 flex h-6 w-6 items-center justify-center rounded text-gray-400"
-          aria-hidden="true"
-        >
-          <svg width={14} height={14} viewBox="0 0 20 20" fill="currentColor">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg text-muted" aria-hidden="true">
+          <svg width={18} height={18} viewBox="0 0 20 20" fill="currentColor">
             <path d="M10 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />
             <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0z" clipRule="evenodd" />
           </svg>
@@ -271,69 +226,55 @@ export default function DrawingToolsPanel() {
   }
 
   return (
-    <aside
-      className={[
-        "flex flex-col items-center border-r border-gray-200 bg-gray-50 transition-all duration-200",
-        collapsed ? "w-8" : "w-14",
-      ].join(" ")}
+    <nav
+      className={`${RAIL} gap-1.5 overflow-y-auto py-4 transition-all duration-200 ${collapsed ? "w-11" : "px-2.5"}`}
       aria-label="Drawing tools"
     >
-      {/* Collapse toggle button — visible on all md+ sizes */}
+      {/* Tool buttons — hidden when collapsed */}
+      {!collapsed &&
+        TOOLS.map(({ id, label, shortcut, Icon }) => {
+          const active = selectedTool === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setSelectedTool(id)}
+              title={`${label} (${shortcut})`}
+              aria-label={label}
+              aria-pressed={active}
+              className={[
+                `flex h-12 w-12 flex-none items-center justify-center rounded-[10px] transition-colors ${FOCUS}`,
+                active ? "bg-accent text-accent-ink" : "text-ink hover:bg-chip",
+              ].join(" ")}
+            >
+              <Icon />
+            </button>
+          );
+        })}
+
+      {/* When collapsed: show only the active tool icon as a hint */}
+      {collapsed &&
+        TOOLS.filter(({ id }) => id === selectedTool).map(({ id, label, Icon }) => (
+          <div
+            key={id}
+            title={label}
+            className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-accent text-accent-ink"
+          >
+            <Icon />
+          </div>
+        ))}
+
+      {/* Collapse toggle — at the foot of the rail */}
       <button
+        type="button"
         onClick={() => setCollapsed((c) => !c)}
         title={collapsed ? "Expand tools panel" : "Collapse tools panel"}
         aria-label={collapsed ? "Expand tools panel" : "Collapse tools panel"}
         aria-expanded={!collapsed}
-        className="mt-2 flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+        className={`mt-auto flex h-8 w-8 flex-none items-center justify-center rounded-lg text-muted transition-colors hover:bg-chip hover:text-ink ${FOCUS}`}
       >
         <CollapseIcon collapsed={collapsed} />
       </button>
-
-      {/* Tool buttons — hidden when collapsed */}
-      {!collapsed && (
-        <>
-          <span className="mb-1 mt-1 text-[10px] font-medium uppercase tracking-widest text-gray-400">
-            Tools
-          </span>
-
-          {TOOLS.map(({ id, label, shortcut, Icon }) => {
-            const active = selectedTool === id;
-            return (
-              <button
-                key={id}
-                onClick={() => setSelectedTool(id)}
-                title={`${label} (${shortcut})`}
-                aria-label={label}
-                aria-pressed={active}
-                className={[
-                  "flex w-10 flex-col items-center justify-center rounded-lg py-2 transition-colors",
-                  active
-                    ? "bg-blue-100 text-blue-600 shadow-inner"
-                    : "text-gray-500 hover:bg-gray-200 hover:text-gray-700",
-                ].join(" ")}
-              >
-                <Icon active={active} />
-                <span className="mt-0.5 text-[9px] leading-none">{label}</span>
-              </button>
-            );
-          })}
-        </>
-      )}
-
-      {/* When collapsed: show only the active tool icon as a hint */}
-      {collapsed && (
-        <div className="mt-2 flex flex-col items-center gap-1">
-          {TOOLS.filter(({ id }) => id === selectedTool).map(({ id, label, Icon }) => (
-            <div
-              key={id}
-              title={label}
-              className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100"
-            >
-              <Icon active={true} />
-            </div>
-          ))}
-        </div>
-      )}
-    </aside>
+    </nav>
   );
 }
