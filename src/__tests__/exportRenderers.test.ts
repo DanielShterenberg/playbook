@@ -954,3 +954,13 @@ describe("pdfPanels", () => {
     ]);
   });
 });
+
+describe("export step timing follows on-screen playback", () => {
+  it("exporters take step durations from the playback helper, not the raw field", () => {
+    for (const rel of ["src/lib/exportVideo.ts", "src/lib/exportGIF.ts"]) {
+      const src = readFileSync(path.join(process.cwd(), rel), "utf8");
+      expect(src, rel).toMatch(/stepDurationMs\(/);
+      expect(src, rel).not.toMatch(/\b(group|g)\.duration\b/);
+    }
+  });
+});

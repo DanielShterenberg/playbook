@@ -46,6 +46,7 @@ import { computeCourtLayout } from "@/lib/courtLayout";
 import type { CourtVariant } from "@/lib/courtLayout";
 import { renderFrame, SCENE_HOLD_MS, FINAL_HOLD_MS, RESOLUTION_WIDTH } from "./frameRenderer";
 import type { FrameResolution } from "./frameRenderer";
+import { stepDurationMs } from "./playback";
 
 // Frame painting (court, tokens, annotations), FrameStyle and the frame presets
 // live in frameRenderer.ts, shared with the PNG, video and PDF exports. This
@@ -153,7 +154,7 @@ export async function exportPlayAsGIF(
       // Duration for this frame: respect speed and clamp to reasonable range.
       // GIF delay is in centiseconds (1/100 s) — divide ms by 10.
       // Clamp: min 2 cs (20 ms), max 500 cs (5 s).
-      const rawDuration = group.duration / speed;
+      const rawDuration = stepDurationMs(group) / speed;
       const delayCs = Math.min(Math.max(Math.round(rawDuration / 10), 2), 500);
 
       renderFrame(canvas, scene, cumulativeAnnotations, width, height, sceneFlipped, {}, variant);

@@ -28,6 +28,7 @@ import {
 } from "./frameRenderer";
 import type { FrameResolution, FrameStyle } from "./frameRenderer";
 import { computeCourtLayout } from "@/lib/courtLayout";
+import { stepDurationMs } from "./playback";
 import type { CourtVariant } from "@/lib/courtLayout";
 import { COLOR_COURT } from "@/lib/courtRendering";
 
@@ -177,7 +178,7 @@ async function exportViaWebCodecs(
   // Pre-calculate total duration for the silent audio track.
   let totalDurationMs = 0;
   for (let si = 0; si < scenes.length; si++) {
-    for (const g of scenes[si].timingGroups) totalDurationMs += g.duration / speed;
+    for (const g of scenes[si].timingGroups) totalDurationMs += stepDurationMs(g) / speed;
     totalDurationMs += (si === scenes.length - 1 ? FINAL_HOLD_MS : SCENE_HOLD_MS) / speed;
   }
 
@@ -235,7 +236,7 @@ async function exportViaWebCodecs(
       const group = sortedGroups[gi];
       cumulativeAnnotations.push(...group.annotations);
       renderVideoFrame(canvas, size, scene, cumulativeAnnotations, sceneFlipped, variant, style);
-      encodeFrame(group.duration, si === 0 && gi === 0);
+      encodeFrame(stepDurationMs(group), si === 0 && gi === 0);
 
       stepsRendered++;
       onProgress?.(stepsRendered / totalSteps);
@@ -304,7 +305,7 @@ async function exportViaMediaRecorder(
     for (const group of sortedGroups) {
       cumulativeAnnotations.push(...group.annotations);
       renderVideoFrame(canvas, size, scene, cumulativeAnnotations, sceneFlipped, variant, style);
-      await new Promise<void>((r) => setTimeout(r, group.duration / speed));
+      await new Promise<void>((r) => setTimeout(r, stepDurationMs(group) / speed));
       stepsRendered++;
       onProgress?.(stepsRendered / totalSteps);
     }
