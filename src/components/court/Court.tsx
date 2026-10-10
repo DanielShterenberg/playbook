@@ -89,10 +89,6 @@ export interface CourtProps {
 // Re-exported so existing imports from this file keep working.
 export { OOB_SIDE_FRAC, OOB_BOTTOM_FRAC } from "@/lib/courtLayout";
 
-// The court drawing itself lives in courtRendering.ts (shared with every export
-// path). drawCourt is re-exported so existing imports from this file keep working.
-export { drawCourt } from "@/lib/courtRendering";
-
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------

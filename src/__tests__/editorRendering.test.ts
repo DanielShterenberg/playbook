@@ -15,6 +15,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 import {
   computeCourtLayout,
   normToCanvasPx,
@@ -250,13 +251,14 @@ describe("on-screen components import the shared contracts (no local copies)", (
     expect(src).not.toMatch(/ctx\.(arc|fillRect|strokeRect|translate|moveTo|lineTo)\(/);
     expect(src).not.toMatch(/#F0C878|#E07B39/i);
     expect(src).not.toMatch(/export type CourtVariant =/);
+    // The legacy drawCourt re-export is gone (issue #176)
+    expect(src).not.toMatch(/drawCourt/);
     // Existing importers keep compiling
-    expect(src).toMatch(/export \{ drawCourt \} from "@\/lib\/courtRendering"/);
     expect(src).toMatch(/export type \{ CourtVariant \} from "@\/lib\/courtLayout"/);
     expect(src).toMatch(/export \{ OOB_SIDE_FRAC, OOB_BOTTOM_FRAC \} from "@\/lib\/courtLayout"/);
   });
 
-  it("Court.tsx only imports modules the courtRendering oracle can resolve", () => {
+  it("Court.tsx only imports React and the shared court modules", () => {
     const src = source("src/components/court/Court.tsx");
     const allowed = new Set(["react", "./courtDimensions", "@/lib/courtLayout", "@/lib/courtRendering", "@/lib/tokenSizing"]);
     const specifiers = Array.from(src.matchAll(/from\s+"([^"]+)"/g)).map((m) => m[1]);
@@ -292,12 +294,143 @@ describe("on-screen components import the shared contracts (no local copies)", (
     expect(ball).toMatch(/import \{[^}]*BALL_RADIUS[^}]*\} from "@\/lib\/tokenSizing"/);
   });
 
-  it("PlayCard.tsx / SceneStrip.tsx size player dots from the shared ratio", () => {
+  it("PlayCard.tsx / SceneStrip.tsx draw their mini court through the shared CourtThumbnail", () => {
     for (const rel of ["src/components/playbook/PlayCard.tsx", "src/components/editor/SceneStrip.tsx"]) {
       const src = source(rel);
-      expect(src, rel).toMatch(/import \{ thumbnailDotRadius \} from "@\/lib\/tokenSizing"/);
-      expect(src, rel).toMatch(/thumbnailDotRadius\(W\)/);
+      expect(src, rel).toMatch(/import CourtThumbnail from "@\/components\/court\/CourtThumbnail"/);
+      expect(src, rel).toMatch(/<CourtThumbnail\b/);
+      // No hand-drawn court or dots left behind
+      expect(src, rel).not.toMatch(/<(path|circle|rect|line)\b[^>]*\bp[xy]\(/);
+      expect(src, rel).not.toMatch(/ A \$\{/);
       expect(src, rel).not.toMatch(/r=\{4\}/);
+      // Scene override ?? play default, like every exporter
+      expect(src, rel).toMatch(/\.flipped \?\? \w+(\?)?\.flipped\) === true/);
     }
+  });
+
+  it("CourtThumbnail.tsx takes geometry and sizes from the shared modules", () => {
+    const src = source("src/components/court/CourtThumbnail.tsx");
+    expect(src).toMatch(/computeThumbnailLayout\(/);
+    expect(src).toMatch(/normToCanvasPx\(/);
+    expect(src).toMatch(/thumbnailDotRadius\(/);
+    expect(src).toMatch(/thumbnailBallRadius\(/);
+    expect(src).toMatch(/thumbnailBallAttachOffsetY\(/);
+    expect(src).not.toMatch(/\* 0\.0[23]\b/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Drag end must not write to the store from inside a setState updater (#176)
+//
+// React runs updater functions while rendering CourtWithPlayers; a Zustand
+// write there re-renders SaveIndicator mid-render ("Cannot update a component
+// (SaveIndicator) while rendering a different component (CourtWithPlayers)")
+// and, under StrictMode, runs twice.
+// ---------------------------------------------------------------------------
+
+describe("CourtWithPlayers drag-end handlers", () => {
+  const FILE = path.resolve(process.cwd(), "src/components/players/CourtWithPlayers.tsx");
+  const sf = ts.createSourceFile(FILE, readFileSync(FILE, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+
+  function calls(name: string): ts.CallExpression[] {
+    const found: ts.CallExpression[] = [];
+    const visit = (node: ts.Node) => {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === name) found.push(node);
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
+    return found;
+  }
+
+  /** Name of the React state setter whose updater function encloses `node`, if any. */
+  function enclosingSetStateUpdater(node: ts.Node): string | null {
+    for (let cur: ts.Node | undefined = node.parent; cur; cur = cur.parent) {
+      if (
+        (ts.isArrowFunction(cur) || ts.isFunctionExpression(cur)) &&
+        ts.isCallExpression(cur.parent) &&
+        ts.isIdentifier(cur.parent.expression) &&
+        /^set[A-Z]/.test(cur.parent.expression.text) &&
+        cur.parent.arguments.includes(cur)
+      ) {
+        return cur.parent.expression.text;
+      }
+    }
+    return null;
+  }
+
+  it("still stores the dragged player once per side", () => {
+    const sides = calls("updatePlayerState").map((c) => c.arguments[1]?.getText(sf));
+    expect(sides.sort()).toEqual(['"defense"', '"offense"']);
+  });
+
+  it.each(["updatePlayerState", "updateBallState"])("%s is never called inside a setState updater", (name) => {
+    for (const call of calls(name)) {
+      expect(enclosingSetStateUpdater(call), call.getText(sf).slice(0, 60)).toBeNull();
+    }
+  });
+
+  it("stores the same fields as before: position, x, y, visible", () => {
+    for (const call of calls("updatePlayerState")) {
+      expect(call.arguments[0].getText(sf)).toBe("sceneId");
+      expect(call.arguments[2].getText(sf)).toBe("{ position, x, y, visible }");
+    }
+  });
+
+  // Review item 8: handleBallDrag called setBallPx inside the setBallAttachment
+  // updater — the same side-effect-in-updater pattern.
+  it("no React state setter is called inside another setter's updater, anywhere in the file", () => {
+    const setters: ts.CallExpression[] = [];
+    const visit = (node: ts.Node) => {
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && /^set[A-Z]/.test(node.expression.text)) setters.push(node);
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
+    expect(setters.length).toBeGreaterThan(10);
+    for (const call of setters) {
+      expect(enclosingSetStateUpdater(call), call.getText(sf).slice(0, 60)).toBeNull();
+    }
+  });
+
+  it("handleBallDrag reads the pixel state from refs: it is not re-created on every drag frame", () => {
+    const src = readFileSync(FILE, "utf8");
+    const m = /const handleBallDrag = useCallback\(([\s\S]*?)\n  \);/.exec(src);
+    expect(m).not.toBeNull();
+    expect(m![1]).toMatch(/\[\],?\s*$/);
+    expect(m![1]).toMatch(/offensePxRef\.current/);
+    expect(m![1]).toMatch(/defensePxRef\.current/);
+    expect(m![1]).toMatch(/DETACH_RADIUS/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Court sizing robustness (review item 9)
+// ---------------------------------------------------------------------------
+
+describe("court sizing", () => {
+  it("CourtWithPlayers guards only the re-projection against a degenerate layout — the size is still updated", () => {
+    const src = source("src/components/players/CourtWithPlayers.tsx");
+    const ready = src.slice(src.indexOf("const handleCourtReady = useCallback("), src.indexOf("// First render — read from the Zustand store"));
+    // The reported size always reaches state, zero or not, before any guard…
+    expect(ready).toMatch(/setCourtSize\(/);
+    expect(ready.indexOf("setCourtSize(")).toBeLessThan(ready.indexOf("hasCourtArea(layout)"));
+    expect(ready).toMatch(/if \(!hasCourtArea\(layout\)\) return;/);
+    // …but a zero-size layout is never remembered or re-projected through.
+    expect(ready.indexOf("if (!hasCourtArea(layout)) return;")).toBeLessThan(ready.indexOf("layoutRef.current = layout;"));
+    expect(ready).toMatch(/reprojectCanvasPx\(/);
+    expect(ready).not.toMatch(/canvasPxToNorm\(/);
+    // Nothing is drawn over neighbouring UI while the court has no area.
+    expect(src).toMatch(/const courtVisible = courtSize !== null && courtSize\.playAreaWidth > 0 && courtSize\.playAreaHeight > 0;/);
+    expect(src.match(/\{courtVisible && courtSize && \(/g)).toHaveLength(2); // token overlay + AnnotationLayer
+    expect(src).not.toMatch(/\{courtSize && \(/);
+  });
+
+  it("EditorCourtArea observes the area element whenever it (re)mounts, not only when courtType changes", () => {
+    const src = source("src/app/play/[id]/EditorCourtArea.tsx");
+    // The measured div is unmounted while "Loading play…" is shown; a ref
+    // object would leave the effect attached to nothing after it comes back.
+    expect(src).toMatch(/const \[areaEl, setAreaEl\] = useState<HTMLDivElement \| null>\(null\);/);
+    expect(src).toMatch(/<div ref=\{setAreaEl\}/);
+    expect(src).toMatch(/\}, \[areaEl, courtType\]\);/);
+    expect(src).not.toMatch(/areaRef/);
   });
 });

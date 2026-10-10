@@ -54,10 +54,16 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
   // Measure the available area height so we can cap the court width to
   // availableHeight × COURT_ASPECT_RATIO. Without this the court overflows
   // vertically on typical laptop screens (e.g. 768px height).
-  const areaRef = useRef<HTMLDivElement>(null);
+  //
+  // The area element is held in state (callback ref), not in a ref object: the
+  // div is unmounted while "Loading play…" / "not found" is shown, and the
+  // observer must be attached to the new element when it comes back. With a
+  // ref object the effect only re-ran on courtType changes, so after a reload
+  // a full-court play was never capped (768×1410 instead of fitting the area).
+  const [areaEl, setAreaEl] = useState<HTMLDivElement | null>(null);
   const [maxCourtWidth, setMaxCourtWidth] = useState<number | undefined>(undefined);
   useEffect(() => {
-    const el = areaRef.current;
+    const el = areaEl;
     if (!el) return;
     const obs = new ResizeObserver(() => {
       if (!el) return;
@@ -71,7 +77,7 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
     });
     obs.observe(el);
     return () => obs.disconnect();
-  }, [courtType]);
+  }, [areaEl, courtType]);
 
   // Guard: only initialise once to prevent the re-render cycle where setting
   // currentPlay triggers the effect to run again with a non-matching playId.
@@ -179,7 +185,7 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
      * inner court is capped to availableHeight × COURT_ASPECT_RATIO — this
      * prevents the court from overflowing vertically on laptop screens.
      */
-    <div ref={areaRef} className="flex h-full w-full items-center justify-center">
+    <div ref={setAreaEl} className="flex h-full w-full items-center justify-center">
       <div style={{ width: "100%", maxWidth: maxCourtWidth ?? "100%" }}>
         <CourtWithPlayers
           sceneId={selectedSceneId ?? scene?.id}

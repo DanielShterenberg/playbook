@@ -6,7 +6,7 @@
  * Implements issue #79: PNG export of single scene.
  *
  * A PNG is one frame of the export pipeline: it is drawn by the same frame
- * painter as GIF / MP4 (renderSceneToCtx in exportGIF.ts) with every
+ * painter as GIF / MP4 (renderSceneToCtx in frameRenderer.ts) with every
  * annotation of the scene visible, so a PNG of a scene is the same picture as
  * a GIF frame of that scene at the same width — only the pixel density
  * differs. Court geometry, norm→pixel mapping and token sizes all come from
@@ -18,10 +18,10 @@
  */
 
 import type { Scene } from "./types";
-import type { PlayerDisplayMode } from "./store";
 import { computeCourtLayout } from "@/lib/courtLayout";
 import type { CourtVariant } from "@/lib/courtLayout";
-import { renderSceneToCtx } from "./exportGIF";
+import { renderSceneToCtx } from "./frameRenderer";
+import type { FrameStyle } from "./frameRenderer";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -35,14 +35,10 @@ const RESOLUTION_SCALE: Record<ExportResolution, number> = {
   "3x": 3,
 };
 
-export interface ExportPNGOptions {
+/** Label mode, names and team colours (FrameStyle) plus the court variant. */
+export interface ExportPNGOptions extends FrameStyle {
   /** Court variant. Default "half". */
   variant?: CourtVariant;
-  /** Player label mode. Default "numbers" (same as a GIF frame). */
-  displayMode?: PlayerDisplayMode;
-  playerNames?: Record<string, string>;
-  offenseColor?: string;
-  defenseColor?: string;
 }
 
 /**
@@ -64,7 +60,7 @@ export function renderPNGToCanvas(
   flipped = false,
   options: ExportPNGOptions = {},
 ): void {
-  const { variant = "half", displayMode = "numbers", playerNames = {}, offenseColor, defenseColor } = options;
+  const { variant = "half", ...style } = options;
   const layout = computeCourtLayout(baseWidth, variant);
 
   canvas.width = Math.round(layout.totalWidth * scale);
@@ -80,10 +76,7 @@ export function renderPNGToCanvas(
     scene,
     scene.timingGroups.flatMap((g) => g.annotations),
     flipped,
-    displayMode,
-    playerNames,
-    offenseColor,
-    defenseColor,
+    style,
   );
 }
 

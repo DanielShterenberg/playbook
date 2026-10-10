@@ -14,7 +14,7 @@
 
 import { useRef, useCallback } from "react";
 import type { PlayerDisplayMode } from "@/lib/store";
-import { PLAYER_RADIUS, playerScale } from "@/lib/tokenSizing";
+import { PLAYER_RADIUS, playerScale, playerLabelFontSize, DEFAULT_OFFENSE_COLOR, DEFAULT_DEFENSE_COLOR } from "@/lib/tokenSizing";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -41,10 +41,10 @@ const DEFENSE_ABBRS: Record<number, string> = {
   5: "C",
 };
 
-const COLOR_OFFENSE_FILL = "#E07B39"; // warm orange (matches court paint)
+// Default team colours (DEFAULT_OFFENSE_COLOR / DEFAULT_DEFENSE_COLOR) live in
+// @/lib/tokenSizing, shared with the exports, thumbnails and the colour picker.
 const COLOR_OFFENSE_STROKE = "#FFFFFF";
 const COLOR_DEFENSE_FILL = "#FFFFFF";
-const COLOR_DEFENSE_STROKE = "#1E3A5F"; // dark navy
 const COLOR_TEXT_OFFENSE = "#FFFFFF";
 
 // ---------------------------------------------------------------------------
@@ -81,12 +81,12 @@ export interface PlayerTokenProps {
   /** Token radius in CSS pixels. Defaults to PLAYER_RADIUS (18). */
   radius?: number;
   /**
-   * Custom fill color for the offense token (overrides COLOR_OFFENSE_FILL).
+   * Custom fill color for the offense token (overrides DEFAULT_OFFENSE_COLOR).
    * Only used when side === "offense".
    */
   offenseColor?: string;
   /**
-   * Custom accent color for the defense token (overrides COLOR_DEFENSE_STROKE).
+   * Custom accent color for the defense token (overrides DEFAULT_DEFENSE_COLOR).
    * Only used when side === "defense".
    */
   defenseColor?: string;
@@ -212,8 +212,8 @@ export default function PlayerToken({
   );
 
   const isOffense = side === "offense";
-  const resolvedOffenseColor = offenseColor ?? COLOR_OFFENSE_FILL;
-  const resolvedDefenseColor = defenseColor ?? COLOR_DEFENSE_STROKE;
+  const resolvedOffenseColor = offenseColor ?? DEFAULT_OFFENSE_COLOR;
+  const resolvedDefenseColor = defenseColor ?? DEFAULT_DEFENSE_COLOR;
   const fillColor = isOffense ? resolvedOffenseColor : COLOR_DEFENSE_FILL;
   const strokeColor = isOffense ? COLOR_OFFENSE_STROKE : resolvedDefenseColor;
   const textColor = isOffense ? COLOR_TEXT_OFFENSE : resolvedDefenseColor;
@@ -236,8 +236,7 @@ export default function PlayerToken({
   const scaledStrokeWidth = Math.max(1.5, strokeWidth * scale);
 
   // Shrink font for long names so they fit inside the token
-  const baseFontSize = Math.max(6, Math.round(11 * scale));
-  const fontSize = label.length > 2 ? Math.max(5, baseFontSize - (label.length - 2) * 1.5) : baseFontSize;
+  const fontSize = playerLabelFontSize(label.length, radius);
 
   return (
     <g

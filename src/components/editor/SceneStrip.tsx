@@ -6,7 +6,8 @@
  * Implements issue #63: Scene management — add, remove, duplicate, reorder.
  *
  * Features:
- *   - Renders a mini SVG court thumbnail for each scene showing player dots.
+ *   - Renders a mini SVG court thumbnail for each scene showing player dots and
+ *     the ball, in the scene's orientation (shared CourtThumbnail).
  *   - Click a scene card to select it.
  *   - [+] button to append a new scene.
  *   - Right-click context menu: Duplicate, Move Left, Move Right, Delete.
@@ -18,178 +19,18 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useStore, selectEditorScene } from "@/lib/store";
 import type { Scene } from "@/lib/types";
-import { thumbnailDotRadius } from "@/lib/tokenSizing";
+import type { CourtVariant } from "@/lib/courtLayout";
+import CourtThumbnail from "@/components/court/CourtThumbnail";
 import InfoTooltip from "./InfoTooltip";
 import { subscribeToComments } from "@/lib/comments";
 
 // ---------------------------------------------------------------------------
-// Mini court thumbnail
+// Mini court thumbnail (the court itself is the shared CourtThumbnail)
 // ---------------------------------------------------------------------------
 
-const DEFAULT_OFFENSE_COLOR = "#3B82F6"; // blue used in strip thumbnails
-const DEFAULT_DEFENSE_COLOR = "#1E3A5F";
-
-/** Renders a tiny SVG court with coloured dots for visible players. */
-function SceneThumbnail({
-  scene,
-  compact = false,
-  offenseColor = DEFAULT_OFFENSE_COLOR,
-  defenseColor = DEFAULT_DEFENSE_COLOR,
-}: {
-  scene: Scene;
-  compact?: boolean;
-  offenseColor?: string;
-  defenseColor?: string;
-}) {
-  const W = compact ? 80 : 120;
-  const H = Math.round(W * (47 / 50)); // half-court aspect ratio: 50ft wide × 47ft deep
-
-  // Normalised → pixel helpers.
-  // px() scales to width; py() scales to height.
-  // Arc radii: a physical radius R_ft has pixel radius = (R_ft/50)*W in BOTH x and y
-  // because H = W*(47/50), so (R_ft/47)*H = (R_ft/50)*W. Use px() for all arc radii.
-  const px = (nx: number) => nx * W;
-  const py = (ny: number) => ny * H;
-
-  // Player dots use the editor's radius-to-court-width ratio (W is the inner
-  // court width — thumbnails have no out-of-bounds margin), with a floor so
-  // they stay legible on tiny thumbnails.
-  const dotR = thumbnailDotRadius(W);
-
-  // NBA court dimensions (normalised, matching courtDimensions.ts):
-  //   y=0 = half-court line, y=1 = baseline
-  //   LANE_LEFT=0.34, LANE_RIGHT=0.66, LANE_TOP≈0.596 (19ft from baseline)
-  //   FT circle radius = 6ft = px(0.12)
-  //   3P radius = 23.75ft = px(0.475), corner y≈0.702, corner x=0.06/0.94
-  //   BASKET_Y≈0.888 (5.25ft from baseline), BACKBOARD_Y≈0.915 (4ft from baseline)
-  //   CENTRE_CIRCLE_RADIUS = 6ft = px(0.12), RESTRICTED_RADIUS = 4ft = px(0.08)
-
-  return (
-    <svg
-      width={W}
-      height={H}
-      viewBox={`0 0 ${W} ${H}`}
-      aria-hidden="true"
-      style={{ display: "block", borderRadius: 3 }}
-    >
-      {/* Court background */}
-      <rect width={W} height={H} fill="#F0C878" rx={3} />
-
-      {/* Paint (free-throw lane) — 16ft wide × 19ft deep from baseline */}
-      <rect
-        x={px(0.34)}
-        y={py(0.596)}
-        width={px(0.32)}
-        height={py(0.404)}
-        fill="#E07B39"
-      />
-
-      {/* Court outline */}
-      <rect width={W} height={H} fill="none" stroke="#fff" strokeWidth={1} rx={3} />
-
-      {/* Half-court line (top border) */}
-      <line x1={0} y1={0} x2={W} y2={0} stroke="#fff" strokeWidth={0.8} />
-
-      {/* Half-court centre-circle arc — bows into the court (downward, sweep=0=CCW) */}
-      <path
-        d={`M ${px(0.38)},0 A ${px(0.12)},${px(0.12)} 0 0 0 ${px(0.62)},0`}
-        fill="none"
-        stroke="#fff"
-        strokeWidth={0.8}
-      />
-
-      {/* Three-point line: corner straights + arc */}
-      {/* Arc: minor arc (large-arc=0) going clockwise (sweep=1) = bows upward over basket */}
-      <path
-        d={`M ${px(0.06)},${py(1)} L ${px(0.06)},${py(0.702)} A ${px(0.475)},${px(0.475)} 0 0 1 ${px(0.94)},${py(0.702)} L ${px(0.94)},${py(1)}`}
-        fill="none"
-        stroke="#fff"
-        strokeWidth={0.8}
-      />
-
-      {/* Lane outline */}
-      <rect
-        x={px(0.34)}
-        y={py(0.596)}
-        width={px(0.32)}
-        height={py(0.404)}
-        fill="none"
-        stroke="#fff"
-        strokeWidth={0.8}
-      />
-
-      {/* Free-throw line */}
-      <line
-        x1={px(0.34)}
-        y1={py(0.596)}
-        x2={px(0.66)}
-        y2={py(0.596)}
-        stroke="#fff"
-        strokeWidth={0.8}
-      />
-
-      {/* Free-throw circle — upper semicircle toward half-court (sweep=1=CW=upward) */}
-      {/* Radius = 6ft = px(0.12); endpoints at lane-center ± radius */}
-      <path
-        d={`M ${px(0.38)},${py(0.596)} A ${px(0.12)},${px(0.12)} 0 0 1 ${px(0.62)},${py(0.596)}`}
-        fill="none"
-        stroke="#fff"
-        strokeWidth={0.8}
-      />
-
-      {/* Backboard (4ft from baseline, 6ft wide) */}
-      <line
-        x1={px(0.44)}
-        y1={py(0.915)}
-        x2={px(0.56)}
-        y2={py(0.915)}
-        stroke="#fff"
-        strokeWidth={1}
-      />
-
-      {/* Restricted area arc — 4ft radius, toward half-court (sweep=1=CW=upward) */}
-      <path
-        d={`M ${px(0.42)},${py(0.888)} A ${px(0.08)},${px(0.08)} 0 0 1 ${px(0.58)},${py(0.888)}`}
-        fill="none"
-        stroke="#fff"
-        strokeWidth={0.8}
-      />
-
-      {/* Basket */}
-      <circle cx={px(0.5)} cy={py(0.888)} r={compact ? 2 : 3} fill="none" stroke="#fff" strokeWidth={0.8} />
-
-      {/* Offensive players */}
-      {scene.players.offense
-        .filter((p) => p.visible)
-        .map((p) => (
-          <circle
-            key={`o-${p.position}`}
-            cx={px(p.x)}
-            cy={py(p.y)}
-            r={dotR}
-            fill={offenseColor}
-            stroke="#fff"
-            strokeWidth={0.8}
-          />
-        ))}
-
-      {/* Defensive players */}
-      {scene.players.defense
-        .filter((p) => p.visible)
-        .map((p) => (
-          <circle
-            key={`d-${p.position}`}
-            cx={px(p.x)}
-            cy={py(p.y)}
-            r={dotR}
-            fill={defenseColor}
-            stroke="#fff"
-            strokeWidth={0.8}
-          />
-        ))}
-    </svg>
-  );
-}
+/** Thumbnail width in px: normal / compact (tablet) scene cards. */
+const THUMBNAIL_W = 120;
+const THUMBNAIL_W_COMPACT = 80;
 
 // ---------------------------------------------------------------------------
 // Context menu
@@ -331,12 +172,16 @@ interface SceneCardProps {
   isActive: boolean;
   compact: boolean;
   onClick: () => void;
+  /** Court variant of the play. */
+  variant: CourtVariant;
+  /** Effective flip of this scene (scene override ?? play default). */
+  flipped: boolean;
   offenseColor?: string;
   defenseColor?: string;
   commentCount?: number;
 }
 
-function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, offenseColor, defenseColor, commentCount = 0 }: SceneCardProps) {
+function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, variant, flipped, offenseColor, defenseColor, commentCount = 0 }: SceneCardProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -374,7 +219,18 @@ function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, offe
         }}
       >
         <div style={{ position: "relative", display: "inline-block" }}>
-          <SceneThumbnail scene={scene} compact={compact} offenseColor={offenseColor} defenseColor={defenseColor} />
+          <CourtThumbnail
+            scene={scene}
+            width={compact ? THUMBNAIL_W_COMPACT : THUMBNAIL_W}
+            variant={variant}
+            flipped={flipped}
+            offenseColor={offenseColor}
+            defenseColor={defenseColor}
+            lineWidth={0.8}
+            outlineWidth={1}
+            basketRadius={compact ? 2 : 3}
+            cornerRadius={3}
+          />
           {commentCount > 0 && (
             <span
               title={`${commentCount} open comment${commentCount !== 1 ? "s" : ""}`}
@@ -525,6 +381,8 @@ export default function SceneStrip() {
           isActive={s.id === activeId}
           compact={isTablet}
           onClick={() => { setSelectedSceneId(s.id); setCurrentSceneIndex(i); }}
+          variant={currentPlay?.courtType === "full" ? "full" : "half"}
+          flipped={(s.flipped ?? currentPlay?.flipped) === true}
           offenseColor={playColors?.offense}
           defenseColor={playColors?.defense}
           commentCount={commentCounts[s.id] ?? 0}

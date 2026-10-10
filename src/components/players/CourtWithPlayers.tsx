@@ -35,7 +35,7 @@ import PlayerToken from "./PlayerToken";
 import BallToken, { type NearbyPlayer, DETACH_RADIUS } from "./BallToken";
 import AnnotationLayer from "@/components/annotations/AnnotationLayer";
 import { useStore } from "@/lib/store";
-import { normToCanvasPx, canvasPxToNorm, type CourtLayout } from "@/lib/courtLayout";
+import { normToCanvasPx, canvasPxToNorm, hasCourtArea, reprojectCanvasPx, type CourtLayout } from "@/lib/courtLayout";
 import { computeTokenSizes } from "@/lib/tokenSizing";
 import type { Scene, PlayerState, BallState } from "@/lib/types";
 
@@ -147,6 +147,13 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
   const [offensePx, setOffensePx] = useState<PixelPlayer[] | null>(null);
   const [defensePx, setDefensePx] = useState<PixelPlayer[] | null>(null);
 
+  // Always-current refs for the pixel state, so the drag-end handlers can read
+  // it without running store writes inside a setState updater (issue #176).
+  const offensePxRef = useRef(offensePx);
+  offensePxRef.current = offensePx;
+  const defensePxRef = useRef(defensePx);
+  defensePxRef.current = defensePx;
+
   // Ball pixel position — free coords when not attached, follows player when attached
   const [ballPx, setBallPx] = useState<{ x: number; y: number } | null>(null);
   // Attachment: which player the ball is attached to (null = free)
@@ -154,6 +161,9 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
     side: "offense" | "defense";
     position: number;
   } | null>(null);
+  // Always-current ref for the attachment, read by handleBallDrag.
+  const ballAttachmentRef = useRef(ballAttachment);
+  ballAttachmentRef.current = ballAttachment;
 
   /**
    * The last layout reported by the Court canvas (null until first draw).
@@ -217,18 +227,25 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
   const handleCourtReady = useCallback(
     (payload: CourtReadyPayload) => {
       const { width, height, playAreaHeight, playAreaOffsetY, playAreaOffsetX, playAreaWidth, layout } = payload;
+      // The reported size always reaches state — when the court collapses the
+      // overlay must collapse with it (see courtVisible below).
+      setCourtSize({ width, height, playAreaWidth, playAreaHeight, offsetX: playAreaOffsetX, offsetY: playAreaOffsetY });
+      // A collapsed / hidden container reports a zero-size court. Do not
+      // remember that layout or re-project through it (÷ 0 would leave every
+      // token at NaN for good): pixel positions stay those of the last real
+      // layout and are re-projected from it when the court comes back.
+      if (!hasCourtArea(layout)) return;
       const prevLayout = layoutRef.current;
       layoutRef.current = layout;
-      setCourtSize({ width, height, playAreaWidth, playAreaHeight, offsetX: playAreaOffsetX, offsetY: playAreaOffsetY });
 
       const currentFlipped = flippedRef.current;
 
       // If size changed (resize) but we already have pixel positions, re-project
       if (prevLayout && (prevLayout.totalWidth !== width || prevLayout.totalHeight !== height)) {
-        const reproject = (px: number, py: number) => {
-          const norm = canvasPxToNorm(px, py, prevLayout, currentFlipped);
-          return normToCanvasPx(norm.x, norm.y, layout, currentFlipped);
-        };
+        // Both layouts have a court area (guard above), so this never yields
+        // null; the fallback keeps the position rather than inventing one.
+        const reproject = (px: number, py: number) =>
+          reprojectCanvasPx(px, py, prevLayout, layout, currentFlipped) ?? { x: px, y: py };
         setOffensePx((prev) =>
           prev
             ? prev.map((p) => {
@@ -355,19 +372,24 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
 
   const handleOffenseDragEnd = useCallback(
     (position: number, newCx: number, newCy: number) => {
-      setOffensePx((prev) => {
-        if (!prev) return prev;
-        const updated = prev.map((p) => (p.position === position ? { ...p, px: newCx, py: newCy } : p));
-        if (sceneId && layoutRef.current) {
-          const { x, y } = canvasPxToNorm(newCx, newCy, layoutRef.current, flippedRef.current);
-          // Read visible from the scene prop (source of truth) to avoid overwriting
-          // a visibility toggle with a stale value from local pixel state.
-          const scenePlayer = offenseVisible?.find((sp) => sp.position === position);
-          const visible = scenePlayer ? scenePlayer.visible : (updated.find((p) => p.position === position)?.visible ?? true);
-          updatePlayerState(sceneId, "offense", { position, x, y, visible });
-        }
-        return updated;
-      });
+      // The store write must not happen inside the setState updater: React runs
+      // updaters while rendering this component, and a Zustand write there
+      // updates SaveIndicator mid-render (and runs twice under StrictMode).
+      const current = offensePxRef.current;
+      if (!current) return;
+      setOffensePx((prev) =>
+        prev
+          ? prev.map((p) => (p.position === position ? { ...p, px: newCx, py: newCy } : p))
+          : prev,
+      );
+      if (sceneId && layoutRef.current) {
+        const { x, y } = canvasPxToNorm(newCx, newCy, layoutRef.current, flippedRef.current);
+        // Read visible from the scene prop (source of truth) to avoid overwriting
+        // a visibility toggle with a stale value from local pixel state.
+        const scenePlayer = offenseVisible?.find((sp) => sp.position === position);
+        const visible = scenePlayer ? scenePlayer.visible : (current.find((p) => p.position === position)?.visible ?? true);
+        updatePlayerState(sceneId, "offense", { position, x, y, visible });
+      }
     },
     [sceneId, updatePlayerState, offenseVisible],
   );
@@ -382,19 +404,24 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
 
   const handleDefenseDragEnd = useCallback(
     (position: number, newCx: number, newCy: number) => {
-      setDefensePx((prev) => {
-        if (!prev) return prev;
-        const updated = prev.map((p) => (p.position === position ? { ...p, px: newCx, py: newCy } : p));
-        if (sceneId && layoutRef.current) {
-          const { x, y } = canvasPxToNorm(newCx, newCy, layoutRef.current, flippedRef.current);
-          // Read visible from the scene prop (source of truth) to avoid overwriting
-          // a visibility toggle with a stale value from local pixel state.
-          const scenePlayer = defenseVisible?.find((sp) => sp.position === position);
-          const visible = scenePlayer ? scenePlayer.visible : (updated.find((p) => p.position === position)?.visible ?? true);
-          updatePlayerState(sceneId, "defense", { position, x, y, visible });
-        }
-        return updated;
-      });
+      // The store write must not happen inside the setState updater: React runs
+      // updaters while rendering this component, and a Zustand write there
+      // updates SaveIndicator mid-render (and runs twice under StrictMode).
+      const current = defensePxRef.current;
+      if (!current) return;
+      setDefensePx((prev) =>
+        prev
+          ? prev.map((p) => (p.position === position ? { ...p, px: newCx, py: newCy } : p))
+          : prev,
+      );
+      if (sceneId && layoutRef.current) {
+        const { x, y } = canvasPxToNorm(newCx, newCy, layoutRef.current, flippedRef.current);
+        // Read visible from the scene prop (source of truth) to avoid overwriting
+        // a visibility toggle with a stale value from local pixel state.
+        const scenePlayer = defenseVisible?.find((sp) => sp.position === position);
+        const visible = scenePlayer ? scenePlayer.visible : (current.find((p) => p.position === position)?.visible ?? true);
+        updatePlayerState(sceneId, "defense", { position, x, y, visible });
+      }
     },
     [sceneId, updatePlayerState, defenseVisible],
   );
@@ -431,31 +458,30 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
 
   const handleBallDrag = useCallback(
     (newCx: number, newCy: number) => {
-      // While dragging, check if we should detach
-      setBallAttachment((prevAttachment) => {
-        if (prevAttachment) {
-          // Get current player position
-          const pool = prevAttachment.side === "offense" ? offensePx : defensePx;
-          const player = pool?.find((p) => p.position === prevAttachment.position);
-          if (player) {
-            const dx = newCx - player.px;
-            const dy = newCy - player.py;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist > DETACH_RADIUS) {
-              // Detach
-              setBallPx({ x: newCx, y: newCy });
-              return null;
-            }
-            // Still attached — don't update free position
-            return prevAttachment;
-          }
+      // Reads the current attachment and player positions from refs: no state
+      // setter runs inside another setter's updater (React runs updaters while
+      // rendering), and the handler is not re-created on every drag frame.
+      const attachment = ballAttachmentRef.current;
+      if (attachment) {
+        // Get current player position
+        const pool = attachment.side === "offense" ? offensePxRef.current : defensePxRef.current;
+        const player = pool?.find((p) => p.position === attachment.position);
+        if (player) {
+          const dx = newCx - player.px;
+          const dy = newCy - player.py;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          // Still attached — don't update free position
+          if (dist <= DETACH_RADIUS) return;
+          // Detach (the ref is updated at once so the next move event, which
+          // may arrive before the re-render, already sees a free ball)
+          ballAttachmentRef.current = null;
+          setBallAttachment(null);
         }
-        // Free ball: update position
-        setBallPx({ x: newCx, y: newCy });
-        return prevAttachment;
-      });
+      }
+      // Free ball: update position
+      setBallPx({ x: newCx, y: newCy });
     },
-    [offensePx, defensePx],
+    [],
   );
 
   const handleBallDragEnd = useCallback(
@@ -496,6 +522,11 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
 
   const allPlayers = buildPlayerList(offensePx, defensePx);
 
+  // While the court has no area (collapsed / hidden container) nothing is
+  // overlaid: both overlays use overflow: visible, so tokens and annotations at
+  // their last positions would otherwise be painted over neighbouring UI.
+  const courtVisible = courtSize !== null && courtSize.playAreaWidth > 0 && courtSize.playAreaHeight > 0;
+
   // Use the inner court (play area) width for proportional token sizing.
   // Nothing is drawn until the court has reported its size, so there is no
   // size-less fallback.
@@ -513,7 +544,7 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
       <Court variant={variant} onReady={handleCourtReady} className="w-full" flipped={flipped} />
 
       {/* SVG player + ball overlay — same dimensions as the canvas */}
-      {courtSize && (
+      {courtVisible && courtSize && (
         <svg
           style={{
             position: "absolute",
@@ -600,7 +631,7 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
       )}
 
       {/* Annotation layer — always rendered; readOnly disables interaction. */}
-      {courtSize && (
+      {courtVisible && courtSize && (
         <AnnotationLayer
           width={courtSize.width}
           height={courtSize.height}

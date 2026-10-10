@@ -66,6 +66,21 @@ export interface CourtLayout {
   playAreaHeight: number;
 }
 
+export interface CourtLayoutOptions {
+  /**
+   * Reserve the side out-of-bounds margins inside `totalWidth` (default true).
+   * false: no side margin — oobLeft = 0 and `totalWidth` IS the inner court
+   * width (thumbnails).
+   */
+  sideMargin?: boolean;
+  /**
+   * Round the baseline out-of-bounds band to a whole pixel (default true, as a
+   * canvas needs). false keeps the exact OOB_BOTTOM_FRAC ratio (SVG thumbnails,
+   * where rounding a ~5 px band would distort it).
+   */
+  roundOobBot?: boolean;
+}
+
 /**
  * Compute the pixel layout for a given total canvas width.
  *
@@ -75,13 +90,20 @@ export interface CourtLayout {
  * consistent with each other.
  *
  * `variant` defaults to "half"; for a half court every pre-existing field has
- * the same numeric value it always had.
+ * the same numeric value it always had. `options` default to the editor's
+ * frame; with the defaults the result is bit-identical to what it always was.
  */
-export function computeCourtLayout(totalWidth: number, variant: CourtVariant = "half"): CourtLayout {
-  const oobLeft     = Math.round((totalWidth * OOB_SIDE_FRAC) / (1 + 2 * OOB_SIDE_FRAC));
+export function computeCourtLayout(
+  totalWidth: number,
+  variant: CourtVariant = "half",
+  options: CourtLayoutOptions = {},
+): CourtLayout {
+  const { sideMargin = true, roundOobBot = true } = options;
+  const oobLeft     = sideMargin ? Math.round((totalWidth * OOB_SIDE_FRAC) / (1 + 2 * OOB_SIDE_FRAC)) : 0;
   const innerW      = totalWidth - 2 * oobLeft;
   const innerH      = Math.round(innerW / COURT_ASPECT_RATIO);
-  const oobBot      = Math.round(innerH * OOB_BOTTOM_FRAC);
+  const exactOobBot = innerH * OOB_BOTTOM_FRAC;
+  const oobBot      = roundOobBot ? Math.round(exactOobBot) : exactOobBot;
   const totalHeight = variant === "full" ? innerH * 2 + oobBot : innerH + oobBot;
   const playAreaOffsetY = variant === "full" ? innerH + oobBot : 0;
   return {
@@ -97,6 +119,32 @@ export function computeCourtLayout(totalWidth: number, variant: CourtVariant = "
     playAreaWidth: innerW,
     playAreaHeight: innerH,
   };
+}
+
+/**
+ * Layout for a thumbnail (the SVG mini-courts of PlayCard / SceneStrip) that is
+ * `width` px wide: computeCourtLayout with no side margin and an unrounded
+ * baseline band.
+ *
+ * A thumbnail shows the play area only, so `width` is the inner court width.
+ * Everything else is the editor's frame at that width — in particular oobBot,
+ * totalHeight and playAreaOffsetY keep their meaning — so the thumbnail can
+ * pair the editor's court transforms (see paintCourt) with normToCanvasPx like
+ * every other renderer and then show just the play-area window
+ *   x ∈ [0, innerW],  y ∈ [playAreaOffsetY, playAreaOffsetY + innerH]
+ * which is where normToCanvasPx puts the unit square, flipped or not.
+ */
+export function computeThumbnailLayout(width: number, variant: CourtVariant = "half"): CourtLayout {
+  return computeCourtLayout(width, variant, { sideMargin: false, roundOobBot: false });
+}
+
+/**
+ * True when the layout has a court to draw on. A container that is collapsed
+ * or hidden reports width 0, which yields innerW = innerH = 0; positions must
+ * never be converted through such a layout (÷ 0 → NaN).
+ */
+export function hasCourtArea(layout: CourtLayout): boolean {
+  return layout.innerW > 0 && layout.innerH > 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -162,4 +210,22 @@ export function canvasPxToNorm(
       ? 1 - (py - playAreaOffsetY) / layout.innerH
       : (py - playAreaOffsetY) / layout.innerH,
   };
+}
+
+/**
+ * Move a canvas pixel position from one layout to another (a resize): the
+ * point keeps its normalised court position. Returns null when either layout
+ * has no court area, so a transient zero-size layout can never turn a position
+ * into NaN — the caller keeps what it had.
+ */
+export function reprojectCanvasPx(
+  px: number,
+  py: number,
+  from: CourtLayout,
+  to: CourtLayout,
+  flipped: boolean,
+): { x: number; y: number } | null {
+  if (!hasCourtArea(from) || !hasCourtArea(to)) return null;
+  const norm = canvasPxToNorm(px, py, from, flipped);
+  return normToCanvasPx(norm.x, norm.y, to, flipped);
 }

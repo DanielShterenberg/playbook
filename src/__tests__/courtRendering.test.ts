@@ -5,15 +5,13 @@
  * mock CanvasRenderingContext2D that logs method calls and property writes in
  * order. Two renderers produce the same pixels if their logs are equal.
  *
- * Three layers of protection:
- *   1. drawCourt here ≡ drawCourt exported by Court.tsx (while Court.tsx still
- *      has its own copy this is an independent oracle; once Court.tsx
- *      re-exports the shared one it is trivially true, and if it stops
- *      exporting drawCourt the comparison is skipped — both are fine).
- *   2. A pinned digest of each log, captured while (1) was an independent
- *      check — this keeps the drawing pinned after Court.tsx's copy is gone.
- *   3. paintCourt's log is checked compositionally against the exact
- *      transform sequence of Court.tsx's draw() callback (lines 375–422).
+ * Two layers of protection:
+ *   1. A pinned digest of each log, captured while Court.tsx still had its own
+ *      copy of the drawing to compare against (the legacy drawCourt entry point
+ *      and that comparison are gone — issue #176); the digest keeps the drawing
+ *      pinned.
+ *   2. paintCourt's log is checked compositionally against the exact transform
+ *      sequence Court.tsx's draw() callback had before it delegated here.
  */
 
 import { describe, it, expect } from "vitest";
@@ -24,66 +22,11 @@ import {
   COLOR_LINE,
   COLOR_LINE_WIDTH_PX,
   drawHalfCourtInner,
-  drawCourt,
   paintCourt,
 } from "@/lib/courtRendering";
 import { computeCourtLayout, normToCanvasPx, type CourtVariant } from "@/lib/courtLayout";
 import { CENTRE_CIRCLE_RADIUS, LANE_TOP, LANE_LEFT, LANE_RIGHT } from "@/components/court/courtDimensions";
-import * as courtDimensions from "@/components/court/courtDimensions";
-import * as courtLayoutModule from "@/lib/courtLayout";
 import * as courtRenderingModule from "@/lib/courtRendering";
-import * as tokenSizingModule from "@/lib/tokenSizing";
-import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import path from "node:path";
-import ts from "typescript";
-
-// ---------------------------------------------------------------------------
-// Court.tsx oracle
-//
-// Court.tsx cannot be imported directly here: the project tsconfig sets
-// jsx: "preserve" (required by Next.js), which Vite cannot parse in a Node
-// test run. Instead the file's source is transpiled on the fly with the
-// TypeScript compiler and evaluated with its imports wired to the real
-// modules. Nothing is rendered — only the exported drawCourt is used.
-//
-// If Court.tsx stops exporting drawCourt, or gains an import this loader does
-// not know, the oracle resolves to null and the comparisons are skipped; the
-// pinned digests below still guard the drawing.
-// ---------------------------------------------------------------------------
-
-type DrawCourtFn = typeof drawCourt;
-
-function loadCourtTsxDrawCourt(): DrawCourtFn | null {
-  try {
-    const file = path.resolve(process.cwd(), "src/components/court/Court.tsx");
-    const js = ts.transpileModule(readFileSync(file, "utf8"), {
-      compilerOptions: {
-        module: ts.ModuleKind.CommonJS,
-        target: ts.ScriptTarget.ES2020,
-        jsx: ts.JsxEmit.ReactJSX,
-        esModuleInterop: true,
-      },
-      fileName: file,
-    }).outputText;
-    const nodeRequire = createRequire(file);
-    const shim = (id: string): unknown => {
-      if (id === "./courtDimensions" || id === "@/components/court/courtDimensions") return courtDimensions;
-      if (id === "@/lib/courtLayout") return courtLayoutModule;
-      if (id === "@/lib/courtRendering") return courtRenderingModule;
-      if (id === "@/lib/tokenSizing") return tokenSizingModule;
-      if (id.startsWith(".") || id.startsWith("@/")) throw new Error(`unmapped import ${id}`);
-      return nodeRequire(id);
-    };
-    const mod: { exports: Record<string, unknown> } = { exports: {} };
-    new Function("require", "module", "exports", js)(shim, mod, mod.exports);
-    return typeof mod.exports.drawCourt === "function" ? (mod.exports.drawCourt as DrawCourtFn) : null;
-  } catch {
-    return null;
-  }
-}
-
-const courtTsxDrawCourt = loadCourtTsxDrawCourt();
 
 // ---------------------------------------------------------------------------
 // Recording mock context
@@ -115,11 +58,6 @@ function createRecordingCtx(): { ctx: CanvasRenderingContext2D; log: LogEntry[] 
     },
   ) as unknown as CanvasRenderingContext2D;
   return { ctx, log };
-}
-
-/** A canvas stand-in whose getContext("2d") returns the given context. */
-function fakeCanvas(ctx: CanvasRenderingContext2D): HTMLCanvasElement {
-  return { getContext: () => ctx } as unknown as HTMLCanvasElement;
 }
 
 function record(fn: (ctx: CanvasRenderingContext2D) => void): LogEntry[] {
@@ -219,12 +157,6 @@ describe("drawHalfCourtInner", () => {
     expect(ops(log)).not.toContain("clearRect");
   });
 
-  it.skipIf(!courtTsxDrawCourt)("equals Court.tsx drawCourt('half') minus its leading clearRect", () => {
-    const reference = record((ctx) => courtTsxDrawCourt!(fakeCanvas(ctx), W, H, "half"));
-    expect(reference[0]).toEqual(["clearRect", 0, 0, W, H]);
-    expect(log).toEqual(reference.slice(1));
-  });
-
   it("pinned digest", () => {
     expect(digest(log)).toMatchInlineSnapshot(`"91692997bec5569d"`);
     expect(log.length).toMatchInlineSnapshot(`67`);
@@ -232,84 +164,13 @@ describe("drawHalfCourtInner", () => {
 });
 
 // ---------------------------------------------------------------------------
-// drawCourt (legacy whole-canvas entry point used by exportPdf)
+// Legacy drawCourt is gone (issue #176)
 // ---------------------------------------------------------------------------
 
-describe("drawCourt", () => {
-  const cases: Array<{ w: number; h: number; variant: CourtVariant; paint?: string }> = [
-    { w: 800, h: 752, variant: "half" },
-    { w: 800, h: 752, variant: "half", paint: "#0055AA" },
-    { w: 800, h: 1504, variant: "full" },
-    { w: 800, h: 1504, variant: "full", paint: "#0055AA" },
-    { w: 452, h: 425, variant: "half" },
-    { w: 377, h: 709, variant: "full" },
-  ];
-
-  it.skipIf(!courtTsxDrawCourt)("produces the same call log as Court.tsx's exported drawCourt", () => {
-    for (const c of cases) {
-      const mine = record((ctx) => drawCourt(fakeCanvas(ctx), c.w, c.h, c.variant, c.paint));
-      const reference = record((ctx) => courtTsxDrawCourt!(fakeCanvas(ctx), c.w, c.h, c.variant, c.paint));
-      expect(mine.length).toBeGreaterThan(50);
-      expect(mine).toEqual(reference);
-    }
-  });
-
-  it("half: clearRect then one half court over the whole canvas", () => {
-    const log = record((ctx) => drawCourt(fakeCanvas(ctx), 800, 752, "half"));
-    const inner = record((ctx) => drawHalfCourtInner(ctx, 800, 752));
-    expect(log).toEqual([["clearRect", 0, 0, 800, 752], ...inner]);
-  });
-
-  it("half: ignores paintColor (faithful to Court.tsx, which does not forward it)", () => {
-    const a = record((ctx) => drawCourt(fakeCanvas(ctx), 800, 752, "half"));
-    const b = record((ctx) => drawCourt(fakeCanvas(ctx), 800, 752, "half", "#0055AA"));
-    expect(b).toEqual(a);
-  });
-
-  it("full: two mirrored halves around the centre line, then centre line + circle", () => {
-    const w = 800;
-    const h = 1504;
-    const halfH = h / 2;
-    const inner = record((ctx) => drawHalfCourtInner(ctx, w, halfH, "#0055AA"));
-    const scaleY = halfH / w;
-    const log = record((ctx) => drawCourt(fakeCanvas(ctx), w, h, "full", "#0055AA"));
-    expect(log).toEqual([
-      ["clearRect", 0, 0, w, h],
-      ["save"],
-      ["translate", 0, halfH],
-      ...inner,
-      ["restore"],
-      ["save"],
-      ["translate", 0, halfH],
-      ["scale", 1, -1],
-      ...inner,
-      ["restore"],
-      ["set strokeStyle", COLOR_LINE],
-      ["set lineWidth", COLOR_LINE_WIDTH_PX],
-      ["set lineCap", "round"],
-      ["beginPath"],
-      ["moveTo", 0, halfH],
-      ["lineTo", w, halfH],
-      ["stroke"],
-      ["save"],
-      ["scale", 1, scaleY],
-      ["beginPath"],
-      ["arc", w * 0.5, halfH / scaleY, w * CENTRE_CIRCLE_RADIUS, 0, Math.PI * 2],
-      ["restore"],
-      ["stroke"],
-    ]);
-  });
-
-  it("does nothing when the canvas has no 2d context", () => {
-    const canvas = { getContext: () => null } as unknown as HTMLCanvasElement;
-    expect(() => drawCourt(canvas, 800, 752, "half")).not.toThrow();
-  });
-
-  it("pinned digests", () => {
-    const d = (c: (typeof cases)[number]) =>
-      digest(record((ctx) => drawCourt(fakeCanvas(ctx), c.w, c.h, c.variant, c.paint)));
-    expect(d(cases[0])).toMatchInlineSnapshot(`"e6eb2bf89aeb76ce"`);
-    expect(d(cases[3])).toMatchInlineSnapshot(`"69a234e114aba61c"`);
+describe("legacy drawCourt", () => {
+  it("is no longer exported — paintCourt is the only whole-court entry point", () => {
+    expect(Object.keys(courtRenderingModule)).not.toContain("drawCourt");
+    expect(typeof courtRenderingModule.paintCourt).toBe("function");
   });
 });
 

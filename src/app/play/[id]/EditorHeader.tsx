@@ -18,6 +18,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { createShareToken } from "@/lib/team";
 import PresentationOverlay from "@/components/editor/PresentationOverlay";
 import CommentsPanel from "@/components/editor/CommentsPanel";
+import { DEFAULT_OFFENSE_COLOR, DEFAULT_DEFENSE_COLOR } from "@/lib/tokenSizing";
 
 const CATEGORY_OPTIONS: { value: Category; label: string }[] = [
   { value: "offense", label: "Offense" },
@@ -90,9 +91,6 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
       setTimeout(() => setShareMsg(null), 3000);
     }
   }
-
-  const DEFAULT_OFFENSE_COLOR = "#E07B39";
-  const DEFAULT_DEFENSE_COLOR = "#1E3A5F";
 
   const [showEdit, setShowEdit] = useState(false);
   const [editTitle, setEditTitle] = useState("");

@@ -18,54 +18,95 @@
  */
 
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
-import type { Play, Annotation } from "./types";
+import type { Play, Scene, Annotation } from "./types";
 
 import {
   renderFrame,
   SCENE_HOLD_MS,
   FINAL_HOLD_MS,
   RESOLUTION_WIDTH,
-} from "./exportGIF";
-import type { GifResolution } from "./exportGIF";
+} from "./frameRenderer";
+import type { FrameResolution, FrameStyle } from "./frameRenderer";
 import { computeCourtLayout } from "@/lib/courtLayout";
+import { stepDurationMs } from "./playback";
 import type { CourtVariant } from "@/lib/courtLayout";
-import type { PlayerDisplayMode } from "./store";
+import { COLOR_COURT } from "@/lib/courtRendering";
 
-export type VideoResolution = GifResolution;
+export type VideoResolution = FrameResolution;
 
-export interface ExportVideoOptions {
+/** Encoder settings plus the frame style (label mode, names, team colours). */
+export interface ExportVideoOptions extends FrameStyle {
   speed?: number;
   resolution?: VideoResolution;
   onProgress?: (fraction: number) => void;
-  displayMode?: PlayerDisplayMode;
-  playerNames?: Record<string, string>;
-  offenseColor?: string;
-  defenseColor?: string;
 }
 
 // ---------------------------------------------------------------------------
-// Frame size (shared by both encoder paths)
+// Frame size and frame painting (shared by both encoder paths)
 // ---------------------------------------------------------------------------
+
+export interface VideoFrameSize {
+  /** Court layout width in px (the resolution preset). */
+  width: number;
+  /** Court layout height in px (computeCourtLayout(width, variant).totalHeight). */
+  height: number;
+  /** Canvas / encoded frame width: `width` padded up to an even number. */
+  encW: number;
+  /** Canvas / encoded frame height: `height` padded up to an even number. */
+  encH: number;
+}
 
 /**
  * Frame size for a resolution preset, from the shared court layout.
  *
- * `width` × `height` is the full frame (used by the MediaRecorder fallback);
- * `encW` × `encH` is the same frame clamped down to even dimensions, which
- * H.264 requires (used by the WebCodecs path — at most one row is cropped).
+ * `width` × `height` is the court layout — the frame is always painted at this
+ * size, like every other renderer. `encW` × `encH` is the canvas both encoder
+ * paths use: the layout padded UP to even dimensions, which H.264 requires.
+ * Padding (at most one row / column, on the bottom / right edge) instead of
+ * cropping keeps every row of the court in the video (issue #176).
  */
 export function videoFrameSize(
   resolution: VideoResolution,
   variant: CourtVariant = "half",
-): { width: number; height: number; encW: number; encH: number } {
+): VideoFrameSize {
   const width  = RESOLUTION_WIDTH[resolution];
   const height = computeCourtLayout(width, variant).totalHeight;
   return {
     width,
     height,
-    encW: width  % 2 === 0 ? width  : width  - 1,
-    encH: height % 2 === 0 ? height : height - 1,
+    encW: width  + (width  % 2),
+    encH: height + (height % 2),
   };
+}
+
+/**
+ * Paint one video frame on a canvas that is `size.encW` × `size.encH`.
+ *
+ * The court is the shared frame at the layout size (renderFrame); when the
+ * canvas is larger than the layout the padding is filled with the floor colour
+ * first, so the extra row reads as out-of-bounds floor. It is refilled on every
+ * frame because the frame painter never clears outside the layout.
+ */
+export function renderVideoFrame(
+  canvas: HTMLCanvasElement,
+  size: VideoFrameSize,
+  scene: Scene,
+  visibleAnnotations: Annotation[],
+  flipped: boolean,
+  variant: CourtVariant,
+  style: FrameStyle = {},
+): void {
+  const { width, height, encW, encH } = size;
+
+  if (encW !== width || encH !== height) {
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.fillStyle = COLOR_COURT;
+      ctx.fillRect(0, 0, encW, encH);
+    }
+  }
+
+  renderFrame(canvas, scene, visibleAnnotations, width, height, flipped, style, variant);
 }
 
 // ---------------------------------------------------------------------------
@@ -77,11 +118,12 @@ async function exportViaWebCodecs(
   filename: string,
   options: ExportVideoOptions,
 ): Promise<void> {
-  const { speed = 1, resolution = "sd", onProgress, displayMode = "numbers", playerNames = {}, offenseColor, defenseColor } = options;
+  const { speed = 1, resolution = "sd", onProgress, ...style } = options;
 
   const variant: CourtVariant = play.courtType;
-  // H.264 requires dimensions divisible by 2
-  const { encW, encH } = videoFrameSize(resolution, variant);
+  // H.264 requires dimensions divisible by 2 — the canvas is the layout padded up
+  const size = videoFrameSize(resolution, variant);
+  const { encW, encH } = size;
 
   const canvas = document.createElement("canvas");
   canvas.width  = encW;
@@ -136,7 +178,7 @@ async function exportViaWebCodecs(
   // Pre-calculate total duration for the silent audio track.
   let totalDurationMs = 0;
   for (let si = 0; si < scenes.length; si++) {
-    for (const g of scenes[si].timingGroups) totalDurationMs += g.duration / speed;
+    for (const g of scenes[si].timingGroups) totalDurationMs += stepDurationMs(g) / speed;
     totalDurationMs += (si === scenes.length - 1 ? FINAL_HOLD_MS : SCENE_HOLD_MS) / speed;
   }
 
@@ -193,8 +235,8 @@ async function exportViaWebCodecs(
     for (let gi = 0; gi < sortedGroups.length; gi++) {
       const group = sortedGroups[gi];
       cumulativeAnnotations.push(...group.annotations);
-      renderFrame(canvas, scene, cumulativeAnnotations, encW, encH, sceneFlipped, displayMode, playerNames, offenseColor, defenseColor, variant);
-      encodeFrame(group.duration, si === 0 && gi === 0);
+      renderVideoFrame(canvas, size, scene, cumulativeAnnotations, sceneFlipped, variant, style);
+      encodeFrame(stepDurationMs(group), si === 0 && gi === 0);
 
       stepsRendered++;
       onProgress?.(stepsRendered / totalSteps);
@@ -204,7 +246,7 @@ async function exportViaWebCodecs(
 
     // Hold frame
     const holdMs = si === scenes.length - 1 ? FINAL_HOLD_MS : SCENE_HOLD_MS;
-    renderFrame(canvas, scene, [...cumulativeAnnotations], encW, encH, sceneFlipped, displayMode, playerNames, offenseColor, defenseColor, variant);
+    renderVideoFrame(canvas, size, scene, [...cumulativeAnnotations], sceneFlipped, variant, style);
     encodeFrame(holdMs, false);
 
     stepsRendered++;
@@ -228,14 +270,16 @@ async function exportViaMediaRecorder(
   filename: string,
   options: ExportVideoOptions,
 ): Promise<void> {
-  const { speed = 1, resolution = "sd", onProgress } = options;
+  // Same frame style and frame size as the WebCodecs path
+  const { speed = 1, resolution = "sd", onProgress, ...style } = options;
 
   const variant: CourtVariant = play.courtType;
-  const { width, height } = videoFrameSize(resolution, variant);
+  const size = videoFrameSize(resolution, variant);
+  const { encW, encH } = size;
 
   const canvas = document.createElement("canvas");
-  canvas.width  = width;
-  canvas.height = height;
+  canvas.width  = encW;
+  canvas.height = encH;
 
   const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
     ? "video/webm;codecs=vp9"
@@ -260,14 +304,14 @@ async function exportViaMediaRecorder(
 
     for (const group of sortedGroups) {
       cumulativeAnnotations.push(...group.annotations);
-      renderFrame(canvas, scene, cumulativeAnnotations, width, height, sceneFlipped, "numbers", {}, undefined, undefined, variant);
-      await new Promise<void>((r) => setTimeout(r, group.duration / speed));
+      renderVideoFrame(canvas, size, scene, cumulativeAnnotations, sceneFlipped, variant, style);
+      await new Promise<void>((r) => setTimeout(r, stepDurationMs(group) / speed));
       stepsRendered++;
       onProgress?.(stepsRendered / totalSteps);
     }
 
     const holdMs = (si === scenes.length - 1 ? FINAL_HOLD_MS : SCENE_HOLD_MS) / speed;
-    renderFrame(canvas, scene, [...cumulativeAnnotations], width, height, sceneFlipped, "numbers", {}, undefined, undefined, variant);
+    renderVideoFrame(canvas, size, scene, [...cumulativeAnnotations], sceneFlipped, variant, style);
     await new Promise<void>((r) => setTimeout(r, holdMs));
     stepsRendered++;
     onProgress?.(stepsRendered / totalSteps);

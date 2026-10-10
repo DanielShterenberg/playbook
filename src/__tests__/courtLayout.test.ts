@@ -545,3 +545,87 @@ describe("master side-by-side: editor geometry measured on master (0d7d99b)", ()
     expect(l.innerH).not.toBe(l.totalHeight);
   });
 });
+
+// ---------------------------------------------------------------------------
+// One layout function, parameterised (review item 5) + degenerate layouts (9a)
+// ---------------------------------------------------------------------------
+
+import { readFileSync as readSource } from "node:fs";
+import nodePath from "node:path";
+import * as layoutModule from "@/lib/courtLayout";
+
+describe("computeCourtLayout options", () => {
+  const { computeCourtLayout: layoutOf, computeThumbnailLayout } = layoutModule;
+
+  it("defaults are bit-identical to the two-argument call", () => {
+    for (let w = 1; w <= 2400; w += 13) {
+      for (const variant of ["half", "full"] as const) {
+        const base = layoutOf(w, variant);
+        expect(layoutOf(w, variant, {})).toEqual(base);
+        expect(layoutOf(w, variant, { sideMargin: true, roundOobBot: true })).toEqual(base);
+      }
+    }
+  });
+
+  it("pinned editor/export values are unchanged", () => {
+    expect(layoutOf(800)).toEqual({
+      variant: "half", totalWidth: 800, oobLeft: 23, innerW: 754, innerH: 709, oobBot: 50, totalHeight: 759,
+      playAreaOffsetX: 23, playAreaOffsetY: 0, playAreaWidth: 754, playAreaHeight: 709,
+    });
+    expect(layoutOf(480, "full")).toMatchObject({ oobLeft: 14, innerW: 452, innerH: 425, oobBot: 30, totalHeight: 880, playAreaOffsetY: 455 });
+    expect(layoutOf(1200, "full")).toMatchObject({ totalHeight: 2202 });
+  });
+
+  it("sideMargin: false makes the width the inner court width", () => {
+    const l = layoutOf(200, "half", { sideMargin: false });
+    expect(l).toMatchObject({ totalWidth: 200, oobLeft: 0, innerW: 200, innerH: 188, oobBot: 13, playAreaOffsetX: 0 });
+  });
+
+  it("roundOobBot: false keeps the exact 7 % band", () => {
+    const l = layoutOf(800, "half", { roundOobBot: false });
+    expect(l.oobBot).toBeCloseTo(709 * 0.07, 12);
+    expect(l.totalHeight).toBe(l.innerH + l.oobBot);
+  });
+
+  it("computeThumbnailLayout is that function with both options off — no second copy of the formula", () => {
+    for (const w of [80, 120, 200]) {
+      for (const variant of ["half", "full"] as const) {
+        expect(computeThumbnailLayout(w, variant)).toEqual(layoutOf(w, variant, { sideMargin: false, roundOobBot: false }));
+      }
+    }
+    const src = readSource(nodePath.resolve(process.cwd(), "src/lib/courtLayout.ts"), "utf8");
+    expect(src.match(/ \/ COURT_ASPECT_RATIO\)/g)).toHaveLength(1);
+    expect(src.match(/ \* OOB_BOTTOM_FRAC/g)).toHaveLength(1);
+  });
+});
+
+describe("degenerate layouts never produce NaN positions", () => {
+  const { computeCourtLayout: layoutOf, hasCourtArea, reprojectCanvasPx } = layoutModule;
+
+  it("hasCourtArea is false exactly when the court has no width or height", () => {
+    expect(hasCourtArea(layoutOf(0))).toBe(false);
+    expect(hasCourtArea(layoutOf(0, "full"))).toBe(false);
+    for (const w of [1, 2, 80, 566, 1200]) expect(hasCourtArea(layoutOf(w))).toBe(true);
+  });
+
+  it("the unguarded round trip through a zero-width layout is NaN (the bug)", () => {
+    const zero = layoutOf(0);
+    const good = layoutOf(566);
+    const n = layoutModule.canvasPxToNorm(100, 100, zero, false);
+    expect(Number.isFinite(layoutModule.normToCanvasPx(n.x, n.y, good, false).x)).toBe(false);
+  });
+
+  it("reprojectCanvasPx maps between two real layouts and refuses a degenerate one", () => {
+    const a = layoutOf(566);
+    const b = layoutOf(768);
+    for (const flipped of [false, true]) {
+      const p = normToCanvasPx(0.3, 0.7, a, flipped);
+      const q = reprojectCanvasPx(p.x, p.y, a, b, flipped)!;
+      const expected = normToCanvasPx(0.3, 0.7, b, flipped);
+      expect(q.x).toBeCloseTo(expected.x, 9);
+      expect(q.y).toBeCloseTo(expected.y, 9);
+      expect(reprojectCanvasPx(p.x, p.y, layoutOf(0), b, flipped)).toBeNull();
+      expect(reprojectCanvasPx(p.x, p.y, a, layoutOf(0), flipped)).toBeNull();
+    }
+  });
+});

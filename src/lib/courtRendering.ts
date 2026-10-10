@@ -6,9 +6,9 @@
  * on an on-screen canvas, an offscreen export canvas, or a recording mock in
  * tests. No React, no DOM lookups.
  *
- * Moved here from Court.tsx (issue #171, parent #163). drawHalfCourtInner and
- * drawCourt are verbatim copies; paintCourt is the body of Court.tsx's draw()
- * callback with the layout passed in.
+ * Moved here from Court.tsx (issue #171, parent #163). drawHalfCourtInner is a
+ * verbatim copy; paintCourt is the body of Court.tsx's draw() callback with the
+ * layout passed in, and the only whole-court entry point.
  */
 
 import {
@@ -27,7 +27,7 @@ import {
   FT_CIRCLE_CENTER_Y,
   CENTRE_CIRCLE_RADIUS,
 } from "@/components/court/courtDimensions";
-import type { CourtLayout, CourtVariant } from "@/lib/courtLayout";
+import type { CourtLayout } from "@/lib/courtLayout";
 
 export type { CourtVariant } from "@/lib/courtLayout";
 
@@ -212,63 +212,6 @@ export function drawHalfCourtInner(ctx: CanvasRenderingContext2D, W: number, H: 
   ctx.strokeStyle = COLOR_LINE;
   ctx.stroke();
   ctx.restore();
-}
-
-// ---------------------------------------------------------------------------
-// Top-level draw function
-// ---------------------------------------------------------------------------
-
-export function drawCourt(
-  canvas: HTMLCanvasElement,
-  cssWidth: number,
-  cssHeight: number,
-  variant: CourtVariant,
-  paintColor?: string,
-): void {
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-
-  ctx.clearRect(0, 0, cssWidth, cssHeight);
-
-  if (variant === "full") {
-    const halfH = cssHeight / 2;
-
-    // Near basket end (bottom half) — normal orientation
-    ctx.save();
-    ctx.translate(0, halfH);
-    drawHalfCourtInner(ctx, cssWidth, halfH, paintColor);
-    ctx.restore();
-
-    // Far basket end (top half) — mirrored vertically around the centre line
-    ctx.save();
-    ctx.translate(0, halfH);
-    ctx.scale(1, -1);
-    drawHalfCourtInner(ctx, cssWidth, halfH, paintColor);
-    ctx.restore();
-
-    // Draw the centre line and full centre circle explicitly to avoid any
-    // sub-pixel gap between the two halves.
-    ctx.strokeStyle = COLOR_LINE;
-    ctx.lineWidth = COLOR_LINE_WIDTH_PX;
-    ctx.lineCap = "round";
-
-    ctx.beginPath();
-    ctx.moveTo(0, halfH);
-    ctx.lineTo(cssWidth, halfH);
-    ctx.stroke();
-
-    // Full centre circle (both halves already drew their arcs, so this is just
-    // a reinforcement of the complete circle at the centre line).
-    const scaleY = halfH / cssWidth;
-    ctx.save();
-    ctx.scale(1, scaleY);
-    ctx.beginPath();
-    ctx.arc(cssWidth * 0.5, halfH / scaleY, cssWidth * CENTRE_CIRCLE_RADIUS, 0, Math.PI * 2);
-    ctx.restore();
-    ctx.stroke();
-  } else {
-    drawHalfCourtInner(ctx, cssWidth, cssHeight);
-  }
 }
 
 // ---------------------------------------------------------------------------
