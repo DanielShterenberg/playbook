@@ -18,6 +18,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import Logo from "@/components/brand/Logo";
+import ThemeToggle from "@/components/brand/ThemeToggle";
 import {
   signInWithEmail,
   signUpWithEmail,
@@ -26,6 +27,33 @@ import {
 } from "@/lib/auth";
 
 type Mode = "signin" | "signup";
+
+// ---------------------------------------------------------------------------
+// Shared styles
+// ---------------------------------------------------------------------------
+
+const PAGE = "relative flex min-h-screen flex-col items-center justify-center bg-app px-4 py-20 text-ink";
+
+const LABEL = "mb-1.5 block font-display text-[13px] font-semibold uppercase tracking-[0.06em] text-muted";
+
+// 16px text on small screens so iOS does not zoom the page on focus.
+const INPUT =
+  "block h-11 w-full rounded-lg border border-line-strong bg-surface px-3 font-sans text-base text-ink placeholder:text-muted focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent sm:text-sm";
+
+const BUTTON =
+  "flex h-11 w-full items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-60";
+
+/** Shown while the auth state resolves (and as the Suspense fallback). */
+function SignInLoading() {
+  return (
+    <main className={PAGE} aria-label="Loading" aria-busy="true">
+      <svg width={36} height={36} viewBox="0 0 36 36" fill="none" aria-hidden="true" className="animate-spin">
+        <circle cx={18} cy={18} r={14} stroke="var(--color-line)" strokeWidth={4} />
+        <path d="M18 4 A14 14 0 0 1 32 18" stroke="var(--color-accent)" strokeWidth={4} strokeLinecap="round" />
+      </svg>
+    </main>
+  );
+}
 
 // useSearchParams() must be inside a Suspense boundary in Next.js App Router.
 // SignInContent contains the real logic; the exported default wraps it.
@@ -54,7 +82,7 @@ function SignInContent() {
   // Auto-focus email when mode changes
   useEffect(() => {
     emailRef.current?.focus();
-  }, [mode]);
+  }, [mode, loading]);
 
   function clearError() {
     if (error) setError("");
@@ -94,71 +122,37 @@ function SignInContent() {
     }
   }
 
-  // Show nothing while checking auth (AuthGuard handles this elsewhere, but
-  // here we're on the public sign-in page — just blank until resolved)
-  if (loading) return null;
+  // While checking auth, show the themed loading screen (AuthGuard handles
+  // this elsewhere, but this is the public sign-in page).
+  if (loading || user) return <SignInLoading />;
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "linear-gradient(135deg, #1E3A5F 0%, #0F1F33 100%)",
-        padding: "24px 16px",
-      }}
-    >
+    <main className={PAGE}>
+      <ThemeToggle className="absolute right-4 top-4" />
+
       {/* Card */}
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 400,
-          background: "#fff",
-          borderRadius: 16,
-          boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
-          padding: "36px 32px 32px",
-        }}
-      >
+      <div className="w-full max-w-[400px] rounded-xl border border-line bg-surface px-5 pb-6 pt-8 sm:px-8 sm:pb-8">
         {/* Logo + title */}
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <h1 style={{ margin: 0 }}>
-            <Logo size={44} stacked wordmarkColor="#141A23" />
+        <div className="mb-6 text-center">
+          <h1 className="m-0">
+            <Logo size={44} stacked />
           </h1>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6B7280" }}>
+          <p className="m-0 mt-2 text-sm text-muted">
             {mode === "signin" ? "Sign in to your account" : "Create a new account"}
           </p>
         </div>
 
         {/* Mode toggle */}
-        <div
-          style={{
-            display: "flex",
-            background: "#F3F4F6",
-            borderRadius: 8,
-            padding: 3,
-            marginBottom: 24,
-          }}
-        >
+        <div role="group" aria-label="Sign in or sign up" className="mb-6 flex overflow-hidden rounded-lg border border-line">
           {(["signin", "signup"] as Mode[]).map((m) => (
             <button
               key={m}
               type="button"
               onClick={() => { setMode(m); setError(""); }}
-              style={{
-                flex: 1,
-                padding: "7px 0",
-                borderRadius: 6,
-                border: "none",
-                fontSize: 13,
-                fontWeight: mode === m ? 600 : 400,
-                color: mode === m ? "#111827" : "#6B7280",
-                background: mode === m ? "#fff" : "transparent",
-                boxShadow: mode === m ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
-                cursor: "pointer",
-                transition: "all 0.15s",
-              }}
+              aria-pressed={mode === m}
+              className={`h-11 flex-1 text-sm transition-colors ${
+                mode === m ? "bg-chip font-semibold text-ink" : "bg-transparent text-muted hover:text-ink"
+              }`}
             >
               {m === "signin" ? "Sign In" : "Sign Up"}
             </button>
@@ -168,8 +162,8 @@ function SignInContent() {
         <form onSubmit={handleSubmit} noValidate>
           {/* Name (sign-up only) */}
           {mode === "signup" && (
-            <div style={{ marginBottom: 14 }}>
-              <label style={labelStyle} htmlFor="name">Name</label>
+            <div className="mb-3.5">
+              <label className={LABEL} htmlFor="name">Name</label>
               <input
                 id="name"
                 type="text"
@@ -177,14 +171,14 @@ function SignInContent() {
                 value={name}
                 onChange={(e) => { setName(e.target.value); clearError(); }}
                 placeholder="Your name"
-                style={inputStyle}
+                className={INPUT}
               />
             </div>
           )}
 
           {/* Email */}
-          <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle} htmlFor="email">Email</label>
+          <div className="mb-3.5">
+            <label className={LABEL} htmlFor="email">Email</label>
             <input
               id="email"
               ref={emailRef}
@@ -193,13 +187,13 @@ function SignInContent() {
               value={email}
               onChange={(e) => { setEmail(e.target.value); clearError(); }}
               placeholder="you@example.com"
-              style={inputStyle}
+              className={INPUT}
             />
           </div>
 
           {/* Password */}
-          <div style={{ marginBottom: error ? 10 : 20 }}>
-            <label style={labelStyle} htmlFor="password">Password</label>
+          <div className={error ? "mb-2.5" : "mb-5"}>
+            <label className={LABEL} htmlFor="password">Password</label>
             <input
               id="password"
               type="password"
@@ -207,47 +201,28 @@ function SignInContent() {
               value={password}
               onChange={(e) => { setPassword(e.target.value); clearError(); }}
               placeholder={mode === "signup" ? "At least 6 characters" : "••••••••"}
-              style={inputStyle}
+              className={INPUT}
             />
           </div>
 
           {/* Error */}
           {error && (
-            <p
-              role="alert"
-              style={{
-                margin: "0 0 14px",
-                padding: "8px 12px",
-                background: "#FEF2F2",
-                border: "1px solid #FECACA",
-                borderRadius: 6,
-                fontSize: 13,
-                color: "#B91C1C",
-              }}
-            >
+            <p role="alert" className="m-0 mb-3.5 rounded-lg border border-danger bg-app px-3 py-2 text-[13px] font-medium text-danger">
               {error}
             </p>
           )}
 
           {/* Submit */}
-          <button
-            type="submit"
-            disabled={submitting}
-            style={{
-              ...buttonStyle,
-              background: submitting ? "#A5B4FC" : "#4F46E5",
-              cursor: submitting ? "not-allowed" : "pointer",
-            }}
-          >
+          <button type="submit" disabled={submitting} className={`${BUTTON} bg-accent text-accent-ink hover:opacity-90`}>
             {submitting ? "Please wait…" : mode === "signin" ? "Sign In" : "Create Account"}
           </button>
         </form>
 
         {/* Divider */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "16px 0" }}>
-          <div style={{ flex: 1, height: 1, background: "#E5E7EB" }} />
-          <span style={{ fontSize: 12, color: "#9CA3AF" }}>or</span>
-          <div style={{ flex: 1, height: 1, background: "#E5E7EB" }} />
+        <div className="my-4 flex items-center gap-2.5">
+          <div className="h-px flex-1 bg-line" />
+          <span className="text-xs text-muted">or</span>
+          <div className="h-px flex-1 bg-line" />
         </div>
 
         {/* Google */}
@@ -255,18 +230,9 @@ function SignInContent() {
           type="button"
           onClick={handleGoogle}
           disabled={submitting}
-          style={{
-            ...buttonStyle,
-            background: "#fff",
-            color: "#374151",
-            border: "1.5px solid #D1D5DB",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-          }}
+          className={`${BUTTON} border border-line-strong bg-surface text-ink hover:bg-app`}
         >
-          {/* Google "G" logo */}
+          {/* Google "G" logo — brand colours, the same in both themes */}
           <svg width={18} height={18} viewBox="0 0 24 24" aria-hidden="true">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -282,45 +248,8 @@ function SignInContent() {
 
 export default function SignInPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<SignInLoading />}>
       <SignInContent />
     </Suspense>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Shared styles
-// ---------------------------------------------------------------------------
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: 12,
-  fontWeight: 600,
-  color: "#374151",
-  marginBottom: 5,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: "9px 12px",
-  border: "1.5px solid #D1D5DB",
-  borderRadius: 8,
-  fontSize: 14,
-  color: "#111827",
-  outline: "none",
-  fontFamily: "inherit",
-  background: "#fff",
-};
-
-const buttonStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 0",
-  borderRadius: 8,
-  border: "none",
-  fontSize: 14,
-  fontWeight: 600,
-  color: "#fff",
-  cursor: "pointer",
-  transition: "background 0.15s",
-};

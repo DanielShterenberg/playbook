@@ -20,10 +20,14 @@
  *     [ / ] (prev/next scene)
  */
 
-import { LogoMark } from "@/components/brand/Logo";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
+import Logo from "@/components/brand/Logo";
+import ThemeToggle from "@/components/brand/ThemeToggle";
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { loadSharedPlay } from "@/lib/team";
-import type { Play } from "@/lib/types";
+import type { Category, Play } from "@/lib/types";
 import {
   tickPlayback,
   sortedTimingGroups,
@@ -45,12 +49,32 @@ interface SharedPlayViewPageProps {
 }
 
 // ---------------------------------------------------------------------------
+// Display helpers
+// ---------------------------------------------------------------------------
+
+const CATEGORY_LABELS: Record<Category, string> = {
+  offense: "Offense",
+  defense: "Defense",
+  inbound: "Inbound",
+  "press-break": "Press Break",
+  "fast-break": "Fast Break",
+  oob: "Out of Bounds",
+  special: "Special",
+};
+
+const ROUND_BUTTON =
+  "flex h-11 w-11 flex-none items-center justify-center rounded-full border border-line bg-surface text-ink transition-colors hover:bg-app disabled:cursor-default disabled:opacity-40 disabled:hover:bg-surface";
+
+const STEP_BUTTON =
+  "flex h-11 items-center gap-1 rounded-lg border border-line bg-surface px-3.5 text-[13px] font-medium text-ink transition-colors hover:bg-app disabled:cursor-default disabled:opacity-40 disabled:hover:bg-surface";
+
+// ---------------------------------------------------------------------------
 // Icon helpers
 // ---------------------------------------------------------------------------
 
 function PlayIcon() {
   return (
-    <svg viewBox="0 0 24 24" width={18} height={18} fill="currentColor" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={20} height={20} fill="currentColor" aria-hidden="true">
       <path d="M8 5v14l11-7z" />
     </svg>
   );
@@ -58,9 +82,33 @@ function PlayIcon() {
 
 function PauseIcon() {
   return (
-    <svg viewBox="0 0 24 24" width={18} height={18} fill="currentColor" aria-hidden="true">
-      <rect x="6" y="4" width="4" height="16" rx="1" />
-      <rect x="14" y="4" width="4" height="16" rx="1" />
+    <svg viewBox="0 0 24 24" width={20} height={20} fill="currentColor" aria-hidden="true">
+      <path d="M7 5h4v14H7zM13 5h4v14h-4z" />
+    </svg>
+  );
+}
+
+function PrevSceneIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={16} height={16} fill="currentColor" aria-hidden="true">
+      <path d="M6 5h2v14H6zM20 5v14L9 12z" />
+    </svg>
+  );
+}
+
+function NextSceneIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={16} height={16} fill="currentColor" aria-hidden="true">
+      <path d="M16 5h2v14h-2zM4 5v14l11-7z" />
+    </svg>
+  );
+}
+
+function RestartIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 4v5h5" />
+      <path d="M3.5 9a9 9 0 1 1-.4 5" />
     </svg>
   );
 }
@@ -78,6 +126,35 @@ function ChevronRightIcon({ size = 16 }: { size?: number }) {
     <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M9 18l6-6-6-6" />
     </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Header (shared by the viewer and its loading / not-found states)
+// ---------------------------------------------------------------------------
+
+function ViewerHeader() {
+  const { user, loading } = useAuth();
+  const pathname = usePathname();
+  // Signed-in viewers go to their playbook; others sign in and come back here.
+  const link = user
+    ? { href: "/playbook", label: "My playbook" }
+    : { href: `/sign-in?redirect=${encodeURIComponent(pathname ?? "/playbook")}`, label: "Sign in" };
+  return (
+    <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-2.5 sm:px-6">
+      <div className="flex flex-1 items-center">
+        <Logo />
+      </div>
+      <ThemeToggle />
+      {!loading && (
+        <Link
+          href={link.href}
+          className="flex h-11 flex-none items-center rounded-lg border border-line px-4 text-sm font-medium text-ink no-underline transition-colors hover:bg-app"
+        >
+          {link.label}
+        </Link>
+      )}
+    </header>
   );
 }
 
@@ -206,6 +283,10 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   useEffect(() => {
     function handler(e: KeyboardEvent) {
       const handlers = handlersRef.current;
+      // Space on a focused control (theme toggle, links, the buttons below)
+      // activates that control; it must not also toggle playback.
+      const onControl = e.target instanceof Element && e.target.closest("button, a, input, select, textarea") !== null;
+      if (e.code === "Space" && onControl) return;
       if (e.code === "Space") {
         e.preventDefault();
         handlers.togglePlay();
@@ -239,27 +320,32 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
 
   if (loading) {
     return (
-      <main style={{ minHeight: "100vh", background: "#F9FAFB", display: "flex", alignItems: "center", justifyContent: "center", gap: 10, color: "#6B7280", fontSize: 15 }}>
-        <svg width={18} height={18} viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ animation: "spin 1s linear infinite" }}>
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-          <circle cx={12} cy={12} r={10} stroke="currentColor" strokeWidth={3} strokeDasharray="31 31" strokeLinecap="round" />
-        </svg>
-        Loading play…
+      <main className="flex min-h-screen flex-col bg-app text-ink">
+        <ViewerHeader />
+        <div className="flex flex-1 items-center justify-center gap-2.5 p-6 text-[15px] text-muted" role="status">
+          <svg width={18} height={18} viewBox="0 0 24 24" fill="none" aria-hidden="true" className="animate-spin">
+            <circle cx={12} cy={12} r={10} stroke="currentColor" strokeWidth={3} strokeDasharray="31 31" strokeLinecap="round" />
+          </svg>
+          Loading play…
+        </div>
       </main>
     );
   }
 
   if (notFound || !play) {
     return (
-      <main style={{ minHeight: "100vh", background: "#F9FAFB", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ textAlign: "center", maxWidth: 380 }}>
-          <svg width={48} height={48} viewBox="0 0 48 48" fill="none" aria-hidden="true" style={{ margin: "0 auto 16px" }}>
-            <circle cx={24} cy={24} r={22} stroke="#E5E7EB" strokeWidth={2} />
-            <path d="M24 14v12" stroke="#9CA3AF" strokeWidth={2.5} strokeLinecap="round" />
-            <circle cx={24} cy={33} r={1.5} fill="#9CA3AF" />
-          </svg>
-          <p style={{ margin: "0 0 6px", fontSize: 18, fontWeight: 600, color: "#374151" }}>Play not found</p>
-          <p style={{ margin: 0, fontSize: 14, color: "#9CA3AF" }}>This share link may have expired or been deleted.</p>
+      <main className="flex min-h-screen flex-col bg-app text-ink">
+        <ViewerHeader />
+        <div className="flex flex-1 items-center justify-center px-4 py-6">
+          <div className="w-full max-w-[400px] rounded-xl border border-line bg-surface px-6 py-9 text-center">
+            <svg width={48} height={48} viewBox="0 0 48 48" fill="none" aria-hidden="true" className="mx-auto mb-4 text-muted">
+              <circle cx={24} cy={24} r={22} stroke="var(--color-line)" strokeWidth={2} />
+              <path d="M24 14v12" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" />
+              <circle cx={24} cy={33} r={1.5} fill="currentColor" />
+            </svg>
+            <h1 className="m-0 mb-1.5 font-display text-2xl font-bold uppercase tracking-[0.03em] text-ink">Play not found</h1>
+            <p className="m-0 text-sm text-muted">This share link may have expired or been deleted.</p>
+          </div>
         </div>
       </main>
     );
@@ -267,155 +353,156 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
 
   const hasMultipleSteps = steps.length > 1;
   const hasMultipleScenes = scenes.length > 1;
+  const sceneCountLabel = `${scenes.length} ${scenes.length === 1 ? "scene" : "scenes"}`;
+  const categoryLabel = CATEGORY_LABELS[play.category];
+  // Share of the current scene that has been reached, by step (the playback
+  // position only re-renders when the step changes, not on every frame).
+  // Empty at the first step, full at the last; a single-step scene is full once it is current.
+  const sceneProgress = steps.length > 1 ? stepIndex / (steps.length - 1) : 1;
 
   return (
-    <main style={{ minHeight: "100vh", background: "#F9FAFB", display: "flex", flexDirection: "column" }}>
-      {/* Header */}
-      <header style={{ background: "#fff", borderBottom: "1px solid #E5E7EB", padding: "0 20px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 52, gap: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <LogoMark size={24} />
-          <span style={{ fontSize: 15, fontWeight: 700, color: "#111827" }}>{play.title}</span>
-        </div>
-        <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 99, background: "#EEF2FF", color: "#4338CA", letterSpacing: "0.03em" }}>
-          READ-ONLY
-        </span>
-      </header>
+    <main className="flex min-h-screen flex-col bg-app text-sm text-ink">
+      <ViewerHeader />
 
-      {/* Scene note */}
-      {scene?.note && (
-        <div style={{ background: "#fff", borderBottom: "1px solid #F3F4F6", padding: "8px 20px" }}>
-          <p style={{ margin: 0, fontSize: 13, color: "#6B7280" }}>{scene.note}</p>
+      <div className="mx-auto flex w-full max-w-[760px] flex-1 flex-col items-center gap-[18px] px-4 py-7 sm:px-6">
+        {/* Title + meta */}
+        <div className="flex max-w-full flex-col items-center gap-1 text-center">
+          <h1 dir="auto" className="m-0 max-w-full break-words font-display text-[34px] font-bold uppercase leading-tight tracking-[0.03em]">
+            {play.title}
+          </h1>
+          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-muted">
+            <span>
+              {categoryLabel ? `${categoryLabel} · ` : ""}{sceneCountLabel}
+            </span>
+            <span className="whitespace-nowrap rounded-full bg-chip px-2.5 py-0.5 font-display text-xs font-semibold uppercase tracking-[0.06em] text-ink">
+              Read-only
+            </span>
+          </div>
         </div>
-      )}
 
-      {/* Court */}
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "24px 16px", background: "#F3F4F6" }}>
+        {/* Court */}
         {scene ? (
           <CourtWithPlayers
             sceneId={scene.id}
             scene={scene}
             variant={(play.courtType ?? "half") as CourtVariant}
-            className="w-full max-w-xl pointer-events-none"
+            className="w-full max-w-[620px] pointer-events-none"
             readOnly
             flipped={effectiveFlipped}
             activeStep={currentStep}
           />
         ) : (
-          <p style={{ color: "#9CA3AF", fontSize: 14 }}>No scenes in this play.</p>
-        )}
-      </div>
-
-      {/* Controls bar */}
-      <div style={{ background: "#fff", borderTop: "1px solid #E5E7EB", padding: "12px 16px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-
-        {/* Step controls */}
-        {hasMultipleSteps && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button
-              onClick={() => stepBy(-1)}
-              disabled={prevStep === undefined}
-              aria-label="Previous step"
-              style={{ padding: "5px 10px", borderRadius: 6, border: "1.5px solid #E5E7EB", background: "#fff", color: prevStep === undefined ? "#D1D5DB" : "#374151", cursor: prevStep === undefined ? "default" : "pointer", display: "flex", alignItems: "center", gap: 4 }}
-            >
-              <ChevronLeftIcon size={14} /> Step
-            </button>
-
-            <button
-              onClick={togglePlay}
-              aria-label={isPlaying ? "Pause" : "Play steps"}
-              style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: "#1E3A5F", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
-            >
-              {isPlaying ? <PauseIcon /> : <PlayIcon />}
-              {isPlaying ? "Pause" : "Play"}
-            </button>
-
-            <button
-              onClick={() => stepBy(1)}
-              disabled={nextStep === undefined}
-              aria-label="Next step"
-              style={{ padding: "5px 10px", borderRadius: 6, border: "1.5px solid #E5E7EB", background: "#fff", color: nextStep === undefined ? "#D1D5DB" : "#374151", cursor: nextStep === undefined ? "default" : "pointer", display: "flex", alignItems: "center", gap: 4 }}
-            >
-              Step <ChevronRightIcon size={14} />
-            </button>
-
-            <span style={{ fontSize: 12, color: "#9CA3AF", minWidth: 54, textAlign: "center" }}>
-              Step {stepIndex + 1} / {steps.length}
-            </span>
-          </div>
+          <p className="m-0 py-10 text-muted">No scenes in this play.</p>
         )}
 
-        {/* Scene navigation */}
-        {hasMultipleScenes && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {/* Go to beginning */}
-            <button
-              onClick={goToBeginning}
-              disabled={atStart}
-              aria-label="Go to beginning"
-              title="Go to beginning"
-              style={{ padding: "6px 10px", borderRadius: 8, border: "1.5px solid #E5E7EB", background: "#fff", fontSize: 13, fontWeight: 500, color: atStart ? "#D1D5DB" : "#374151", cursor: atStart ? "default" : "pointer" }}
+        {/* Control card */}
+        <div className="flex w-full max-w-[620px] flex-col gap-3.5 rounded-xl border border-line bg-surface p-4">
+          {/* Progress: one segment per scene, filled up to the current step */}
+          {hasMultipleScenes && (
+            <div
+              className="-my-[19px] grid gap-1.5"
+              style={{ gridTemplateColumns: `repeat(${scenes.length}, minmax(0, 1fr))` }}
             >
-              ⏮
-            </button>
-
-            <button
-              onClick={() => sceneBy(-1)}
-              disabled={sceneIndex === 0}
-              aria-label="Previous scene"
-              style={{ padding: "6px 16px", borderRadius: 8, border: "1.5px solid #E5E7EB", background: "#fff", fontSize: 13, fontWeight: 500, color: sceneIndex === 0 ? "#D1D5DB" : "#374151", cursor: sceneIndex === 0 ? "default" : "pointer" }}
-            >
-              ← Prev scene
-            </button>
-
-            {/* Scene dots */}
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               {scenes.map((s, i) => (
                 <button
                   key={s.id}
+                  type="button"
                   onClick={() => goToScene(i)}
                   aria-label={`Scene ${i + 1}${s.note ? ` — ${s.note}` : ""}`}
-                  style={{ width: i === sceneIndex ? 22 : 8, height: 8, borderRadius: 4, background: i === sceneIndex ? "#1E3A5F" : "#D1D5DB", border: "none", cursor: "pointer", padding: 0, transition: "width 0.2s, background 0.2s" }}
-                />
+                  aria-current={i === sceneIndex ? "step" : undefined}
+                  className="flex h-11 items-center"
+                >
+                  <span className="relative block h-1.5 w-full overflow-hidden rounded-[3px] bg-line">
+                    <span
+                      className="absolute inset-y-0 left-0 rounded-[3px] bg-accent"
+                      style={{ width: `${(i < sceneIndex ? 1 : i === sceneIndex ? sceneProgress : 0) * 100}%` }}
+                    />
+                  </span>
+                </button>
               ))}
             </div>
+          )}
 
-            <button
-              onClick={() => sceneBy(1)}
-              disabled={sceneIndex >= scenes.length - 1}
-              aria-label="Next scene"
-              style={{ padding: "6px 16px", borderRadius: 8, border: "1.5px solid #E5E7EB", background: "#fff", fontSize: 13, fontWeight: 500, color: sceneIndex >= scenes.length - 1 ? "#D1D5DB" : "#374151", cursor: sceneIndex >= scenes.length - 1 ? "default" : "pointer" }}
-            >
-              Next scene →
-            </button>
+          {/* Transport */}
+          <div className="relative flex flex-wrap items-center justify-center gap-3">
+            {hasMultipleScenes && (
+              <>
+                <button type="button" onClick={goToBeginning} disabled={atStart} aria-label="Go to beginning" title="Go to beginning" className={ROUND_BUTTON}>
+                  <RestartIcon />
+                </button>
+                <button type="button" onClick={() => sceneBy(-1)} disabled={sceneIndex === 0} aria-label="Previous scene" title="Previous scene" className={ROUND_BUTTON}>
+                  <PrevSceneIcon />
+                </button>
+              </>
+            )}
+
+            {(hasMultipleSteps || hasMultipleScenes) && (
+              <button
+                type="button"
+                onClick={togglePlay}
+                aria-label={isPlaying ? "Pause" : "Play steps"}
+                className="flex h-14 w-14 flex-none items-center justify-center rounded-full bg-accent text-accent-ink transition-opacity hover:opacity-90"
+              >
+                {isPlaying ? <PauseIcon /> : <PlayIcon />}
+              </button>
+            )}
+
+            {hasMultipleScenes && (
+              <button type="button" onClick={() => sceneBy(1)} disabled={sceneIndex >= scenes.length - 1} aria-label="Next scene" title="Next scene" className={ROUND_BUTTON}>
+                <NextSceneIcon />
+              </button>
+            )}
+
+            {scenes.length > 0 && (
+              <span className="tabular-nums text-muted">
+                Scene {sceneIndex + 1} of {scenes.length}
+              </span>
+            )}
+
+            {/* Speed control */}
+            <div role="group" aria-label="Playback speed" className="flex overflow-hidden rounded-lg border border-line">
+              {([0.5, 1, 1.5, 2] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSpeed(s)}
+                  aria-pressed={speed === s}
+                  aria-label={`Speed ${s}x`}
+                  className={`h-11 min-w-11 px-3 text-[13px] transition-colors ${
+                    speed === s ? "bg-chip font-semibold text-ink" : "bg-transparent text-muted hover:text-ink"
+                  }`}
+                >
+                  {s}x
+                </button>
+              ))}
+            </div>
           </div>
-        )}
 
-        {/* Speed control */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 11, color: "#9CA3AF", marginRight: 2 }}>Speed</span>
-          {([0.5, 1, 1.5, 2] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setSpeed(s)}
-              aria-pressed={speed === s}
-              style={{
-                padding: "3px 9px",
-                borderRadius: 99,
-                border: speed === s ? "1.5px solid #1E3A5F" : "1.5px solid #E5E7EB",
-                background: speed === s ? "#1E3A5F" : "#fff",
-                color: speed === s ? "#fff" : "#6B7280",
-                fontSize: 11,
-                fontWeight: speed === s ? 700 : 400,
-                cursor: "pointer",
-              }}
-            >
-              {s}×
-            </button>
-          ))}
+          {/* Step controls */}
+          {hasMultipleSteps && (
+            <div className="flex flex-wrap items-center justify-center gap-3 border-t border-line pt-3.5">
+              <button type="button" onClick={() => stepBy(-1)} disabled={prevStep === undefined} aria-label="Previous step" className={STEP_BUTTON}>
+                <ChevronLeftIcon size={14} /> Step
+              </button>
+              <span className="min-w-[72px] text-center tabular-nums text-muted">
+                Step {stepIndex + 1} / {steps.length}
+              </span>
+              <button type="button" onClick={() => stepBy(1)} disabled={nextStep === undefined} aria-label="Next step" className={STEP_BUTTON}>
+                Step <ChevronRightIcon size={14} />
+              </button>
+            </div>
+          )}
         </div>
 
+        {/* Scene note */}
+        {scene?.note && (
+          <p dir="auto" className="m-0 max-w-[620px] whitespace-pre-line break-words text-center leading-normal text-muted">
+            {scene.note}
+          </p>
+        )}
+
         {/* Keyboard hint */}
-        <p style={{ margin: 0, fontSize: 11, color: "#C4C4C4" }}>
+        <p className="m-0 text-center text-xs text-muted">
           Space: play/pause · ← →: step · [ ]: scene · Home: restart
         </p>
       </div>

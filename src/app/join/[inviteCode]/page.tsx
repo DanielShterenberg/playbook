@@ -18,9 +18,34 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeam } from "@/contexts/TeamContext";
 import { joinTeamByInviteCode } from "@/lib/team";
+import Logo from "@/components/brand/Logo";
 
 interface JoinTeamPageProps {
   params: { inviteCode: string };
+}
+
+const PAGE = "flex min-h-screen flex-col items-center justify-center bg-app px-4 py-6 text-ink";
+
+/** Themed full-page status line with a spinner (auth resolving / joining). */
+function JoinStatus({ label }: { label: string }) {
+  return (
+    <main className={PAGE}>
+      <div role="status" className="flex items-center gap-2.5 text-[15px] text-muted">
+        <svg width={18} height={18} viewBox="0 0 24 24" fill="none" aria-hidden="true" className="animate-spin">
+          <circle
+            cx={12}
+            cy={12}
+            r={10}
+            stroke="currentColor"
+            strokeWidth={3}
+            strokeDasharray="31 31"
+            strokeLinecap="round"
+          />
+        </svg>
+        {label}
+      </div>
+    </main>
+  );
 }
 
 export default function JoinTeamPage({ params }: JoinTeamPageProps) {
@@ -55,44 +80,16 @@ export default function JoinTeamPage({ params }: JoinTeamPageProps) {
       });
   }, [user, authLoading, inviteCode, status, refresh, router]);
 
-  if (authLoading || !user) return null;
+  // Auth resolving, or about to redirect to sign-in
+  if (authLoading || !user) return <JoinStatus label="Loading…" />;
 
   if (status === "error") {
     return (
-      <main
-        style={{
-          minHeight: "100vh",
-          background: "#F9FAFB",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 24,
-        }}
-      >
-        <div
-          style={{
-            background: "#fff",
-            borderRadius: 16,
-            boxShadow: "0 4px 24px rgba(0,0,0,0.08)",
-            padding: "40px 36px",
-            maxWidth: 400,
-            width: "100%",
-            textAlign: "center",
-          }}
-        >
-          <div
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: "50%",
-              background: "#FEE2E2",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 16px",
-            }}
-          >
-            <svg width={22} height={22} viewBox="0 0 20 20" fill="#B91C1C" aria-hidden="true">
+      <main className={PAGE}>
+        <div className="w-full max-w-[400px] rounded-xl border border-line bg-surface px-5 py-9 text-center sm:px-8">
+          <Logo size={44} stacked />
+          <div className="mx-auto mb-4 mt-7 flex h-12 w-12 items-center justify-center rounded-full bg-chip text-danger">
+            <svg width={22} height={22} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path
                 fillRule="evenodd"
                 d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"
@@ -100,22 +97,14 @@ export default function JoinTeamPage({ params }: JoinTeamPageProps) {
               />
             </svg>
           </div>
-          <h1 style={{ margin: "0 0 8px", fontSize: 20, fontWeight: 700, color: "#111827" }}>
+          <h1 className="m-0 mb-2 font-display text-2xl font-bold uppercase tracking-[0.03em] text-ink">
             Could not join team
           </h1>
-          <p style={{ margin: "0 0 24px", fontSize: 14, color: "#6B7280" }}>{errorMsg}</p>
+          <p role="alert" className="m-0 mb-6 break-words text-sm text-muted">{errorMsg}</p>
           <button
+            type="button"
             onClick={() => router.push("/playbook")}
-            style={{
-              padding: "10px 24px",
-              borderRadius: 8,
-              border: "none",
-              background: "#4F46E5",
-              color: "#fff",
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
+            className="inline-flex h-11 items-center justify-center rounded-lg bg-accent px-6 text-sm font-semibold text-accent-ink transition-opacity hover:opacity-90"
           >
             Go to Playbook
           </button>
@@ -125,39 +114,5 @@ export default function JoinTeamPage({ params }: JoinTeamPageProps) {
   }
 
   // Joining…
-  return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#F9FAFB",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 10,
-        color: "#6B7280",
-        fontSize: 15,
-      }}
-    >
-      <svg
-        width={18}
-        height={18}
-        viewBox="0 0 24 24"
-        fill="none"
-        aria-hidden="true"
-        style={{ animation: "spin 1s linear infinite" }}
-      >
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        <circle
-          cx={12}
-          cy={12}
-          r={10}
-          stroke="currentColor"
-          strokeWidth={3}
-          strokeDasharray="31 31"
-          strokeLinecap="round"
-        />
-      </svg>
-      Joining team…
-    </main>
-  );
+  return <JoinStatus label="Joining team…" />;
 }
