@@ -37,16 +37,9 @@ export type { CourtVariant } from "@/lib/courtLayout";
 // Colours
 // ---------------------------------------------------------------------------
 // Every colour comes from a CourtPalette (courtPalette.ts). The default is the
-// light palette, which is what the exports use; the named constants below are
-// its values, for callers that need a single colour.
-/** Floor colour of the light (default) palette. */
-export const COLOR_COURT = LIGHT_COURT_PALETTE.floor;
-/** Out-of-bounds margin colour of the light (default) palette. */
+// light palette, which is what the exports use.
+/** Out-of-bounds margin colour of the light (default) palette — the video exporter's padding. */
 export const COLOR_OOB = LIGHT_COURT_PALETTE.oob;
-/** Paint (free-throw lane) fill of the light (default) palette. */
-export const DEFAULT_COLOR_PAINT = LIGHT_COURT_PALETTE.paint;
-/** Court line colour of the light (default) palette. */
-export const COLOR_LINE = LIGHT_COURT_PALETTE.line;
 /** Court line width in the context's current units (CSS px in the editor). */
 export const COLOR_LINE_WIDTH_PX = 2; // base line width — scaled by canvas resolution
 

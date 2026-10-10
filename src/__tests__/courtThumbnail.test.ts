@@ -21,6 +21,7 @@ import * as courtLayoutModule from "@/lib/courtLayout";
 import * as tokenSizingModule from "@/lib/tokenSizing";
 import * as courtRenderingModule from "@/lib/courtRendering";
 import * as useThemeModule from "@/hooks/useTheme";
+import * as courtPaletteModule from "@/lib/courtPalette";
 import * as courtDimensions from "@/components/court/courtDimensions";
 import {
   computeCourtLayout,
@@ -75,6 +76,7 @@ function loadComponent(): (props: ThumbnailProps) => unknown {
     if (id === "@/lib/tokenSizing") return tokenSizingModule;
     if (id === "@/lib/courtRendering") return courtRenderingModule;
     if (id === "@/hooks/useTheme") return useThemeModule;
+    if (id === "@/lib/courtPalette") return courtPaletteModule;
     if (id === "./courtDimensions" || id === "@/components/court/courtDimensions") return courtDimensions;
     if (id.startsWith(".") || id.startsWith("@/")) throw new Error(`unmapped import ${id}`);
     return nodeRequire(id);
@@ -380,7 +382,9 @@ describe("CourtThumbnail", () => {
     for (const variant of VARIANTS) {
       const svg = render({ ...base, scene: makeScene(), width: 120, variant });
       const rects = tags(svg, "rect");
-      expect(rects.length).toBe(3); // floor, lane, frame
+      expect(rects.length).toBe(4); // out-of-bounds backdrop, floor, lane, frame
+      expect(rects[0].fill).toBe("#DCE1E8");
+      expect(rects[1].fill).toBe("#FFFFFF");
       const lane = rects.filter((r) => r.fill === PAINT);
       expect(lane.length).toBe(1);
       expect(lane[0].stroke).toBeDefined();
@@ -490,6 +494,13 @@ describe("CourtThumbnail", () => {
       expect(b.x).toBe(h.x);
       expect(b.y).toBe(Math.max(b.r, h.y + thumbnailBallAttachOffsetY(6, 4)));
     });
+  });
+
+  it("flipped half court: the band outside the court is the out-of-bounds colour, as in paintCourt", () => {
+    const svg = render({ ...base, scene: makeScene(), width: 120, variant: "half", flipped: true });
+    const rects = tags(svg, "rect");
+    expect(rects[0].fill).toBe("#DCE1E8"); // backdrop, outside the flip group
+    expect(svg.indexOf("<g")).toBeLessThan(svg.indexOf('fill="#FFFFFF"')); // floor is inside it
   });
 
   it("takes court and token colours from the shared modules (no hex literals of its own)", () => {

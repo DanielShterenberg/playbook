@@ -17,10 +17,7 @@
 import { describe, it, expect } from "vitest";
 import { createHash } from "node:crypto";
 import {
-  COLOR_COURT,
   COLOR_OOB,
-  DEFAULT_COLOR_PAINT,
-  COLOR_LINE,
   COLOR_LINE_WIDTH_PX,
   drawHalfCourtInner,
   paintCourt,
@@ -29,6 +26,10 @@ import { computeCourtLayout, normToCanvasPx, type CourtVariant } from "@/lib/cou
 import { CENTRE_CIRCLE_RADIUS, LANE_TOP, LANE_LEFT, LANE_RIGHT } from "@/components/court/courtDimensions";
 import * as courtRenderingModule from "@/lib/courtRendering";
 import { DARK_COURT_PALETTE, LIGHT_COURT_PALETTE } from "@/lib/courtPalette";
+
+const COLOR_COURT = LIGHT_COURT_PALETTE.floor;
+const DEFAULT_COLOR_PAINT = LIGHT_COURT_PALETTE.paint;
+const COLOR_LINE = LIGHT_COURT_PALETTE.line;
 
 // ---------------------------------------------------------------------------
 // Recording mock context
@@ -105,10 +106,7 @@ describe("recording ctx", () => {
 
 describe("colours", () => {
   it("are the light palette's", () => {
-    expect(COLOR_COURT).toBe(LIGHT_COURT_PALETTE.floor);
     expect(COLOR_OOB).toBe(LIGHT_COURT_PALETTE.oob);
-    expect(DEFAULT_COLOR_PAINT).toBe(LIGHT_COURT_PALETTE.paint);
-    expect(COLOR_LINE).toBe(LIGHT_COURT_PALETTE.line);
     expect(LIGHT_COURT_PALETTE).toMatchObject({ floor: "#FFFFFF", oob: "#DCE1E8", line: "#2A3442" });
     expect(DARK_COURT_PALETTE).toMatchObject({ floor: "#1B2330", oob: "#141A23", line: "#C9D2DE" });
     expect(COLOR_LINE_WIDTH_PX).toBe(2);

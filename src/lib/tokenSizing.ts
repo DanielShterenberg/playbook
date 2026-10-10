@@ -43,14 +43,8 @@ export const BALL_RADIUS = 12;
 // ---------------------------------------------------------------------------
 
 // Token colours come from a CourtPalette (courtPalette.ts), per theme. These
-// are the light (default) palette's values — what the exports draw and what
-// the team colour picker offers as defaults.
-/** Basketball fill. */
-export const COLOR_BALL = LIGHT_COURT_PALETTE.ball;
-/** Basketball highlight arc. */
-export const COLOR_BALL_HIGHLIGHT = LIGHT_COURT_PALETTE.ballHighlight;
-/** Basketball seam lines and outline. */
-export const COLOR_BALL_SEAM = LIGHT_COURT_PALETTE.ballSeam;
+// are the light (default) palette's team colours — what the team colour picker
+// offers as defaults.
 /** Offense token fill when the play has no custom team colours. */
 export const DEFAULT_OFFENSE_COLOR = LIGHT_COURT_PALETTE.offenseFill;
 /** Defense token fill when the play has no custom team colours. */

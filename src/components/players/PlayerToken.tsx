@@ -16,7 +16,7 @@
 import { useRef, useCallback } from "react";
 import type { PlayerDisplayMode } from "@/lib/store";
 import { PLAYER_RADIUS, playerScale, playerLabelFontSize } from "@/lib/tokenSizing";
-import { contrastText } from "@/lib/courtPalette";
+import { contrastText, customTeamColor } from "@/lib/courtPalette";
 import { useCourtPalette } from "@/hooks/useTheme";
 
 // ---------------------------------------------------------------------------
@@ -213,7 +213,9 @@ export default function PlayerToken({
   );
 
   const isOffense = side === "offense";
-  const fillColor = isOffense ? offenseColor ?? palette.offenseFill : defenseColor ?? palette.defenseFill;
+  const fillColor = isOffense
+    ? customTeamColor(offenseColor) ?? palette.offenseFill
+    : customTeamColor(defenseColor) ?? palette.defenseFill;
   const strokeColor = palette.tokenStroke;
   const textColor = contrastText(fillColor);
   const strokeWidth = 2;

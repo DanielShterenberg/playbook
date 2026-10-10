@@ -19,6 +19,7 @@ import { createShareToken } from "@/lib/team";
 import PresentationOverlay from "@/components/editor/PresentationOverlay";
 import CommentsPanel from "@/components/editor/CommentsPanel";
 import { DEFAULT_OFFENSE_COLOR, DEFAULT_DEFENSE_COLOR } from "@/lib/tokenSizing";
+import { customTeamColor } from "@/lib/courtPalette";
 
 const CATEGORY_OPTIONS: { value: Category; label: string }[] = [
   { value: "offense", label: "Offense" },
@@ -110,8 +111,8 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
     setEditDesc(currentPlay.description);
     setEditCategory(currentPlay.category);
     setEditCourtType(currentPlay.courtType);
-    setEditOffenseColor(currentPlay.colors?.offense ?? DEFAULT_OFFENSE_COLOR);
-    setEditDefenseColor(currentPlay.colors?.defense ?? DEFAULT_DEFENSE_COLOR);
+    setEditOffenseColor(customTeamColor(currentPlay.colors?.offense) ?? DEFAULT_OFFENSE_COLOR);
+    setEditDefenseColor(customTeamColor(currentPlay.colors?.defense) ?? DEFAULT_DEFENSE_COLOR);
     setEditError("");
     setShowEdit(true);
   }

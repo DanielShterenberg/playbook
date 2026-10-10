@@ -170,7 +170,6 @@ describe("computeTokenSizes", () => {
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
-  COLOR_BALL,
   DEFAULT_OFFENSE_COLOR,
   DEFAULT_DEFENSE_COLOR,
   thumbnailBallAttachOffsetY,
@@ -180,7 +179,6 @@ import {
 
 describe("token colours — one exported source", () => {
   it("are the editor's", () => {
-    expect(COLOR_BALL).toBe("#F2B33D");
     expect(DEFAULT_OFFENSE_COLOR).toBe("#FF7A1A");
     expect(DEFAULT_DEFENSE_COLOR).toBe("#141A23");
   });
@@ -214,12 +212,6 @@ describe("token colours — one exported source", () => {
       expect(src, f).toMatch(/palette\.ballSeam/);
     }
     expect(readFileSync(path.resolve(process.cwd(), "src/app/play/[id]/EditorHeader.tsx"), "utf8")).toMatch(/import \{[^}]*DEFAULT_OFFENSE_COLOR[^}]*\} from "@\/lib\/tokenSizing"/);
-  });
-
-  it("ball highlight and seam colours", async () => {
-    const m = await import("@/lib/tokenSizing");
-    expect(m.COLOR_BALL_HIGHLIGHT).toBe("#FFE2A6");
-    expect(m.COLOR_BALL_SEAM).toBe("#141A23");
   });
 });
 

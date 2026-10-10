@@ -37,6 +37,7 @@
 
 import { computeThumbnailLayout, normToCanvasPx, type CourtVariant } from "@/lib/courtLayout";
 import { useCourtPalette } from "@/hooks/useTheme";
+import { customTeamColor } from "@/lib/courtPalette";
 import {
   thumbnailBallAttachOffsetY,
   thumbnailBallRadius,
@@ -106,8 +107,8 @@ export default function CourtThumbnail({
   fluid = false,
 }: CourtThumbnailProps) {
   const palette = useCourtPalette();
-  const offenseColor = offenseColorProp ?? palette.offenseFill;
-  const defenseColor = defenseColorProp ?? palette.defenseFill;
+  const offenseColor = customTeamColor(offenseColorProp) ?? palette.offenseFill;
+  const defenseColor = customTeamColor(defenseColorProp) ?? palette.defenseFill;
   const layout = computeThumbnailLayout(width);
   const flipped = variant === "half" && sceneFlipped;
   const W = layout.innerW;
@@ -138,6 +139,9 @@ export default function CourtThumbnail({
   // line), "0 0 0" bows downward. Do not edit them to flip — use a transform.
   const court = (
     <>
+      {/* Floor of the court itself; the frame behind it is out-of-bounds */}
+      <rect x={0} y={0} width={W} height={H} fill={palette.floor} />
+
       {/* Free-throw lane: the editor's paint (never a team colour) and its
           outline in one rect; its top edge is the free-throw line */}
       <rect x={laneX} y={laneY} width={laneW} height={laneH} fill={palette.paint} stroke={palette.line} strokeWidth={lineWidth} />
@@ -217,8 +221,8 @@ export default function CourtThumbnail({
           : { display: "block", borderRadius: cornerRadius }
       }
     >
-      {/* Floor (also the out-of-bounds band a flipped court shows) */}
-      <rect x={0} y={0} width={W} height={H} fill={palette.floor} rx={cornerRadius} />
+      {/* Out-of-bounds colour — what shows in the band of a flipped court, as in paintCourt */}
+      <rect x={0} y={0} width={W} height={H} fill={palette.oob} rx={cornerRadius} />
 
       {flipped ? <g transform={`translate(0 ${layout.totalHeight}) scale(1 -1)`}>{court}</g> : court}
 

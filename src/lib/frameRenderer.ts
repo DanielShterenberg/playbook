@@ -39,7 +39,7 @@ import {
   PLAYER_RADIUS_RATIO,
   playerLabelFontSize,
 } from "@/lib/tokenSizing";
-import { LIGHT_COURT_PALETTE, contrastText, type CourtPalette } from "@/lib/courtPalette";
+import { LIGHT_COURT_PALETTE, contrastText, customTeamColor, type CourtPalette } from "@/lib/courtPalette";
 
 // ---------------------------------------------------------------------------
 // Animation frame presets (shared by the GIF and video encoders)
@@ -99,15 +99,18 @@ function drawPlayer(
   py: number,
   r: number,
   style: FrameStyle,
+  palette: CourtPalette,
 ): void {
-  const { displayMode = "numbers", playerNames = {}, offenseColor, defenseColor, palette = LIGHT_COURT_PALETTE } = style;
+  const { displayMode = "numbers", playerNames = {}, offenseColor, defenseColor } = style;
   const isOffense = side === "offense";
   // Scale all size-based values proportionally to the token radius.
   const s = playerScale(r);
 
   // Colours mirror PlayerToken.tsx: team colour else the palette's fill, the
   // palette's outline, and a label that contrasts with the fill.
-  const fill = isOffense ? offenseColor ?? palette.offenseFill : defenseColor ?? palette.defenseFill;
+  const fill = isOffense
+    ? customTeamColor(offenseColor) ?? palette.offenseFill
+    : customTeamColor(defenseColor) ?? palette.defenseFill;
 
   ctx.save();
   ctx.globalAlpha = 0.25;
@@ -461,7 +464,7 @@ export function renderSceneToCtx(
   for (const p of scene.players.defense) {
     if (p.visible) {
       const { x, y } = pos(p);
-      drawPlayer(ctx, "defense", p.position, x, y, playerR, style);
+      drawPlayer(ctx, "defense", p.position, x, y, playerR, style, palette);
     }
   }
 
@@ -469,7 +472,7 @@ export function renderSceneToCtx(
   for (const p of scene.players.offense) {
     if (p.visible) {
       const { x, y } = pos(p);
-      drawPlayer(ctx, "offense", p.position, x, y, playerR, style);
+      drawPlayer(ctx, "offense", p.position, x, y, playerR, style, palette);
     }
   }
 

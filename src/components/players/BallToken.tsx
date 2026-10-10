@@ -241,6 +241,8 @@ export default function BallToken({
   // -------------------------------------------------------------------------
 
   const r = radius;
+  // Stroke widths are authored at BALL_RADIUS and scale with the ball, as in drawBall
+  const s = ballScale(r);
 
   return (
     <g
@@ -255,14 +257,14 @@ export default function BallToken({
       <circle r={r} cx={1} cy={2} fill="rgba(0,0,0,0.3)" />
 
       {/* Ball body */}
-      <circle r={r} fill={palette.ball} stroke={palette.ballSeam} strokeWidth={1.5 * ballScale(r)} />
+      <circle r={r} fill={palette.ball} stroke={palette.ballSeam} strokeWidth={1.5 * s} />
 
       {/* Highlight arc (upper-left quadrant) */}
       <path
         d={`M ${-r * 0.5} ${-r * 0.6} A ${r * 0.7} ${r * 0.7} 0 0 1 ${r * 0.4} ${-r * 0.5}`}
         fill="none"
         stroke={palette.ballHighlight}
-        strokeWidth={1.5}
+        strokeWidth={1.5 * s}
         strokeLinecap="round"
         opacity={0.5}
       />
@@ -272,7 +274,7 @@ export default function BallToken({
         d={`M 0 ${-r} C ${r * 0.55} ${-r * 0.5} ${r * 0.55} ${r * 0.5} 0 ${r}`}
         fill="none"
         stroke={palette.ballSeam}
-        strokeWidth={1.2}
+        strokeWidth={1.2 * s}
         strokeLinecap="round"
       />
 
@@ -281,7 +283,7 @@ export default function BallToken({
         d={`M ${-r} 0 C ${-r * 0.5} ${r * 0.4} ${r * 0.5} ${r * 0.4} ${r} 0`}
         fill="none"
         stroke={palette.ballSeam}
-        strokeWidth={1.2}
+        strokeWidth={1.2 * s}
         strokeLinecap="round"
       />
     </g>

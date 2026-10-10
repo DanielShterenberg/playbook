@@ -23,6 +23,7 @@ import { signOut } from "@/lib/auth";
 import { loadPlaysForUser, loadPlaysForTeam } from "@/lib/db";
 import { ensureInviteDoc } from "@/lib/team";
 import CreateTeamModal from "@/components/playbook/CreateTeamModal";
+import { useCourtPalette } from "@/hooks/useTheme";
 
 const CATEGORY_FILTERS: { value: Category | "all"; label: string }[] = [
   { value: "all", label: "All" },
@@ -38,6 +39,7 @@ const CATEGORY_FILTERS: { value: Category | "all"; label: string }[] = [
 export default function PlaybookPage() {
   const plays = useStore((s) => s.plays);
   const setPlays = useStore((s) => s.setPlays);
+  const palette = useCourtPalette();
   const [showModal, setShowModal] = useState(false);
   const [showCreateTeam, setShowCreateTeam] = useState(false);
   const [search, setSearch] = useState("");
@@ -381,8 +383,8 @@ export default function PlaybookPage() {
               aria-hidden="true"
               style={{ opacity: 0.25 }}
             >
-              <rect width={100} height={94} fill="#F0C878" rx={8} />
-              <rect x={34} y={56} width={32} height={38} fill="#E07B39" />
+              <rect width={100} height={94} fill={palette.floor} rx={8} />
+              <rect x={34} y={56} width={32} height={38} fill={palette.paint} />
               <rect width={100} height={94} fill="none" stroke="#9CA3AF" strokeWidth={2} rx={8} />
               <line x1={34} y1={56} x2={66} y2={56} stroke="#9CA3AF" strokeWidth={1.5} />
               <path

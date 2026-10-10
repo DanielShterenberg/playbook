@@ -41,9 +41,18 @@ export function toggleTheme(): void {
 
 export function subscribeTheme(listener: () => void): () => void {
   listeners.add(listener);
+  if (listeners.size === 1) window.addEventListener("storage", onStorage);
   return () => {
     listeners.delete(listener);
+    if (listeners.size === 0) window.removeEventListener("storage", onStorage);
   };
+}
+
+/** Another tab changed the theme: follow it so canvas colours and CSS stay in step. */
+function onStorage(e: StorageEvent): void {
+  if (e.key !== THEME_STORAGE_KEY) return;
+  document.documentElement.dataset.theme = e.newValue === "dark" ? "dark" : "light";
+  listeners.forEach((l) => l());
 }
 
 /**
