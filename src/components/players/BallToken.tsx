@@ -20,13 +20,14 @@
  */
 
 import { useRef, useCallback } from "react";
+import { BALL_RADIUS } from "@/lib/tokenSizing";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Radius of the ball token in CSS pixels. */
-const BALL_RADIUS = 12;
+// Default radius (BALL_RADIUS, 12 CSS px) lives in @/lib/tokenSizing, shared
+// with every export path.
 
 /**
  * Distance (in CSS pixels) within which releasing the ball attaches it to a

@@ -25,9 +25,9 @@ import { exportPlayToPdf, type PdfLayout } from "@/lib/exportPdf";
 // ---------------------------------------------------------------------------
 
 const PNG_RESOLUTION_OPTIONS: { label: string; value: ExportResolution; description: string }[] = [
-  { label: "Standard (1×)", value: "1x", description: "~800 × 752 px" },
-  { label: "High (2×)", value: "2x", description: "~1600 × 1504 px" },
-  { label: "Ultra (3×)", value: "3x", description: "~2400 × 2256 px" },
+  { label: "Standard (1×)", value: "1x", description: "800 px wide" },
+  { label: "High (2×)", value: "2x", description: "1600 px wide" },
+  { label: "Ultra (3×)", value: "3x", description: "2400 px wide" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -172,11 +172,17 @@ export default function ExportMenu() {
       const sceneIndex = (currentPlay?.scenes.findIndex((s) => s.id === scene.id) ?? 0) + 1;
       const filename = `${safeTitle}-scene-${sceneIndex}`;
       const flipped = (scene.flipped ?? currentPlay?.flipped) === true;
-      exportSceneAsPNG(scene, 800, pngResolution, filename, flipped);
+      exportSceneAsPNG(scene, 800, pngResolution, filename, flipped, {
+        variant: currentPlay?.courtType,
+        displayMode,
+        playerNames,
+        offenseColor: currentPlay?.colors?.offense,
+        defenseColor: currentPlay?.colors?.defense,
+      });
     } finally {
       setTimeout(() => setExportMode("idle"), 500);
     }
-  }, [scene, currentPlay, pngResolution]);
+  }, [scene, currentPlay, pngResolution, displayMode, playerNames]);
 
   const handleExportPDF = useCallback(async () => {
     if (!currentPlay) return;
