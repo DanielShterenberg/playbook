@@ -231,11 +231,11 @@ describe("CourtThumbnail", () => {
   it("is an SVG of the play-area window: width × innerH, no out-of-bounds margin", () => {
     for (const w of WIDTHS) {
       for (const { variant, flipped } of CASES) {
-        const l = computeThumbnailLayout(w, variant);
+        const l = computeThumbnailLayout(w);
         const [svg] = tags(render({ ...base, scene: makeScene(), width: w, variant, flipped }), "svg");
         expect(svg.width).toBe(String(w));
         expect(svg.height).toBe(String(l.innerH));
-        expect(svg.viewBox).toBe(`0 ${l.playAreaOffsetY} ${w} ${l.innerH}`);
+        expect(svg.viewBox).toBe(`0 0 ${w} ${l.innerH}`);
       }
     }
   });
@@ -244,14 +244,15 @@ describe("CourtThumbnail", () => {
     for (const w of WIDTHS) {
       for (const { variant, flipped } of CASES) {
         const scene = makeScene();
-        const l = computeThumbnailLayout(w, variant);
+        const l = computeThumbnailLayout(w);
+        const shown = variant === "half" && flipped; // full-court thumbnails ignore the flip (#173)
         const svg = render({ ...base, scene, width: w, variant, flipped });
         for (const [side, fill] of [["offense", OFF], ["defense", DEF]] as const) {
           const dots = circlesFilled(svg, fill).map(at);
           const visible = scene.players[side].filter((p) => p.visible);
           expect(dots.length, `${side} ${w} ${variant} ${flipped}`).toBe(visible.length);
           for (const p of visible) {
-            const c = normToCanvasPx(p.x, p.y, l, flipped);
+            const c = normToCanvasPx(p.x, p.y, l, shown);
             expect(dots.some((d) => Math.abs(d.x - c.x) < 1e-9 && Math.abs(d.y - c.y) < 1e-9 && d.r === thumbnailDotRadius(w))).toBe(true);
           }
         }
@@ -269,9 +270,10 @@ describe("CourtThumbnail", () => {
     for (const w of WIDTHS) {
       for (const { variant, flipped } of CASES) {
         const scene = makeScene();
-        const l = computeThumbnailLayout(w, variant);
+        const l = computeThumbnailLayout(w);
+        const shown = variant === "half" && flipped; // full-court thumbnails ignore the flip (#173)
         const balls = circlesFilled(render({ ...base, scene, width: w, variant, flipped }), BALL).map(at);
-        const c = normToCanvasPx(scene.ball.x, scene.ball.y, l, flipped);
+        const c = normToCanvasPx(scene.ball.x, scene.ball.y, l, shown);
         expect(balls).toEqual([{ x: c.x, y: c.y, r: thumbnailBallRadius(w) }]);
       }
     }
@@ -282,9 +284,10 @@ describe("CourtThumbnail", () => {
       for (const { variant, flipped } of CASES) {
         for (const attachedTo of [{ side: "offense", position: 2 }, { side: "defense", position: 4 }] as const) {
           const scene = makeScene(attachedTo);
-          const l = computeThumbnailLayout(w, variant);
+          const l = computeThumbnailLayout(w);
+        const shown = variant === "half" && flipped; // full-court thumbnails ignore the flip (#173)
           const holder = scene.players[attachedTo.side].find((p) => p.position === attachedTo.position)!;
-          const h = normToCanvasPx(holder.x, holder.y, l, flipped);
+          const h = normToCanvasPx(holder.x, holder.y, l, shown);
           const offset = thumbnailBallAttachOffsetY(thumbnailDotRadius(w), thumbnailBallRadius(w));
           expect(offset).toBeLessThan(0);
           const balls = circlesFilled(render({ ...base, scene, width: w, variant, flipped }), BALL).map(at);
@@ -332,20 +335,30 @@ describe("CourtThumbnail", () => {
       }
     });
 
-    it("full: near end at translate(0, innerH + oobBot), far end mirrored about the same line", () => {
-      const l = computeThumbnailLayout(200, "full");
-      const near = `translate(0 ${l.innerH + l.oobBot})`;
-      expect(transforms(render({ ...base, scene: makeScene(), width: 200, variant: "full" }))).toEqual([near, `${near} scale(1 -1)`]);
+    // Review item 2 / issue #173: the editor's flipped full-court frame puts
+    // players at the centre line, away from the basket. Until that is decided a
+    // full-court thumbnail stays coherent: the near end, never flipped — exactly
+    // the picture of a half-court thumbnail of the same scene.
+    it("full court: one half court, no transform, flipped or not — identical to the unflipped half-court thumbnail", () => {
+      for (const w of WIDTHS) {
+        const half = render({ ...base, scene: makeScene({ side: "offense", position: 2 }), width: w });
+        for (const flipped of [false, true]) {
+          const full = render({ ...base, scene: makeScene({ side: "offense", position: 2 }), width: w, variant: "full", flipped });
+          expect(transforms(full)).toEqual([]);
+          expect(full).toBe(half);
+        }
+      }
     });
 
-    it("full, flipped: the same two ends inside translate(0, totalHeight) scale(1, -1)", () => {
-      const l = computeThumbnailLayout(200, "full");
-      const near = `translate(0 ${l.innerH + l.oobBot})`;
-      expect(transforms(render({ ...base, scene: makeScene(), width: 200, variant: "full", flipped: true }))).toEqual([
-        `translate(0 ${l.totalHeight}) scale(1 -1)`,
-        near,
-        `${near} scale(1 -1)`,
-      ]);
+    it("full court flipped: a player stored near the basket is drawn near the basket", () => {
+      const scene = makeScene();
+      scene.players.offense = [{ position: 1, x: 0.5, y: 0.85, visible: true }];
+      scene.players.defense = [];
+      const l = computeThumbnailLayout(200);
+      const svg = render({ ...base, scene, width: 200, variant: "full", flipped: true });
+      const [dot] = circlesFilled(svg, OFF).map(at);
+      const basket = tags(svg, "circle").filter((c) => c.fill === "none").map(at)[0];
+      expect(Math.abs(dot.y - basket.y)).toBeLessThan(0.05 * l.innerH);
     });
 
     it("flipping never rewrites a path: the arcs are the same strings, only the group transform changes", () => {
@@ -358,6 +371,39 @@ describe("CourtThumbnail", () => {
         expect(paths(false).filter((d) => / 0 0 0 /.test(d)).length).toBe(1);
       }
     });
+  });
+
+  // Review item 8
+  it("emits each marking once: one lane rect (fill + outline), four paths, no group for an unflipped court", () => {
+    for (const variant of VARIANTS) {
+      const svg = render({ ...base, scene: makeScene(), width: 120, variant });
+      const rects = tags(svg, "rect");
+      expect(rects.length).toBe(3); // floor, lane, frame
+      const lane = rects.filter((r) => r.fill === PAINT);
+      expect(lane.length).toBe(1);
+      expect(lane[0].stroke).toBeDefined();
+      expect(tags(svg, "path").length).toBe(4);
+      expect(tags(svg, "g").length).toBe(0);
+      expect(tags(svg, "line").length).toBe(3); // half-court line, baseline, backboard
+    }
+  });
+
+  // Review item 3: a default offense dot is the lane's colour; its outline must
+  // survive at 4 px radius.
+  it("outlines every dot with a 1.5 px light ring at every size, so an orange dot reads on the orange lane", () => {
+    for (const w of WIDTHS) {
+      const scene = makeScene();
+      scene.players.offense[0] = { position: 1, x: 0.5, y: 0.8, visible: true }; // inside the lane
+      const svg = render({ scene, width: w, lineWidth: 0.8 });
+      const dots = [...circlesFilled(svg, OFF), ...circlesFilled(svg, DEF)];
+      expect(dots.length).toBe(4);
+      for (const d of dots) {
+        expect(Number(d["stroke-width"])).toBe(1.5);
+        expect(d.stroke.toUpperCase()).toBe("#FFFFFF");
+      }
+      // the ring is at least a third of the smallest dot's radius
+      expect(1.5 / thumbnailDotRadius(w)).toBeGreaterThanOrEqual(0.25);
+    }
   });
 
   it("uses the given colours and stroke scale", () => {
@@ -412,7 +458,7 @@ describe("CourtThumbnail", () => {
           for (const y of [0, 0.01, 0.99, 1]) {
             const scene = makeScene({ side: "offense", position: 2 });
             scene.players.offense[1] = { position: 2, x: 0.5, y, visible: true };
-            const l = computeThumbnailLayout(w, variant);
+            const l = computeThumbnailLayout(w);
             const [b] = circlesFilled(render({ ...base, scene, width: w, variant, flipped }), BALL).map(at);
             expect(inside(b, w, l.playAreaOffsetY, l.innerH), `${w} ${variant} ${flipped} y=${y}`).toBe(true);
             expect(b.x).toBe(w / 2);

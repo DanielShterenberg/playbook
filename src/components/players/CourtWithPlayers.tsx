@@ -227,13 +227,16 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
   const handleCourtReady = useCallback(
     (payload: CourtReadyPayload) => {
       const { width, height, playAreaHeight, playAreaOffsetY, playAreaOffsetX, playAreaWidth, layout } = payload;
-      // A collapsed / hidden container reports a zero-size court. Ignore it and
-      // keep the last real layout: re-projecting through a zero-width layout
-      // divides by zero and would leave every token at NaN for good.
+      // The reported size always reaches state — when the court collapses the
+      // overlay must collapse with it (see courtVisible below).
+      setCourtSize({ width, height, playAreaWidth, playAreaHeight, offsetX: playAreaOffsetX, offsetY: playAreaOffsetY });
+      // A collapsed / hidden container reports a zero-size court. Do not
+      // remember that layout or re-project through it (÷ 0 would leave every
+      // token at NaN for good): pixel positions stay those of the last real
+      // layout and are re-projected from it when the court comes back.
       if (!hasCourtArea(layout)) return;
       const prevLayout = layoutRef.current;
       layoutRef.current = layout;
-      setCourtSize({ width, height, playAreaWidth, playAreaHeight, offsetX: playAreaOffsetX, offsetY: playAreaOffsetY });
 
       const currentFlipped = flippedRef.current;
 
@@ -519,6 +522,11 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
 
   const allPlayers = buildPlayerList(offensePx, defensePx);
 
+  // While the court has no area (collapsed / hidden container) nothing is
+  // overlaid: both overlays use overflow: visible, so tokens and annotations at
+  // their last positions would otherwise be painted over neighbouring UI.
+  const courtVisible = courtSize !== null && courtSize.playAreaWidth > 0 && courtSize.playAreaHeight > 0;
+
   // Use the inner court (play area) width for proportional token sizing.
   // Nothing is drawn until the court has reported its size, so there is no
   // size-less fallback.
@@ -536,7 +544,7 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
       <Court variant={variant} onReady={handleCourtReady} className="w-full" flipped={flipped} />
 
       {/* SVG player + ball overlay — same dimensions as the canvas */}
-      {courtSize && (
+      {courtVisible && courtSize && (
         <svg
           style={{
             position: "absolute",
@@ -623,7 +631,7 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
       )}
 
       {/* Annotation layer — always rendered; readOnly disables interaction. */}
-      {courtSize && (
+      {courtVisible && courtSize && (
         <AnnotationLayer
           width={courtSize.width}
           height={courtSize.height}

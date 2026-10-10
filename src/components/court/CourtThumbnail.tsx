@@ -5,13 +5,11 @@
  * Implements issue #175: thumbnails reflect the flipped setting and show the
  * ball, so a play's thumbnail is the same picture as the editor.
  *
- * A thumbnail is the editor's court seen through the play-area window, with no
- * out-of-bounds margin around it:
- *   - layout     → computeThumbnailLayout(width, variant)  (oobLeft = 0)
- *   - court      → the transforms paintCourt uses, as SVG group transforms:
+ * A thumbnail is one half court — the end the players are in — seen through
+ * the play-area window, with no out-of-bounds margin around it:
+ *   - layout     → computeThumbnailLayout(width)  (half court, oobLeft = 0)
+ *   - court      → the transform paintCourt uses, as an SVG group transform:
  *                    flipped:  translate(0, totalHeight) scale(1, -1)
- *                    full:     near end at translate(0, innerH + oobBot),
- *                              far end mirrored about the same line
  *   - positions  → normToCanvasPx(x, y, layout, flipped)
  *   - sizes      → thumbnailDotRadius / thumbnailBallRadius /
  *                  thumbnailBallAttachOffsetY
@@ -22,12 +20,19 @@
  * Flipping is done ONLY by the group transform; the marking paths (and their
  * arc flags) are the same strings in every orientation.
  *
- * Because the editor's flip is about totalHeight (= innerH + oobBot for a half
- * court), a flipped half-court thumbnail shows what the editor shows in that
- * window: a floor band of oobBot above the baseline, and markings oobBot below
- * the tokens that share their normY (see the FLIPPED CONVENTION note in
+ * HALF COURT, FLIPPED. The editor's flip is about totalHeight (= innerH +
+ * oobBot), so the thumbnail shows what the editor shows in that window: a
+ * floor band of oobBot above the baseline, and markings oobBot below the
+ * tokens that share their normY (see the FLIPPED CONVENTION note in
  * courtLayout.ts). The last oobBot of the court at the half-court line falls
  * outside the window.
+ *
+ * FULL COURT. Players live in the near end, which unflipped is exactly a half
+ * court, so the thumbnail is the half-court picture. The flip is NOT applied:
+ * the editor's flipped full-court frame is known to be wrong (issue #173 — it
+ * puts players at the centre line, away from the basket), and until that is
+ * decided a full-court thumbnail stays coherent, with players in the right
+ * place relative to the basket.
  */
 
 import { computeThumbnailLayout, normToCanvasPx, type CourtVariant } from "@/lib/courtLayout";
@@ -60,19 +65,25 @@ import {
   CENTRE_CIRCLE_RADIUS,
 } from "./courtDimensions";
 
+/** Width in px of the light ring around every player dot. */
+const DOT_OUTLINE_WIDTH = 1.5;
+
 export interface CourtThumbnailProps {
   scene: Scene;
   /** SVG width in px — also the inner court width (no out-of-bounds margin). */
   width: number;
   /** Court variant of the play. A full-court thumbnail shows the end the players are in. */
   variant?: CourtVariant;
-  /** Effective flip of the scene: (scene.flipped ?? play.flipped) === true. */
+  /**
+   * Effective flip of the scene: (scene.flipped ?? play.flipped) === true.
+   * Applied to half-court plays only (see FULL COURT above).
+   */
   flipped?: boolean;
   /** Offense dot fill — the play's team colour. Default: the editor's. */
   offenseColor?: string;
   /** Defense dot fill — the play's team colour. Default: the editor's. */
   defenseColor?: string;
-  /** Stroke width of court lines and token outlines. */
+  /** Stroke width of court lines and the ball outline. */
   lineWidth?: number;
   /** Stroke width of the outer frame and the backboard. */
   outlineWidth?: number;
@@ -88,7 +99,7 @@ export default function CourtThumbnail({
   scene,
   width,
   variant = "half",
-  flipped = false,
+  flipped: sceneFlipped = false,
   offenseColor = DEFAULT_OFFENSE_COLOR,
   defenseColor = DEFAULT_DEFENSE_COLOR,
   lineWidth = 1,
@@ -97,10 +108,10 @@ export default function CourtThumbnail({
   cornerRadius = 6,
   fluid = false,
 }: CourtThumbnailProps) {
-  const layout = computeThumbnailLayout(width, variant);
+  const layout = computeThumbnailLayout(width);
+  const flipped = variant === "half" && sceneFlipped;
   const W = layout.innerW;
   const H = layout.innerH;
-  const top = layout.playAreaOffsetY;
 
   // Normalised → px inside ONE half court whose origin is its half-court line.
   // Arc radii: a physical radius R_ft is (R_ft / 50) * W px in both x and y
@@ -109,6 +120,10 @@ export default function CourtThumbnail({
   const py = (ny: number) => ny * H;
 
   const dotR = thumbnailDotRadius(W);
+  // Dot outline: the editor's light token outline, but at a fixed width that
+  // survives at a 4 px radius — the default offense dot is the lane's colour,
+  // so on the paint the ring is what makes it readable.
+  const dotOutline = DOT_OUTLINE_WIDTH;
   const ballR = thumbnailBallRadius(W);
   const pos = (p: { x: number; y: number }) => normToCanvasPx(p.x, p.y, layout, flipped);
 
@@ -121,10 +136,11 @@ export default function CourtThumbnail({
   // One half court: y = 0 half-court line, y = H baseline. Verified arc flags
   // (y-down, chord left→right): "0 0 1" bows upward (toward the half-court
   // line), "0 0 0" bows downward. Do not edit them to flip — use a transform.
-  const halfCourt = (
+  const court = (
     <>
-      {/* Paint (free-throw lane) — the editor's paint, never a team colour */}
-      <rect x={laneX} y={laneY} width={laneW} height={laneH} fill={DEFAULT_COLOR_PAINT} />
+      {/* Free-throw lane: the editor's paint (never a team colour) and its
+          outline in one rect; its top edge is the free-throw line */}
+      <rect x={laneX} y={laneY} width={laneW} height={laneH} fill={DEFAULT_COLOR_PAINT} stroke={COLOR_LINE} strokeWidth={lineWidth} />
 
       {/* Half-court line and baseline (the sidelines are the frame) */}
       <line x1={0} y1={0} x2={W} y2={0} stroke={COLOR_LINE} strokeWidth={lineWidth} />
@@ -141,10 +157,6 @@ export default function CourtThumbnail({
         d={`M ${px(CORNER_THREE_LEFT_X)},${py(1)} L ${px(CORNER_THREE_LEFT_X)},${py(CORNER_THREE_Y)} A ${px(THREE_POINT_RADIUS)},${px(THREE_POINT_RADIUS)} 0 0 1 ${px(CORNER_THREE_RIGHT_X)},${py(CORNER_THREE_Y)} L ${px(CORNER_THREE_RIGHT_X)},${py(1)}`}
         {...line}
       />
-
-      {/* Lane outline and free-throw line */}
-      <rect x={laneX} y={laneY} width={laneW} height={laneH} {...line} />
-      <line x1={laneX} y1={laneY} x2={laneX + laneW} y2={laneY} stroke={COLOR_LINE} strokeWidth={lineWidth} />
 
       {/* Free-throw circle — upper semicircle, toward half court */}
       <path
@@ -173,18 +185,6 @@ export default function CourtThumbnail({
     </>
   );
 
-  // Same transforms as paintCourt (courtRendering.ts).
-  const nearEnd = `translate(0 ${layout.innerH + layout.oobBot})`;
-  const court =
-    variant === "full" ? (
-      <>
-        <g transform={nearEnd}>{halfCourt}</g>
-        <g transform={`${nearEnd} scale(1 -1)`}>{halfCourt}</g>
-      </>
-    ) : (
-      halfCourt
-    );
-
   // Ball: above its holder in SCREEN space (never negated when flipped), as in
   // the editor; free otherwise. Like the editor (and the exports) the holder is
   // looked up whether or not it is visible, so a ball attached to a hidden
@@ -200,7 +200,7 @@ export default function CourtThumbnail({
       const h = pos(holder);
       ballPos = {
         x: clamp(h.x, ballR, W - ballR),
-        y: clamp(h.y + thumbnailBallAttachOffsetY(dotR, ballR), top + ballR, top + H - ballR),
+        y: clamp(h.y + thumbnailBallAttachOffsetY(dotR, ballR), ballR, H - ballR),
       };
     }
   }
@@ -209,7 +209,7 @@ export default function CourtThumbnail({
     <svg
       width={W}
       height={H}
-      viewBox={`0 ${top} ${W} ${H}`}
+      viewBox={`0 0 ${W} ${H}`}
       aria-hidden="true"
       style={
         fluid
@@ -218,25 +218,25 @@ export default function CourtThumbnail({
       }
     >
       {/* Floor (also the out-of-bounds band a flipped court shows) */}
-      <rect x={0} y={top} width={W} height={H} fill={COLOR_COURT} rx={cornerRadius} />
+      <rect x={0} y={0} width={W} height={H} fill={COLOR_COURT} rx={cornerRadius} />
 
       {flipped ? <g transform={`translate(0 ${layout.totalHeight}) scale(1 -1)`}>{court}</g> : court}
 
       {/* Frame */}
-      <rect x={0} y={top} width={W} height={H} fill="none" stroke={COLOR_LINE} strokeWidth={outlineWidth} rx={cornerRadius} />
+      <rect x={0} y={0} width={W} height={H} fill="none" stroke={COLOR_LINE} strokeWidth={outlineWidth} rx={cornerRadius} />
 
       {/* Players — defense under offense, as in the editor */}
       {scene.players.defense
         .filter((p) => p.visible)
         .map((p) => {
           const { x, y } = pos(p);
-          return <circle key={`d-${p.position}`} cx={x} cy={y} r={dotR} fill={defenseColor} stroke={COLOR_LINE} strokeWidth={lineWidth} />;
+          return <circle key={`d-${p.position}`} cx={x} cy={y} r={dotR} fill={defenseColor} stroke={COLOR_LINE} strokeWidth={dotOutline} />;
         })}
       {scene.players.offense
         .filter((p) => p.visible)
         .map((p) => {
           const { x, y } = pos(p);
-          return <circle key={`o-${p.position}`} cx={x} cy={y} r={dotR} fill={offenseColor} stroke={COLOR_LINE} strokeWidth={lineWidth} />;
+          return <circle key={`o-${p.position}`} cx={x} cy={y} r={dotR} fill={offenseColor} stroke={COLOR_LINE} strokeWidth={dotOutline} />;
         })}
 
       {/* Ball — on top of all players */}

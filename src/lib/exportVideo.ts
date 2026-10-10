@@ -25,13 +25,13 @@ import {
   SCENE_HOLD_MS,
   FINAL_HOLD_MS,
   RESOLUTION_WIDTH,
-} from "./exportGIF";
-import type { GifResolution, FrameStyle } from "./exportGIF";
+} from "./frameRenderer";
+import type { FrameResolution, FrameStyle } from "./frameRenderer";
 import { computeCourtLayout } from "@/lib/courtLayout";
 import type { CourtVariant } from "@/lib/courtLayout";
 import { COLOR_COURT } from "@/lib/courtRendering";
 
-export type VideoResolution = GifResolution;
+export type VideoResolution = FrameResolution;
 
 /** Encoder settings plus the frame style (label mode, names, team colours). */
 export interface ExportVideoOptions extends FrameStyle {

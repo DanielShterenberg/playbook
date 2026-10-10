@@ -20,7 +20,7 @@
  */
 
 import { useRef, useCallback } from "react";
-import { BALL_RADIUS, COLOR_BALL } from "@/lib/tokenSizing";
+import { BALL_RADIUS, COLOR_BALL, COLOR_BALL_HIGHLIGHT, COLOR_BALL_SEAM } from "@/lib/tokenSizing";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -41,9 +41,7 @@ const SNAP_RADIUS = BALL_RADIUS * 2.5;
  */
 const DETACH_RADIUS = BALL_RADIUS * 3.5;
 
-// COLOR_BALL lives in @/lib/tokenSizing, shared with the exports and thumbnails.
-const COLOR_BALL_HIGHLIGHT = "#F47B2A";
-const COLOR_SEAM = "#FFFFFF";
+// The ball colours live in @/lib/tokenSizing, shared with the exports and thumbnails.
 
 // ---------------------------------------------------------------------------
 // Exported constants for use by the parent
@@ -269,7 +267,7 @@ export default function BallToken({
       <path
         d={`M 0 ${-r} C ${r * 0.55} ${-r * 0.5} ${r * 0.55} ${r * 0.5} 0 ${r}`}
         fill="none"
-        stroke={COLOR_SEAM}
+        stroke={COLOR_BALL_SEAM}
         strokeWidth={1.2}
         strokeLinecap="round"
       />
@@ -278,7 +276,7 @@ export default function BallToken({
       <path
         d={`M ${-r} 0 C ${-r * 0.5} ${r * 0.4} ${r * 0.5} ${r * 0.4} ${r} 0`}
         fill="none"
-        stroke={COLOR_SEAM}
+        stroke={COLOR_BALL_SEAM}
         strokeWidth={1.2}
         strokeLinecap="round"
       />

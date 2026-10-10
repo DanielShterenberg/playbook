@@ -18,11 +18,11 @@ import { computeCourtLayout, normToCanvasPx, type CourtLayout, type CourtVariant
 import { FT_CIRCLE_CENTER_Y } from "@/components/court/courtDimensions";
 import { paintCourt, COLOR_COURT } from "@/lib/courtRendering";
 import { computeTokenSizes } from "@/lib/tokenSizing";
-import { renderSceneToCtx, renderFrame, annotationScale, RESOLUTION_WIDTH } from "@/lib/exportGIF";
+import { renderSceneToCtx, renderFrame, annotationScale, RESOLUTION_WIDTH } from "@/lib/frameRenderer";
 import { renderPNGToCanvas } from "@/lib/exportPNG";
-import { drawPdfSceneOnCanvas, PDF_EXPORT_W } from "@/lib/exportPdf";
+import { drawPdfSceneOnCanvas, pdfPanels, PDF_EXPORT_W, type PdfPanel } from "@/lib/exportPdf";
 import { videoFrameSize, renderVideoFrame } from "@/lib/exportVideo";
-import type { Annotation, Scene } from "@/lib/types";
+import type { Annotation, Play, Scene } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
 // Recording mock context (same shape as the one in courtRendering.test.ts)
@@ -185,19 +185,24 @@ describe("GIF/MP4 frame (renderSceneToCtx)", () => {
       const log = record((ctx) => renderSceneToCtx(ctx, layout, makeScene(false), [a], flipped)).slice(court.length);
       const f = normToCanvasPx(a.from.x, a.from.y, layout, flipped);
       const t = normToCanvasPx(a.to.x, a.to.y, layout, flipped);
-      const i = log.findIndex((e) => e[0] === "moveTo");
-      expect(log[i]).toEqual(["moveTo", f.x, f.y]);
+      // annotations are drawn after the tokens and the ball (whose highlight also uses moveTo)
+      const i = log.findIndex((e) => e[0] === "moveTo" && e[1] === f.x && e[2] === f.y);
+      expect(i).toBeGreaterThan(-1);
       expect(log[i + 1]).toEqual(["lineTo", t.x, t.y]);
     }
   });
 
-  it("annotation strokes scale with annotationScale(totalWidth)", () => {
-    expect(annotationScale(480)).toBe(1);
-    expect(annotationScale(800)).toBe(800 / 480);
+  it("annotation sizes scale with the inner court width, like the tokens (design size: innerW = 600)", () => {
+    expect(annotationScale(600)).toBe(1);
+    expect(annotationScale(300)).toBe(0.5);
     const layout = computeCourtLayout(800, "half");
-    const court = record((ctx) => paintCourt(ctx, layout, {}));
-    const log = record((ctx) => renderSceneToCtx(ctx, layout, makeScene(false), [ann("m", "movement")], false)).slice(court.length);
-    expect(log.find((e) => e[0] === "set lineWidth")).toEqual(["set lineWidth", 2.5 * annotationScale(800)]);
+    const log = record((ctx) => renderSceneToCtx(ctx, layout, makeScene(false), [ann("m", "movement")], false));
+    expect(log.filter((e) => e[0] === "set lineWidth").pop()).toEqual(["set lineWidth", 2.5 * (layout.innerW / 600)]);
+    // …so an annotation keeps its size relative to a token at every resolution.
+    for (const w of [480, 800, 1200, 2400]) {
+      const l = computeCourtLayout(w, "half");
+      expect((12 * annotationScale(l.innerW)) / (l.innerW * 0.03)).toBeCloseTo(12 / 18, 12);
+    }
   });
 
   it("restores the context state it changes", () => {
@@ -536,7 +541,7 @@ describe("PDF (drawPdfSceneOnCanvas)", () => {
     const src = readFileSync(path.resolve(process.cwd(), "src/lib/exportPdf.ts"), "utf8");
     expect(src).not.toMatch(/computePdfFrame|drawCourt\b|oobBot/);
     expect(src).toMatch(/computeCourtLayout\(EXPORT_W, courtType\)/);
-    expect(src).toMatch(/import \{ renderSceneToCtx \} from "\.\/exportGIF"/);
+    expect(src).toMatch(/import \{ renderSceneToCtx \} from "\.\/frameRenderer"/);
     expect(src).toMatch(/renderSceneToCtx\(/);
     expect(src).not.toMatch(/function (drawPlayer|drawBall|drawAnnotation|drawArrowHead|strokeBezier)\b/);
     expect(src).not.toMatch(/paintCourt|normToCanvasPx|computeTokenSizes/);
@@ -582,9 +587,10 @@ describe("frame style", () => {
     }
   });
 
-  it("is declared once (exportGIF.ts) and imported by the other exporters", () => {
+  it("is declared once (frameRenderer.ts) and imported by the exporters", () => {
     const read = (f: string) => readFileSync(path.resolve(process.cwd(), "src/lib", f), "utf8");
-    expect(read("exportGIF.ts")).toMatch(/export interface FrameStyle \{/);
+    expect(read("frameRenderer.ts")).toMatch(/export interface FrameStyle \{/);
+    expect(read("exportGIF.ts")).not.toMatch(/interface FrameStyle/);
     for (const f of ["exportPNG.ts", "exportVideo.ts", "exportPdf.ts"]) {
       const src = read(f);
       expect(src, f).toMatch(/FrameStyle/);
@@ -593,7 +599,7 @@ describe("frame style", () => {
       expect(src, f).not.toMatch(/interface (PdfSceneStyle|VideoFrameStyle)/);
     }
     // No renderer is called with the style unpacked into positional arguments.
-    for (const f of ["exportGIF.ts", "exportPNG.ts", "exportVideo.ts", "exportPdf.ts"]) {
+    for (const f of ["frameRenderer.ts", "exportGIF.ts", "exportPNG.ts", "exportVideo.ts", "exportPdf.ts"]) {
       expect(read(f), f).not.toMatch(/playerNames,\s*offenseColor,\s*defenseColor,?\s*\)/);
     }
   });
@@ -651,7 +657,27 @@ describe("scene without a ball", () => {
 
 describe("exporter sources", () => {
   const read = (f: string) => readFileSync(path.resolve(process.cwd(), "src/lib", f), "utf8");
-  const files = ["exportGIF.ts", "exportPNG.ts", "exportVideo.ts", "exportPdf.ts"];
+  const files = ["frameRenderer.ts", "exportGIF.ts", "exportPNG.ts", "exportVideo.ts", "exportPdf.ts"];
+
+  // Review item 7: the painter lives in a neutral module; only the GIF encoder
+  // touches gifenc, and nobody reaches the painter through the GIF module.
+  it("the frame painter is neutral: no gifenc, and no exporter imports it via exportGIF", () => {
+    const painter = read("frameRenderer.ts");
+    expect(painter).not.toMatch(/gifenc/);
+    expect(painter).not.toMatch(/from "\.\/export/);
+    for (const name of ["FrameStyle", "renderSceneToCtx", "renderFrame", "annotationScale"]) {
+      expect(painter, name).toMatch(new RegExp(`export (interface|function) ${name}\\b`));
+    }
+    for (const f of ["exportPNG.ts", "exportVideo.ts", "exportPdf.ts"]) {
+      expect(read(f), f).not.toMatch(/exportGIF"/);
+      expect(read(f), f).not.toMatch(/gifenc/);
+    }
+    const gif = read("exportGIF.ts");
+    expect(gif).toMatch(/from "gifenc"/);
+    expect(gif).toMatch(/import \{[^}]*renderFrame[^}]*\} from "\.\/frameRenderer"/);
+    expect(gif).not.toMatch(/function (drawPlayer|drawBall|drawAnnotation|renderSceneToCtx|renderFrame|annotationScale)\b/);
+    expect(gif).not.toMatch(/ctx\.(arc|stroke|moveTo|lineTo|setLineDash|fillText)\(/);
+  });
 
   it.each(files)("%s has no court-drawing, layout or sizing copy", (file) => {
     const src = read(file);
@@ -668,15 +694,263 @@ describe("exporter sources", () => {
     expect(src).not.toMatch(/toX\s*=|toY\s*=/);
   });
 
-  it("exportVideo takes the layout from courtLayout, not exportGIF", () => {
+  it("exportVideo takes the layout from courtLayout", () => {
     const src = read("exportVideo.ts");
     expect(src).toMatch(/import\s*\{[^}]*computeCourtLayout[^}]*\}\s*from\s*"@\/lib\/courtLayout"/);
-    expect(src).not.toMatch(/computeCourtLayout[^;]*from\s*"\.\/exportGIF"/);
   });
 
   it("no exporter negates the ball attach offset when flipped", () => {
     for (const file of files) {
       expect(read(file)).not.toMatch(/flipped\s*\?\s*-\s*ballAttachOffsetY/);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Annotations are the editor's (AnnotationLayer.tsx is the reference)
+//
+// The editor draws annotations in fixed CSS px; the painter draws them at the
+// same sizes × annotationScale(innerW). At innerW = 600 (total width 636) the
+// scale is 1, so the painter's numbers must be the editor's numbers.
+// ---------------------------------------------------------------------------
+
+describe("annotations match the editor (AnnotationLayer.tsx)", () => {
+  const layout = computeCourtLayout(636, "half");
+  const editorSrc = readFileSync(path.resolve(process.cwd(), "src/components/annotations/AnnotationLayer.tsx"), "utf8");
+  const rendered = editorSrc.slice(editorSrc.indexOf("function RenderedAnnotation("), editorSrc.indexOf("// In-progress (preview) annotation"));
+
+  /** The editor's visible strokes for a type, read from its source: [colour, width, dash, opacity]. */
+  function editorStrokes(type: string): Array<{ color: string; width: number; dash: number[]; opacity: number }> {
+    const start = rendered.indexOf(`if (type === "${type}")`);
+    expect(start, type).toBeGreaterThan(-1);
+    const next = rendered.indexOf("if (type ===", start + 10);
+    const block = rendered.slice(start, next === -1 ? undefined : next);
+    const out: Array<{ color: string; width: number; dash: number[]; opacity: number }> = [];
+    for (const m of Array.from(block.matchAll(/<(path|line)\b([\s\S]*?)\/>/g))) {
+      const attrs = m[2];
+      const color = /stroke="(#[0-9A-Fa-f]{6})"/.exec(attrs)?.[1];
+      if (!color) continue; // transparent hit area
+      const width = Number(/strokeWidth=\{([\d.]+)\}/.exec(attrs)![1]);
+      const dash = (/strokeDasharray="([\d. ]+)"/.exec(attrs)?.[1] ?? "").split(" ").filter(Boolean).map(Number);
+      const opacity = Number(/opacity=\{([\d.]+)\}/.exec(attrs)?.[1] ?? 1);
+      out.push({ color, width, dash, opacity });
+    }
+    return out;
+  }
+
+  /** The painter's strokes for one annotation: canvas state at each stroke() after the tokens. */
+  function painterStrokes(a: Annotation): Array<{ color: string; width: number; dash: number[]; opacity: number }> {
+    const log = record((ctx) => renderSceneToCtx(ctx, layout, makeScene(false), [a], false));
+    const start = annStart(log);
+    const state = { color: "", width: 0, dash: [] as number[], opacity: 1 };
+    const out: Array<{ color: string; width: number; dash: number[]; opacity: number }> = [];
+    log.forEach((e, i) => {
+      if (i < start) return; // token drawing manages its own state with save/restore
+      if (e[0] === "set strokeStyle") state.color = String(e[1]);
+      if (e[0] === "set lineWidth") state.width = e[1] as number;
+      if (e[0] === "setLineDash") state.dash = e[1] as number[];
+      if (e[0] === "set globalAlpha") state.opacity = e[1] as number;
+      if (e[0] === "stroke") out.push({ ...state, dash: [...state.dash] });
+    });
+    return out;
+  }
+
+  /** Index in a frame log where annotation drawing starts: after the last token / ball op. */
+  function annStart(log: LogEntry[]): number {
+    const scene = makeScene(false);
+    const noAnn = record((ctx) => renderSceneToCtx(ctx, layout, scene, [], false));
+    // logs are identical up to the point where the annotation-free frame ends its token drawing
+    let i = 0;
+    while (i < noAnn.length && i < log.length && JSON.stringify(noAnn[i]) === JSON.stringify(log[i])) i++;
+    return i;
+  }
+
+  const uniq = (xs: Array<{ color: string; width: number; dash: number[]; opacity: number }>) =>
+    Array.from(new Set(xs.map((x) => JSON.stringify(x)))).sort();
+
+  const TYPES: Array<[Annotation["type"], Partial<Annotation>, string]> = [
+    ["movement", {}, "straight"],
+    ["movement", { controlPoints: [{ x: 0.5, y: 0.2 }] }, "curved"],
+    ["movement", { waypoints: [{ x: 0.4, y: 0.6 }] }, "multi-leg"],
+    ["pass", {}, "straight"],
+    ["pass", { controlPoints: [{ x: 0.5, y: 0.2 }] }, "curved"],
+    ["screen", {}, "straight"],
+    ["cut", {}, "straight"],
+    ["cut", { waypoints: [{ x: 0.4, y: 0.6 }] }, "multi-leg"],
+    ["guard", {}, "straight"],
+    ["handoff", {}, "straight"],
+    ["handoff", { controlPoints: [{ x: 0.5, y: 0.2 }] }, "curved"],
+  ];
+
+  it.each(TYPES)("%s (%#): colour, width, dash and opacity are the editor's", (type, extra) => {
+    const editor = editorStrokes(type);
+    expect(editor.length).toBeGreaterThan(0);
+    expect(uniq(painterStrokes(ann("x", type, extra)))).toEqual(uniq(editor));
+  });
+
+  it("the pass is solid and the guard link is 4-4 dashed at 85 % opacity (both were wrong)", () => {
+    expect(uniq(painterStrokes(ann("p", "pass")))).toEqual([JSON.stringify({ color: "#059669", width: 2, dash: [], opacity: 1 })]);
+    expect(uniq(painterStrokes(ann("g", "guard")))).toEqual([JSON.stringify({ color: "#D97706", width: 2, dash: [4, 4], opacity: 0.85 })]);
+  });
+
+  it("dribble: zigzag when straight, 5-4 dashes when curved or multi-leg — the editor's three branches", () => {
+    const block = rendered.slice(rendered.indexOf('if (type === "dribble")'), rendered.indexOf('if (type === "pass")'));
+    expect(block.match(/strokeDasharray="5 4"/g)).toHaveLength(2);
+    const solid = { color: "#1E3A5F", width: 2.5, dash: [], opacity: 1 };
+    const dashed = { ...solid, dash: [5, 4] };
+    expect(uniq(painterStrokes(ann("d", "dribble")))).toEqual([JSON.stringify(solid)]);
+    expect(uniq(painterStrokes(ann("d", "dribble", { controlPoints: [{ x: 0.5, y: 0.2 }] })))).toEqual([JSON.stringify(dashed)]);
+    expect(uniq(painterStrokes(ann("d", "dribble", { waypoints: [{ x: 0.4, y: 0.6 }] })))).toEqual([JSON.stringify(dashed)]);
+  });
+
+  const px = (p: { x: number; y: number }) => normToCanvasPx(p.x, p.y, layout, false);
+  const frameOps = (a: Annotation) => {
+    const log = record((ctx) => renderSceneToCtx(ctx, layout, makeScene(false), [a], false));
+    return log.slice(annStart(log));
+  };
+  const near = (a: number, b: number) => Math.abs(a - b) < 1e-9;
+
+  it("straight dribble zigzag is the editor's: len/18 zigs, ±6 px, zero offset at BOTH ends", () => {
+    const a = ann("d", "dribble");
+    const f = px(a.from), t = px(a.to);
+    const dx = t.x - f.x, dy = t.y - f.y, len = Math.hypot(dx, dy);
+    const zigCount = Math.max(2, Math.round(len / 18));
+    const expected: Array<[number, number]> = [];
+    for (let i = 0; i <= zigCount; i++) {
+      const tt = i / zigCount;
+      const perp = i === 0 || i === zigCount ? 0 : i % 2 === 0 ? 6 : -6;
+      expected.push([f.x + dx * tt + (-dy / len) * perp, f.y + dy * tt + (dx / len) * perp]);
+    }
+    const pts = frameOps(a).filter((e) => e[0] === "moveTo" || e[0] === "lineTo").slice(0, zigCount + 1);
+    expect(pts.length).toBe(zigCount + 1);
+    pts.forEach((e, i) => {
+      expect(near(e[1] as number, expected[i][0]) && near(e[2] as number, expected[i][1]), `zig ${i}`).toBe(true);
+    });
+    expect(pts[0]).toEqual(["moveTo", f.x, f.y]);
+  });
+
+  it("arrowhead is the editor's 12 px triangle (half-width 0.45 × 12), along the control-point tangent when curved", () => {
+    for (const cp of [undefined, { x: 0.5, y: 0.2 }]) {
+      const a = ann("m", "movement", cp ? { controlPoints: [cp] } : {});
+      const t = px(a.to), tail = cp ? px(cp) : px(a.from);
+      const d = Math.hypot(t.x - tail.x, t.y - tail.y);
+      const ux = (t.x - tail.x) / d, uy = (t.y - tail.y) / d;
+      const bx = t.x - ux * 12, by = t.y - uy * 12, w = 12 * 0.45;
+      const ops = frameOps(a);
+      const i = ops.map((e) => e[0]).lastIndexOf("closePath");
+      const tri = ops.slice(i - 3, i).map((e) => [e[1], e[2]]) as number[][];
+      const expected = [[t.x, t.y], [bx - uy * w, by + ux * w], [bx + uy * w, by - ux * w]];
+      tri.forEach((p, k) => expect(near(p[0], expected[k][0]) && near(p[1], expected[k][1]), `vertex ${k}`).toBe(true));
+    }
+  });
+
+  it("screen: straight line plus a ±10 px bar, 3 px wide, no arrowhead", () => {
+    const a = ann("s", "screen", { controlPoints: [{ x: 0.5, y: 0.2 }] }); // the editor ignores the control point
+    const f = px(a.from), t = px(a.to);
+    const ops = frameOps(a);
+    expect(ops.some((e) => e[0] === "quadraticCurveTo")).toBe(false);
+    expect(ops.some((e) => e[0] === "closePath")).toBe(false);
+    const d = Math.hypot(t.x - f.x, t.y - f.y);
+    const ux = (t.x - f.x) / d, uy = (t.y - f.y) / d;
+    const moves = ops.filter((e) => e[0] === "moveTo" || e[0] === "lineTo");
+    expect(moves[0]).toEqual(["moveTo", f.x, f.y]);
+    expect(moves[1]).toEqual(["lineTo", t.x, t.y]);
+    expect(near(moves[2][1] as number, t.x - uy * 10) && near(moves[2][2] as number, t.y + ux * 10)).toBe(true);
+    expect(near(moves[3][1] as number, t.x + uy * 10) && near(moves[3][2] as number, t.y - ux * 10)).toBe(true);
+  });
+
+  it("hand-off ticks are the editor's: at t = 0.85 and 0.72, 9 px each side, perpendicular to the path", () => {
+    const tickSrc = rendered.slice(rendered.indexOf('if (type === "handoff")'));
+    expect(tickSrc).toMatch(/const tickLen = 9;/);
+    expect(tickSrc).toMatch(/bezierPoint\(from, to, 0\.85, cp\)/);
+    expect(tickSrc).toMatch(/bezierPoint\(from, to, 0\.72, cp\)/);
+    expect(tickSrc).toMatch(/bezierPoint\(from, to, 0\.83, cp\)/);
+    expect(tickSrc).toMatch(/bezierPoint\(from, to, 0\.70, cp\)/);
+
+    const a = ann("h", "handoff");
+    const f = px(a.from), t = px(a.to);
+    const at = (tt: number) => ({ x: f.x + (t.x - f.x) * tt, y: f.y + (t.y - f.y) * tt });
+    const d = Math.hypot(t.x - f.x, t.y - f.y);
+    const pux = -(t.y - f.y) / d, puy = (t.x - f.x) / d;
+    const moves = frameOps(a).filter((e) => e[0] === "moveTo" || e[0] === "lineTo");
+    // body (2), tick 1 (2), tick 2 (2), then the arrowhead
+    for (const [k, tt] of [[2, 0.85], [4, 0.72]] as const) {
+      const c = at(tt);
+      expect(near(moves[k][1] as number, c.x + pux * 9) && near(moves[k][2] as number, c.y + puy * 9), `tick at ${tt}`).toBe(true);
+      expect(near(moves[k + 1][1] as number, c.x - pux * 9) && near(moves[k + 1][2] as number, c.y - puy * 9), `tick at ${tt}`).toBe(true);
+    }
+  });
+
+  it("a pass ignores waypoints for its body, as the editor does (only move / cut / dribble are multi-leg)", () => {
+    const a = ann("p", "pass", { waypoints: [{ x: 0.4, y: 0.6 }] });
+    const moves = frameOps(a).filter((e) => e[0] === "moveTo" || e[0] === "lineTo");
+    expect(moves[0]).toEqual(["moveTo", px(a.from).x, px(a.from).y]);
+    expect(moves[1]).toEqual(["lineTo", px(a.to).x, px(a.to).y]);
+  });
+
+  it("z-order: every annotation is drawn AFTER all tokens and the ball, in the given order (the editor's layer sits on top)", () => {
+    for (const { variant, flipped } of CASES) {
+      const l = computeCourtLayout(800, variant);
+      const scene = makeScene(true);
+      const noAnn = record((ctx) => renderSceneToCtx(ctx, l, scene, [], flipped));
+      const log = record((ctx) => renderSceneToCtx(ctx, l, scene, ANNOTATIONS, flipped));
+      // the frame without annotations is a prefix (minus its closing restore)
+      expect(log.slice(0, noAnn.length - 1)).toEqual(noAnn.slice(0, noAnn.length - 1));
+      const after = log.slice(noAnn.length - 1);
+      const sizes = computeTokenSizes(l.innerW);
+      expect(after.some((e) => e[0] === "arc" && (e[3] === sizes.playerR || e[3] === sizes.ballR))).toBe(false);
+      expect(after.some((e) => e[0] === "fillText")).toBe(false);
+      // order: movement (navy), pass (green), cut (red), screen (purple)
+      const colours = after.filter((e) => e[0] === "set strokeStyle").map((e) => e[1]);
+      expect(Array.from(new Set(colours))).toEqual(["#1E3A5F", "#059669", "#DC2626", "#7C3AED"]);
+    }
+  });
+
+  it("leaves no dash pattern or alpha behind", () => {
+    const log = record((ctx) => renderSceneToCtx(ctx, layout, makeScene(false), [ann("g", "guard"), ann("c", "cut")], false));
+    const dashes = log.filter((e) => e[0] === "setLineDash");
+    expect(dashes[dashes.length - 1]).toEqual(["setLineDash", []]);
+    const alphas = log.filter((e) => e[0] === "set globalAlpha");
+    expect(alphas[alphas.length - 1]).toEqual(["set globalAlpha", 1]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PDF panels: every scene gets at least one (review item 5)
+// ---------------------------------------------------------------------------
+
+describe("pdfPanels", () => {
+  const scene = (id: string, order: number, steps: number[]): Scene => ({
+    ...makeScene(false),
+    id,
+    order,
+    timingGroups: steps.map((step) => ({ step, duration: 500, annotations: [] })),
+  });
+  const play = (scenes: Scene[]) => ({ title: "t", scenes } as unknown as Play);
+
+  it("without export steps: one panel per scene, in scene order, showing everything", () => {
+    const items = pdfPanels(play([scene("b", 2, [1, 2]), scene("a", 1, [])]), false);
+    expect(items.map((i: PdfPanel) => [i.scene.id, i.maxStep, i.label])).toEqual([
+      ["a", Infinity, "Scene 1"],
+      ["b", Infinity, "Scene 2"],
+    ]);
+  });
+
+  it("with export steps: one panel per timing step, sorted", () => {
+    const items = pdfPanels(play([scene("a", 1, [2, 1])]), true);
+    expect(items.map((i: PdfPanel) => [i.scene.id, i.maxStep, i.label])).toEqual([
+      ["a", 1, "Scene 1 · Step 1"],
+      ["a", 2, "Scene 1 · Step 2"],
+    ]);
+  });
+
+  it("with export steps: a scene with no timing groups still gets one panel", () => {
+    const items = pdfPanels(play([scene("a", 1, [1]), scene("b", 2, []), scene("c", 3, [1, 2])]), true);
+    expect(items.map((i: PdfPanel) => [i.scene.id, i.maxStep, i.label])).toEqual([
+      ["a", 1, "Scene 1 · Step 1"],
+      ["b", Infinity, "Scene 2"],
+      ["c", 1, "Scene 3 · Step 1"],
+      ["c", 2, "Scene 3 · Step 2"],
+    ]);
   });
 });

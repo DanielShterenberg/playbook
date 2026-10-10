@@ -13,7 +13,7 @@
  * avoid loading it on the server.
  *
  * A PDF panel is one frame of the export pipeline (issue #174): it is drawn by
- * the same frame painter as GIF / MP4 / PNG (renderSceneToCtx in exportGIF.ts)
+ * the same frame painter as GIF / MP4 / PNG (renderSceneToCtx in frameRenderer.ts)
  * on the shared layout at EXPORT_W, so a panel is the same picture as a video
  * frame of that scene — court frame and flip, token positions and sizes, label
  * mode, player names, team colours and annotation styling included. The only
@@ -25,8 +25,8 @@
 import { computeCourtLayout } from "@/lib/courtLayout";
 import type { CourtVariant } from "@/lib/courtLayout";
 import type { Play, Scene } from "@/lib/types";
-import { renderSceneToCtx } from "./exportGIF";
-import type { FrameStyle } from "./exportGIF";
+import { renderSceneToCtx } from "./frameRenderer";
+import type { FrameStyle } from "./frameRenderer";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -90,6 +90,35 @@ function renderScene(
 // PDF assembly
 // ---------------------------------------------------------------------------
 
+/** One court panel of the PDF. */
+export interface PdfPanel {
+  scene: Scene;
+  /** Step filter for drawPdfSceneOnCanvas (Infinity = every annotation). */
+  maxStep: number;
+  /** "Scene 2" or "Scene 2 · Step 1". */
+  label: string;
+}
+
+/**
+ * The panels of a play's PDF, in order: one per scene, or — with
+ * `exportSteps` — one per timing step of each scene (cumulative reveal).
+ * A scene without timing groups has no step to reveal but is still part of the
+ * play, so it always gets one panel showing the whole scene.
+ */
+export function pdfPanels(play: Play, exportSteps: boolean): PdfPanel[] {
+  const items: PdfPanel[] = [];
+  const scenes = [...play.scenes].sort((a, b) => a.order - b.order);
+  scenes.forEach((scene, sceneIdx) => {
+    const sortedSteps = [...scene.timingGroups].sort((a, b) => a.step - b.step).map((g) => g.step);
+    const steps = exportSteps && sortedSteps.length > 0 ? sortedSteps : [Infinity];
+    for (const maxStep of steps) {
+      const stepLabel = maxStep !== Infinity ? ` · Step ${maxStep}` : "";
+      items.push({ scene, maxStep, label: `Scene ${sceneIdx + 1}${stepLabel}` });
+    }
+  });
+  return items;
+}
+
 export type PdfLayout = "1x1" | "2x1" | "2x2" | "3x2";
 
 export interface ExportPdfOptions extends FrameStyle {
@@ -134,22 +163,7 @@ export async function exportPlayToPdf(play: Play, options: ExportPdfOptions = {}
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
   // --- Collect all items to render ---
-  interface RenderItem {
-    scene: typeof play.scenes[number];
-    maxStep: number;
-    label: string;
-  }
-  const items: RenderItem[] = [];
-  const scenes = [...play.scenes].sort((a, b) => a.order - b.order);
-  for (const scene of scenes) {
-    const sceneIdx = scenes.indexOf(scene);
-    const sortedGroups = [...scene.timingGroups].sort((a, b) => a.step - b.step);
-    const steps = exportSteps ? sortedGroups.map((g) => g.step) : [Infinity];
-    for (const maxStep of steps) {
-      const stepLabel = exportSteps && maxStep !== Infinity ? ` · Step ${maxStep}` : "";
-      items.push({ scene, maxStep, label: `Scene ${sceneIdx + 1}${stepLabel}` });
-    }
-  }
+  const items = pdfPanels(play, exportSteps);
 
   // --- Render pages ---
   const totalPages = Math.ceil(items.length / itemsPerPage);

@@ -184,22 +184,39 @@ describe("token colours — one exported source", () => {
     expect(DEFAULT_DEFENSE_COLOR).toBe("#1E3A5F");
   });
 
-  it("no other module re-declares the ball colour or the default team colours", () => {
+  it("no other module re-declares the ball colours or the default team colours", () => {
     const files = [
       "src/components/players/BallToken.tsx",
+      "src/components/players/PlayerToken.tsx",
       "src/components/court/CourtThumbnail.tsx",
       "src/components/playbook/PlayCard.tsx",
       "src/components/editor/SceneStrip.tsx",
+      "src/app/play/[id]/EditorHeader.tsx",
+      "src/lib/frameRenderer.ts",
       "src/lib/exportGIF.ts",
     ];
     for (const f of files) {
       const src = readFileSync(path.resolve(process.cwd(), f), "utf8");
-      expect(src, f).not.toMatch(/#E05C00/i);
-      expect(src, f).not.toMatch(/const (COLOR_BALL|DEFAULT_OFFENSE_COLOR|DEFAULT_DEFENSE_COLOR)\b/);
+      expect(src, f).not.toMatch(/["'`]#(E05C00|F47B2A|E07B39|1E3A5F)["'`]\s*;/i);
+      expect(src, f).not.toMatch(/const (COLOR_BALL|COLOR_BALL_HIGHLIGHT|COLOR_SEAM|COLOR_BALL_SEAM|DEFAULT_OFFENSE_COLOR|DEFAULT_DEFENSE_COLOR|COLOR_OFFENSE_FILL|COLOR_DEFENSE_STROKE)\b/);
     }
-    for (const f of ["src/components/players/BallToken.tsx", "src/components/court/CourtThumbnail.tsx", "src/lib/exportGIF.ts"]) {
+    for (const f of ["src/components/players/BallToken.tsx", "src/components/court/CourtThumbnail.tsx", "src/lib/frameRenderer.ts"]) {
       expect(readFileSync(path.resolve(process.cwd(), f), "utf8"), f).toMatch(/import \{[^}]*COLOR_BALL[^}]*\} from "@\/lib\/tokenSizing"/);
     }
+    for (const f of ["src/components/players/BallToken.tsx", "src/lib/frameRenderer.ts"]) {
+      const src = readFileSync(path.resolve(process.cwd(), f), "utf8");
+      expect(src, f).toMatch(/COLOR_BALL_HIGHLIGHT/);
+      expect(src, f).toMatch(/COLOR_BALL_SEAM/);
+    }
+    for (const f of ["src/components/players/PlayerToken.tsx", "src/app/play/[id]/EditorHeader.tsx", "src/lib/frameRenderer.ts"]) {
+      expect(readFileSync(path.resolve(process.cwd(), f), "utf8"), f).toMatch(/import \{[^}]*DEFAULT_OFFENSE_COLOR[^}]*\} from "@\/lib\/tokenSizing"/);
+    }
+  });
+
+  it("ball highlight and seam colours", async () => {
+    const m = await import("@/lib/tokenSizing");
+    expect(m.COLOR_BALL_HIGHLIGHT).toBe("#F47B2A");
+    expect(m.COLOR_BALL_SEAM).toBe("#FFFFFF");
   });
 });
 

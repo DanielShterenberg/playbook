@@ -42,6 +42,10 @@ export const BALL_RADIUS = 12;
 
 /** Basketball fill. */
 export const COLOR_BALL = "#E05C00";
+/** Basketball highlight arc. */
+export const COLOR_BALL_HIGHLIGHT = "#F47B2A";
+/** Basketball seam lines. */
+export const COLOR_BALL_SEAM = "#FFFFFF";
 /** Offense token fill when the play has no custom team colours. */
 export const DEFAULT_OFFENSE_COLOR = "#E07B39";
 /** Defense token accent (outline / label) when the play has no custom team colours. */

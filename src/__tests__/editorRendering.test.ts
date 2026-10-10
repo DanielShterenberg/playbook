@@ -407,15 +407,21 @@ describe("CourtWithPlayers drag-end handlers", () => {
 // ---------------------------------------------------------------------------
 
 describe("court sizing", () => {
-  it("CourtWithPlayers ignores a degenerate layout and re-projects through the shared guarded helper", () => {
+  it("CourtWithPlayers guards only the re-projection against a degenerate layout — the size is still updated", () => {
     const src = source("src/components/players/CourtWithPlayers.tsx");
-    expect(src).toMatch(/if \(!hasCourtArea\(layout\)\) return;/);
-    expect(src).toMatch(/reprojectCanvasPx\(/);
-    // the guard comes before the layout is remembered
-    expect(src.indexOf("if (!hasCourtArea(layout)) return;")).toBeLessThan(src.indexOf("layoutRef.current = layout;"));
-    // no unguarded px → norm → px round trip left in the resize branch
-    const resize = src.slice(src.indexOf("// If size changed (resize)"), src.indexOf("// First render — read from the Zustand store"));
-    expect(resize).not.toMatch(/canvasPxToNorm\(/);
+    const ready = src.slice(src.indexOf("const handleCourtReady = useCallback("), src.indexOf("// First render — read from the Zustand store"));
+    // The reported size always reaches state, zero or not, before any guard…
+    expect(ready).toMatch(/setCourtSize\(/);
+    expect(ready.indexOf("setCourtSize(")).toBeLessThan(ready.indexOf("hasCourtArea(layout)"));
+    expect(ready).toMatch(/if \(!hasCourtArea\(layout\)\) return;/);
+    // …but a zero-size layout is never remembered or re-projected through.
+    expect(ready.indexOf("if (!hasCourtArea(layout)) return;")).toBeLessThan(ready.indexOf("layoutRef.current = layout;"));
+    expect(ready).toMatch(/reprojectCanvasPx\(/);
+    expect(ready).not.toMatch(/canvasPxToNorm\(/);
+    // Nothing is drawn over neighbouring UI while the court has no area.
+    expect(src).toMatch(/const courtVisible = courtSize !== null && courtSize\.playAreaWidth > 0 && courtSize\.playAreaHeight > 0;/);
+    expect(src.match(/\{courtVisible && courtSize && \(/g)).toHaveLength(2); // token overlay + AnnotationLayer
+    expect(src).not.toMatch(/\{courtSize && \(/);
   });
 
   it("EditorCourtArea observes the area element whenever it (re)mounts, not only when courtType changes", () => {
