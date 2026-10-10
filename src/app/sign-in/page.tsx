@@ -82,7 +82,7 @@ function SignInContent() {
   // Auto-focus email when mode changes
   useEffect(() => {
     emailRef.current?.focus();
-  }, [mode]);
+  }, [mode, loading]);
 
   function clearError() {
     if (error) setError("");
@@ -124,7 +124,7 @@ function SignInContent() {
 
   // While checking auth, show the themed loading screen (AuthGuard handles
   // this elsewhere, but this is the public sign-in page).
-  if (loading) return <SignInLoading />;
+  if (loading || user) return <SignInLoading />;
 
   return (
     <main className={PAGE}>

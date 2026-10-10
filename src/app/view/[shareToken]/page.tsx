@@ -21,6 +21,8 @@
  */
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 import Logo from "@/components/brand/Logo";
 import ThemeToggle from "@/components/brand/ThemeToggle";
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
@@ -132,18 +134,26 @@ function ChevronRightIcon({ size = 16 }: { size?: number }) {
 // ---------------------------------------------------------------------------
 
 function ViewerHeader() {
+  const { user, loading } = useAuth();
+  const pathname = usePathname();
+  // Signed-in viewers go to their playbook; others sign in and come back here.
+  const link = user
+    ? { href: "/playbook", label: "My playbook" }
+    : { href: `/sign-in?redirect=${encodeURIComponent(pathname ?? "/playbook")}`, label: "Sign in" };
   return (
     <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-2.5 sm:px-6">
       <div className="flex flex-1 items-center">
         <Logo />
       </div>
       <ThemeToggle />
-      <Link
-        href="/sign-in"
-        className="flex h-11 flex-none items-center rounded-lg border border-line px-4 text-sm font-medium text-ink no-underline transition-colors hover:bg-app"
-      >
-        Sign in
-      </Link>
+      {!loading && (
+        <Link
+          href={link.href}
+          className="flex h-11 flex-none items-center rounded-lg border border-line px-4 text-sm font-medium text-ink no-underline transition-colors hover:bg-app"
+        >
+          {link.label}
+        </Link>
+      )}
     </header>
   );
 }
@@ -273,6 +283,10 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   useEffect(() => {
     function handler(e: KeyboardEvent) {
       const handlers = handlersRef.current;
+      // Space on a focused control (theme toggle, links, the buttons below)
+      // activates that control; it must not also toggle playback.
+      const onControl = e.target instanceof Element && e.target.closest("button, a, input, select, textarea") !== null;
+      if (e.code === "Space" && onControl) return;
       if (e.code === "Space") {
         e.preventDefault();
         handlers.togglePlay();
@@ -343,7 +357,8 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   const categoryLabel = CATEGORY_LABELS[play.category];
   // Share of the current scene that has been reached, by step (the playback
   // position only re-renders when the step changes, not on every frame).
-  const sceneProgress = steps.length > 0 ? (stepIndex + 1) / steps.length : 1;
+  // Empty at the first step, full at the last; a single-step scene is full once it is current.
+  const sceneProgress = steps.length > 1 ? stepIndex / (steps.length - 1) : 1;
 
   return (
     <main className="flex min-h-screen flex-col bg-app text-sm text-ink">
@@ -421,7 +436,7 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
               </>
             )}
 
-            {hasMultipleSteps && (
+            {(hasMultipleSteps || hasMultipleScenes) && (
               <button
                 type="button"
                 onClick={togglePlay}
