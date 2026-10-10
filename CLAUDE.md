@@ -25,9 +25,19 @@
 ## Key Conventions
 
 ### Zustand store
-- `selectedSceneId` MUST always be set in sync with `currentPlay` — never set one without the other
+- `selectedSceneId` and `currentSceneIndex` are reconciled on every store write (the `set` wrapper in `store.ts`), so always go through store actions — never call `useStore.setState` directly
 - Use `useStore.getState()` inside `useEffect` to read state without adding it to deps
 - Undo/redo wraps every store mutation — check `src/lib/store.ts` for the `withHistory` pattern
+
+### Rendering pipeline (editor, viewer, thumbnails, exports)
+- One recipe everywhere: `computeCourtLayout(width, variant)` → `paintCourt(ctx, layout, { flipped })` → `normToCanvasPx(x, y, layout, flipped)` → `computeTokenSizes(layout.innerW)` (`src/lib/courtLayout.ts`, `courtRendering.ts`, `tokenSizing.ts`)
+- PNG / MP4 / PDF frames are all drawn by `renderSceneToCtx` in `src/lib/frameRenderer.ts`; its annotation drawing mirrors `AnnotationLayer.tsx` — change both together
+- The editor's on-screen frame is the reference. Never add a private court-drawing copy or an `oobBot` compensation in an exporter
+- Verify rendering changes in a real browser against the editor; unit tests have missed export bugs here
+
+### Playback
+- One engine: `tickPlayback` in `src/lib/playback.ts`, driven by `usePlaybackEngine` (mounted once in `src/app/play/[id]/PlaybackEngine.tsx`). Components own no timers
+- `stepDurationMs` is the single step-timing rule for on-screen playback and exports
 
 ### Coordinates
 - Court positions are normalized `[0, 1]` (x=0 left, x=1 right, y=0 half-court line, y=1 baseline)
@@ -52,10 +62,8 @@
 - Password: Test1234!
 - Team: מכבי קדימה (admin role)
 
-## Open Issues (as of 2026-02-21)
-- #77  GIF export
-- #128 Defender follow/guard assignment
-- #129 Multi-leg player paths
-- #130 Custom team colors
-- #132 Presentation mode
-- #133 Scene comments with threading
+## Open Issues (as of 2026-10-10)
+- #167 Full app redesign + new logo
+- #173 Flipped full court inverts the formation relative to the basket (needs a product decision; fixing moves stored plays)
+- #179 Playback/store cleanup after #177
+- #180 Rendering cleanup after #178
