@@ -161,3 +161,63 @@ describe("computeTokenSizes", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Token colours and thumbnail attach offset (review items 4, 6, 7)
+// ---------------------------------------------------------------------------
+
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import {
+  COLOR_BALL,
+  DEFAULT_OFFENSE_COLOR,
+  DEFAULT_DEFENSE_COLOR,
+  thumbnailBallAttachOffsetY,
+  thumbnailBallRadius,
+  thumbnailDotRadius,
+} from "@/lib/tokenSizing";
+
+describe("token colours — one exported source", () => {
+  it("are the editor's", () => {
+    expect(COLOR_BALL).toBe("#E05C00");
+    expect(DEFAULT_OFFENSE_COLOR).toBe("#E07B39");
+    expect(DEFAULT_DEFENSE_COLOR).toBe("#1E3A5F");
+  });
+
+  it("no other module re-declares the ball colour or the default team colours", () => {
+    const files = [
+      "src/components/players/BallToken.tsx",
+      "src/components/court/CourtThumbnail.tsx",
+      "src/components/playbook/PlayCard.tsx",
+      "src/components/editor/SceneStrip.tsx",
+      "src/lib/exportGIF.ts",
+    ];
+    for (const f of files) {
+      const src = readFileSync(path.resolve(process.cwd(), f), "utf8");
+      expect(src, f).not.toMatch(/#E05C00/i);
+      expect(src, f).not.toMatch(/const (COLOR_BALL|DEFAULT_OFFENSE_COLOR|DEFAULT_DEFENSE_COLOR)\b/);
+    }
+    for (const f of ["src/components/players/BallToken.tsx", "src/components/court/CourtThumbnail.tsx", "src/lib/exportGIF.ts"]) {
+      expect(readFileSync(path.resolve(process.cwd(), f), "utf8"), f).toMatch(/import \{[^}]*COLOR_BALL[^}]*\} from "@\/lib\/tokenSizing"/);
+    }
+  });
+});
+
+describe("thumbnailBallAttachOffsetY — the editor's gap scaled to the dot", () => {
+  it("is the editor's offset at the editor's base radius", () => {
+    expect(thumbnailBallAttachOffsetY(18, 12)).toBe(ballAttachOffsetY(18, 12));
+  });
+
+  it("scales the 2 px gap with the dot radius instead of keeping it fixed", () => {
+    for (const w of [80, 120, 200]) {
+      const dot = thumbnailDotRadius(w);
+      const ball = thumbnailBallRadius(w);
+      const off = thumbnailBallAttachOffsetY(dot, ball);
+      expect(off).toBeCloseTo(-(dot + ball + (BALL_ATTACH_GAP * dot) / 18), 12);
+      // closer to the holder than the fixed-gap offset, but never overlapping it
+      expect(off).toBeGreaterThan(ballAttachOffsetY(dot, ball));
+      expect(-off).toBeGreaterThan(dot + ball);
+      expect(-off - (dot + ball)).toBeLessThan(1);
+    }
+  });
+});

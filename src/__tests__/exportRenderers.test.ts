@@ -16,12 +16,12 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { computeCourtLayout, normToCanvasPx, type CourtLayout, type CourtVariant } from "@/lib/courtLayout";
 import { FT_CIRCLE_CENTER_Y } from "@/components/court/courtDimensions";
-import { paintCourt } from "@/lib/courtRendering";
+import { paintCourt, COLOR_COURT } from "@/lib/courtRendering";
 import { computeTokenSizes } from "@/lib/tokenSizing";
 import { renderSceneToCtx, renderFrame, annotationScale, RESOLUTION_WIDTH } from "@/lib/exportGIF";
 import { renderPNGToCanvas } from "@/lib/exportPNG";
 import { drawPdfSceneOnCanvas, PDF_EXPORT_W } from "@/lib/exportPdf";
-import { videoFrameSize } from "@/lib/exportVideo";
+import { videoFrameSize, renderVideoFrame } from "@/lib/exportVideo";
 import type { Annotation, Scene } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
@@ -213,7 +213,7 @@ describe("GIF/MP4 frame (renderSceneToCtx)", () => {
       const layout = computeCourtLayout(480, variant);
       const expected = record((ctx) => renderSceneToCtx(ctx, layout, scene, ANNOTATIONS, flipped));
       const { ctx, log } = createRecordingCtx();
-      renderFrame(fakeCanvas(ctx, 480, layout.totalHeight), scene, ANNOTATIONS, 480, layout.totalHeight, flipped, "numbers", {}, undefined, undefined, variant);
+      renderFrame(fakeCanvas(ctx, 480, layout.totalHeight), scene, ANNOTATIONS, 480, layout.totalHeight, flipped, {}, variant);
       expect(log).toEqual(expected);
     }
   });
@@ -246,27 +246,70 @@ describe("defender tokens read like the editor's (PlayerToken.tsx)", () => {
 });
 
 describe("video frame size", () => {
-  it("is the shared layout's size for both encoder paths", () => {
+  it("is the shared layout's size, padded UP to even dimensions (H.264) — nothing is cropped", () => {
     for (const res of ["sd", "hd"] as const) {
       for (const variant of VARIANTS) {
         const layout = computeCourtLayout(RESOLUTION_WIDTH[res], variant);
         const size = videoFrameSize(res, variant);
+        // The court is laid out exactly as everywhere else…
         expect(size.width).toBe(layout.totalWidth);
         expect(size.height).toBe(layout.totalHeight);
-        // H.264 needs even dimensions: at most one row/column is cropped.
+        // …on a canvas that is even and never smaller than the layout.
         expect(size.encW % 2).toBe(0);
         expect(size.encH % 2).toBe(0);
-        expect(size.width - size.encW).toBeLessThanOrEqual(1);
-        expect(size.height - size.encH).toBeLessThanOrEqual(1);
-        // The layout is derived from encW, so it must not change the geometry.
-        expect(computeCourtLayout(size.encW, variant)).toEqual(layout);
+        expect(size.encW - size.width === 0 || size.encW - size.width === 1).toBe(true);
+        expect(size.encH - size.height === 0 || size.encH - size.height === 1).toBe(true);
       }
     }
   });
 
-  it("half-court sizes are unchanged from before the unification", () => {
-    expect(videoFrameSize("sd", "half")).toMatchObject({ width: 480, height: 455 });
-    expect(videoFrameSize("hd", "half")).toMatchObject({ width: 800, height: 759 });
+  it("half-court layouts are unchanged; the odd heights gain one row instead of losing one", () => {
+    expect(videoFrameSize("sd", "half")).toEqual({ width: 480, height: 455, encW: 480, encH: 456 });
+    expect(videoFrameSize("hd", "half")).toEqual({ width: 800, height: 759, encW: 800, encH: 760 });
+    expect(videoFrameSize("sd", "full")).toEqual({ width: 480, height: 880, encW: 480, encH: 880 });
+    expect(videoFrameSize("hd", "full")).toEqual({ width: 800, height: 1468, encW: 800, encH: 1468 });
+  });
+
+  it("both encoder paths size their canvas from encW × encH", () => {
+    const src = readFileSync(path.resolve(process.cwd(), "src/lib/exportVideo.ts"), "utf8");
+    expect(src.match(/canvas\.width\s*=\s*encW;/g)).toHaveLength(2);
+    expect(src.match(/canvas\.height\s*=\s*encH;/g)).toHaveLength(2);
+    expect(src).not.toMatch(/canvas\.(width|height)\s*=\s*(width|height);/);
+  });
+});
+
+describe("video frame (renderVideoFrame)", () => {
+  const style = { displayMode: "names" as const, playerNames: { "offense-1": "Dan" }, offenseColor: "#112233", defenseColor: "#445566" };
+
+  for (const res of ["sd", "hd"] as const) {
+    for (const { variant, flipped } of CASES) {
+      it(`${res} ${variant} ${flipped ? "flipped" : "normal"}: the full layout frame, floor colour in the padding row`, () => {
+        const size = videoFrameSize(res, variant);
+        const layout = computeCourtLayout(size.width, variant);
+        const scene = makeScene(true);
+        const frame = record((ctx) =>
+          renderSceneToCtx(ctx, layout, scene, ANNOTATIONS, flipped, style),
+        );
+        const { ctx, log } = createRecordingCtx();
+        renderVideoFrame(fakeCanvas(ctx, size.encW, size.encH), size, scene, ANNOTATIONS, flipped, variant, style);
+
+        const padded = size.encW !== size.width || size.encH !== size.height;
+        const pad: LogEntry[] = padded ? [["set fillStyle", COLOR_COURT], ["fillRect", 0, 0, size.encW, size.encH]] : [];
+        expect(log).toEqual([...pad, ...frame]);
+        // The court floor still covers the whole layout: no row of it is lost.
+        expect(log.some((e) => e[0] === "fillRect" && e[3] === layout.totalWidth && e[4] === layout.totalHeight)).toBe(true);
+        expectTokens(log, scene, layout, flipped);
+      });
+    }
+  }
+
+  it("defaults to the plain numbers frame", () => {
+    const size = videoFrameSize("sd", "full");
+    const layout = computeCourtLayout(size.width, "full");
+    const scene = makeScene(false);
+    const { ctx, log } = createRecordingCtx();
+    renderVideoFrame(fakeCanvas(ctx, size.encW, size.encH), size, scene, [], false, "full");
+    expect(log).toEqual(record((c) => renderSceneToCtx(c, layout, scene, [], false)));
   });
 });
 
@@ -357,7 +400,10 @@ describe("PDF (drawPdfSceneOnCanvas)", () => {
       const markingY = flipped ? (log[ti][2] as number) - unflipped : unflipped;
 
       const { playerR } = computeTokenSizes(layout.innerW);
-      const token = log.find((e) => e[0] === "arc" && e[3] === playerR && e[5] === FULL_CIRCLE)!;
+      // The frame painter draws the token's drop shadow first, then the token.
+      const discs = log.filter((e) => e[0] === "arc" && e[3] === playerR && e[5] === FULL_CIRCLE);
+      expect(discs).toHaveLength(2);
+      const token = discs[1];
       return { px: (token[2] as number) - markingY, layout };
     }
 
@@ -425,12 +471,178 @@ describe("PDF (drawPdfSceneOnCanvas)", () => {
     }
   });
 
-  it("has no private frame: no computePdfFrame, no legacy drawCourt", () => {
+  // Issue #174: a PDF panel is the same picture as a video frame.
+  describe("panel is a video frame at the PDF width (renderSceneToCtx)", () => {
+    const style = { displayMode: "names" as const, playerNames: { "offense-1": "Dan", "defense-4": "Big" }, offenseColor: "#112233", defenseColor: "#445566" };
+    const upTo = (scene: Scene, maxStep: number) =>
+      [...scene.timingGroups].sort((a, b) => a.step - b.step).filter((g) => g.step <= maxStep).flatMap((g) => g.annotations);
+
+    for (const { variant, flipped } of CASES) {
+      for (const maxStep of [1, 2, Infinity]) {
+        it(`${variant} ${flipped ? "flipped" : "normal"} maxStep=${maxStep}: identical call log, defaults`, () => {
+          const layout = computeCourtLayout(PDF_EXPORT_W, variant);
+          const scene = makeScene(true);
+          const frame = record((ctx) => renderSceneToCtx(ctx, layout, scene, upTo(scene, maxStep), flipped));
+          const pdf = record((ctx) => drawPdfSceneOnCanvas(fakeCanvas(ctx), scene, variant, flipped, maxStep));
+          expect(pdf).toEqual(frame);
+        });
+
+        it(`${variant} ${flipped ? "flipped" : "normal"} maxStep=${maxStep}: identical call log with label mode, names and team colours`, () => {
+          const layout = computeCourtLayout(PDF_EXPORT_W, variant);
+          const scene = makeScene(false);
+          const frame = record((ctx) =>
+            renderSceneToCtx(ctx, layout, scene, upTo(scene, maxStep), flipped, style),
+          );
+          const pdf = record((ctx) => drawPdfSceneOnCanvas(fakeCanvas(ctx), scene, variant, flipped, maxStep, style));
+          expect(pdf).toEqual(frame);
+        });
+      }
+    }
+
+    it("step filter is cumulative and ordered by step, whatever the stored group order", () => {
+      const layout = computeCourtLayout(PDF_EXPORT_W, "half");
+      const scene = makeScene(false);
+      scene.timingGroups = [...scene.timingGroups].reverse();
+      const [a1, a2, a3, a4] = ANNOTATIONS;
+      const expectLog = (maxStep: number | undefined, anns: Annotation[]) =>
+        expect(record((ctx) => drawPdfSceneOnCanvas(fakeCanvas(ctx), scene, "half", false, maxStep))).toEqual(
+          record((ctx) => renderSceneToCtx(ctx, layout, scene, anns, false)),
+        );
+      expectLog(0, []);
+      expectLog(1, [a1, a2]);
+      expectLog(2, [a1, a2, a3, a4]);
+      expectLog(undefined, [a1, a2, a3, a4]);
+    });
+
+    it("label mode, names and team colours reach the tokens", () => {
+      const scene = makeScene(false);
+      const texts = (log: LogEntry[]) => log.filter((e) => e[0] === "fillText").map((e) => e[1]);
+      const fills = (log: LogEntry[]) => log.filter((e) => e[0] === "set fillStyle").map((e) => e[1]);
+      const draw = (opts?: Parameters<typeof drawPdfSceneOnCanvas>[5]) =>
+        record((ctx) => drawPdfSceneOnCanvas(fakeCanvas(ctx), scene, "half", false, Infinity, opts));
+
+      expect(texts(draw()).sort()).toEqual(["1", "1", "2", "4"]);
+      expect(texts(draw({ displayMode: "abbreviations" })).sort()).toEqual(["PF", "PG", "PG", "SG"]);
+      expect(texts(draw({ displayMode: "names", playerNames: style.playerNames })).sort()).toEqual(["2", "Big", "Dan", "X1"]);
+
+      const custom = draw({ offenseColor: "#112233", defenseColor: "#445566" });
+      expect(fills(custom)).toContain("#112233");
+      expect(fills(custom)).toContain("#445566");
+      expect(fills(draw())).not.toContain("#112233");
+    });
+  });
+
+  it("has no private renderer: no own frame, tokens, annotations or court call", () => {
     const src = readFileSync(path.resolve(process.cwd(), "src/lib/exportPdf.ts"), "utf8");
     expect(src).not.toMatch(/computePdfFrame|drawCourt\b|oobBot/);
     expect(src).toMatch(/computeCourtLayout\(EXPORT_W, courtType\)/);
-    expect(src).toMatch(/paintCourt\(ctx, layout, \{ flipped \}\)/);
+    expect(src).toMatch(/import \{ renderSceneToCtx \} from "\.\/exportGIF"/);
+    expect(src).toMatch(/renderSceneToCtx\(/);
+    expect(src).not.toMatch(/function (drawPlayer|drawBall|drawAnnotation|drawArrowHead|strokeBezier)\b/);
+    expect(src).not.toMatch(/paintCourt|normToCanvasPx|computeTokenSizes/);
+    expect(src).not.toMatch(/ctx\.(arc|fill|stroke|moveTo|lineTo|setLineDash|fillText)\(/);
+    expect(src).not.toMatch(/ANN_|EXPORT_W \*/);
   });
+});
+
+// ---------------------------------------------------------------------------
+// One frame style for every exporter (review item 3)
+// ---------------------------------------------------------------------------
+
+describe("frame style", () => {
+  const style = { displayMode: "names" as const, playerNames: { "offense-1": "Dan" }, offenseColor: "#112233", defenseColor: "#445566" };
+  const texts = (log: LogEntry[]) => log.filter((e) => e[0] === "fillText").map((e) => e[1]);
+  const fills = (log: LogEntry[]) => log.filter((e) => e[0] === "set fillStyle").map((e) => e[1]);
+
+  it("renderSceneToCtx takes the style as one object; omitted fields default", () => {
+    const layout = computeCourtLayout(480, "half");
+    const scene = makeScene(false);
+    const plain = record((ctx) => renderSceneToCtx(ctx, layout, scene, [], false));
+    expect(record((ctx) => renderSceneToCtx(ctx, layout, scene, [], false, {}))).toEqual(plain);
+    expect(record((ctx) => renderSceneToCtx(ctx, layout, scene, [], false, { displayMode: "numbers", playerNames: {} }))).toEqual(plain);
+    const styled = record((ctx) => renderSceneToCtx(ctx, layout, scene, [], false, style));
+    expect(texts(styled)).toContain("Dan");
+    expect(fills(styled)).toEqual(expect.arrayContaining(["#112233", "#445566"]));
+  });
+
+  it("PNG, video and PDF hand the same object to the same painter", () => {
+    const scene = makeScene(true);
+    const all = scene.timingGroups.flatMap((g) => g.annotations);
+    for (const { variant, flipped } of CASES) {
+      const png = record((ctx) => renderPNGToCanvas(fakeCanvas(ctx), scene, 800, 1, flipped, { variant, ...style }));
+      expect(png.slice(1)).toEqual(record((ctx) => renderSceneToCtx(ctx, computeCourtLayout(800, variant), scene, all, flipped, style)));
+
+      const size = videoFrameSize("hd", variant);
+      const video = record((ctx) => renderVideoFrame(fakeCanvas(ctx, size.encW, size.encH), size, scene, all, flipped, variant, style));
+      const frame = record((ctx) => renderSceneToCtx(ctx, computeCourtLayout(800, variant), scene, all, flipped, style));
+      expect(video.slice(video.length - frame.length)).toEqual(frame);
+
+      const pdf = record((ctx) => drawPdfSceneOnCanvas(fakeCanvas(ctx), scene, variant, flipped, Infinity, style));
+      expect(pdf).toEqual(record((ctx) => renderSceneToCtx(ctx, computeCourtLayout(PDF_EXPORT_W, variant), scene, all, flipped, style)));
+    }
+  });
+
+  it("is declared once (exportGIF.ts) and imported by the other exporters", () => {
+    const read = (f: string) => readFileSync(path.resolve(process.cwd(), "src/lib", f), "utf8");
+    expect(read("exportGIF.ts")).toMatch(/export interface FrameStyle \{/);
+    for (const f of ["exportPNG.ts", "exportVideo.ts", "exportPdf.ts"]) {
+      const src = read(f);
+      expect(src, f).toMatch(/FrameStyle/);
+      expect(src, f).not.toMatch(/playerNames\?: Record<string, string>/);
+      expect(src, f).not.toMatch(/displayMode\?: PlayerDisplayMode/);
+      expect(src, f).not.toMatch(/interface (PdfSceneStyle|VideoFrameStyle)/);
+    }
+    // No renderer is called with the style unpacked into positional arguments.
+    for (const f of ["exportGIF.ts", "exportPNG.ts", "exportVideo.ts", "exportPdf.ts"]) {
+      expect(read(f), f).not.toMatch(/playerNames,\s*offenseColor,\s*defenseColor,?\s*\)/);
+    }
+  });
+
+  it("both video encoder paths pass the style (WebCodecs and the MediaRecorder fallback)", () => {
+    const src = readFileSync(path.resolve(process.cwd(), "src/lib/exportVideo.ts"), "utf8");
+    const calls = src.match(/renderVideoFrame\(canvas,[^;]*\);/g) ?? [];
+    expect(calls).toHaveLength(4);
+    for (const c of calls) expect(c).toMatch(/, variant, style\);$/);
+    expect(src).not.toMatch(/"numbers", \{\}/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A scene without a ball renders without one — never throws (review item 1)
+// ---------------------------------------------------------------------------
+
+describe("scene without a ball", () => {
+  const noBall = (): Scene => ({ ...makeScene(false), ball: undefined } as unknown as Scene);
+  const nullBall = (): Scene => ({ ...makeScene(false), ball: null } as unknown as Scene);
+  const BALL = "#E05C00";
+  const hasBall = (log: LogEntry[]) => log.some((e) => e[0] === "set fillStyle" && e[1] === BALL);
+
+  for (const make of [noBall, nullBall]) {
+    for (const { variant, flipped } of CASES) {
+      it(`${make.name} ${variant} ${flipped ? "flipped" : "normal"}: frame, PNG, PDF and video draw everything but the ball`, () => {
+        const scene = make();
+        const layout = computeCourtLayout(480, variant);
+        const withBall = record((ctx) => renderSceneToCtx(ctx, layout, makeScene(false), ANNOTATIONS, flipped));
+        const frame = record((ctx) => renderSceneToCtx(ctx, layout, scene, ANNOTATIONS, flipped));
+        expect(hasBall(withBall)).toBe(true);
+        expect(hasBall(frame)).toBe(false);
+        expect(frame.length).toBeLessThan(withBall.length);
+        const { playerR } = computeTokenSizes(layout.innerW);
+        const players = (log: LogEntry[]) => log.filter((e) => e[0] === "arc" && e[3] === playerR);
+        expect(players(frame)).toEqual(players(withBall));
+        expect(frame.filter((e) => e[0] === "save").length).toBe(frame.filter((e) => e[0] === "restore").length);
+
+        const png = record((ctx) => renderPNGToCanvas(fakeCanvas(ctx), scene, 800, 2, flipped, { variant }));
+        const pdf = record((ctx) => drawPdfSceneOnCanvas(fakeCanvas(ctx), scene, variant, flipped));
+        const size = videoFrameSize("sd", variant);
+        const video = record((ctx) => renderVideoFrame(fakeCanvas(ctx, size.encW, size.encH), size, scene, ANNOTATIONS, flipped, variant));
+        for (const log of [png, pdf, video]) {
+          expect(log.length).toBeGreaterThan(50);
+          expect(hasBall(log)).toBe(false);
+        }
+      });
+    }
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -446,7 +658,10 @@ describe("exporter sources", () => {
     expect(src).not.toMatch(/drawCourtOnCanvas|drawHalfCourtInner/);
     expect(src).not.toMatch(/function\s+computeCourtLayout/);
     expect(src).not.toMatch(/components\/court\/Court"/); // court drawing comes from src/lib
-    expect(src).not.toMatch(/COLOR_COURT|COLOR_PAINT|COLOR_LINE/);
+    // Shared colour constants may be imported, never redefined or hard-coded.
+    expect(src).not.toMatch(/(const|let|var)\s+(COLOR_COURT|COLOR_PAINT|COLOR_LINE)\b/);
+    expect(src).not.toMatch(/COLOR_PAINT|COLOR_LINE/);
+    expect(src).not.toMatch(/#F0C878/i);
     expect(src).not.toMatch(/OOB_SIDE_FRAC|OOB_BOTTOM_FRAC|-\s*oobBot/);
     expect(src).not.toMatch(/const\s+(PLAYER_RADIUS|BALL_RADIUS|PLAYER_R|BALL_R)\b/);
     expect(src).not.toMatch(/\*\s*0\.03\b|\*\s*0\.02\b|\*\s*0\.016\b/);

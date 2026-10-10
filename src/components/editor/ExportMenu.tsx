@@ -189,11 +189,18 @@ export default function ExportMenu() {
     setExportMode("pdf");
     setOpen(false);
     try {
-      await exportPlayToPdf(currentPlay, { exportSteps: pdfExportSteps, layout: pdfLayout });
+      await exportPlayToPdf(currentPlay, {
+        exportSteps: pdfExportSteps,
+        layout: pdfLayout,
+        displayMode,
+        playerNames,
+        offenseColor: currentPlay.colors?.offense,
+        defenseColor: currentPlay.colors?.defense,
+      });
     } finally {
       setExportMode("idle");
     }
-  }, [currentPlay, pdfExportSteps, pdfLayout]);
+  }, [currentPlay, pdfExportSteps, pdfLayout, displayMode, playerNames]);
 
   const handleExportVideo = useCallback(async () => {
     if (!currentPlay) return;

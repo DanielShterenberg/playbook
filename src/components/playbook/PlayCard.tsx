@@ -6,8 +6,8 @@
  * Implements issue #69: Playbook grid view.
  *
  * Shows:
- *   - Thumbnail of the first scene (reuses the SVG court + dots pattern
- *     from SceneStrip's SceneThumbnail logic)
+ *   - Thumbnail of the first scene (the shared CourtThumbnail, which follows
+ *     the scene's flipped setting and shows the ball)
  *   - Play title
  *   - Scene count
  *   - Category badge
@@ -19,161 +19,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
-import type { Play, Role, Scene } from "@/lib/types";
-import { thumbnailDotRadius } from "@/lib/tokenSizing";
+import type { Play, Role } from "@/lib/types";
+import CourtThumbnail from "@/components/court/CourtThumbnail";
 import { addPlayToTeam, deletePlay, savePlay } from "@/lib/db";
 
 // ---------------------------------------------------------------------------
-// Inline mini court thumbnail (same logic as SceneStrip's SceneThumbnail)
+// Thumbnail (the court itself is the shared CourtThumbnail)
 // ---------------------------------------------------------------------------
 
-const DEFAULT_OFFENSE_COLOR = "#E07B39";
-const DEFAULT_DEFENSE_COLOR = "#1E3A5F";
-
-function PlayThumbnail({
-  scene,
-  offenseColor = DEFAULT_OFFENSE_COLOR,
-  defenseColor = DEFAULT_DEFENSE_COLOR,
-}: {
-  scene: Scene;
-  offenseColor?: string;
-  defenseColor?: string;
-}) {
-  const W = 200;
-  const H = Math.round(W / (50 / 47)); // ~188 px
-
-  const px = (nx: number) => nx * W;
-  const py = (ny: number) => ny * H;
-
-  // Player dots use the editor's radius-to-court-width ratio (W is the inner
-  // court width — thumbnails have no out-of-bounds margin), with a floor so
-  // they stay legible on tiny thumbnails.
-  const dotR = thumbnailDotRadius(W);
-
-  return (
-    <svg
-      width={W}
-      height={H}
-      viewBox={`0 0 ${W} ${H}`}
-      aria-hidden="true"
-      style={{ display: "block", width: "100%", height: "auto" }}
-    >
-      {/* Court background */}
-      <rect width={W} height={H} fill="#F0C878" rx={6} />
-
-      {/* Paint (16ft wide × 19ft deep; LANE_LEFT=0.34, LANE_RIGHT=0.66) */}
-      <rect
-        x={px(0.34)}
-        y={py(0.596)}
-        width={px(0.32)}
-        height={py(0.404)}
-        fill={offenseColor}
-      />
-
-      {/* Court outline */}
-      <rect width={W} height={H} fill="none" stroke="#fff" strokeWidth={1.5} rx={6} />
-
-      {/* Half-court line */}
-      <line x1={0} y1={0} x2={W} y2={0} stroke="#fff" strokeWidth={1} />
-
-      {/* Half-court centre-circle arc — bows into the court (sweep=0=CCW) */}
-      <path
-        d={`M ${px(0.38)},0 A ${px(0.12)},${px(0.12)} 0 0 0 ${px(0.62)},0`}
-        fill="none"
-        stroke="#fff"
-        strokeWidth={1}
-      />
-
-      {/* Three-point line: corner straights + minor arc (large-arc=0, sweep=1) bowing upward */}
-      <path
-        d={`M ${px(0.06)},${py(1)} L ${px(0.06)},${py(0.702)} A ${px(0.475)},${px(0.475)} 0 0 1 ${px(0.94)},${py(0.702)} L ${px(0.94)},${py(1)}`}
-        fill="none"
-        stroke="#fff"
-        strokeWidth={1}
-      />
-
-      {/* Lane outline */}
-      <rect
-        x={px(0.34)}
-        y={py(0.596)}
-        width={px(0.32)}
-        height={py(0.404)}
-        fill="none"
-        stroke="#fff"
-        strokeWidth={1}
-      />
-
-      {/* Free-throw line */}
-      <line
-        x1={px(0.34)}
-        y1={py(0.596)}
-        x2={px(0.66)}
-        y2={py(0.596)}
-        stroke="#fff"
-        strokeWidth={1}
-      />
-
-      {/* Free-throw circle upper arc — toward half-court (sweep=1=CW=upward) */}
-      <path
-        d={`M ${px(0.38)},${py(0.596)} A ${px(0.12)},${px(0.12)} 0 0 1 ${px(0.62)},${py(0.596)}`}
-        fill="none"
-        stroke="#fff"
-        strokeWidth={1}
-      />
-
-      {/* Backboard (4ft from baseline, 6ft wide) */}
-      <line
-        x1={px(0.44)}
-        y1={py(0.915)}
-        x2={px(0.56)}
-        y2={py(0.915)}
-        stroke="#fff"
-        strokeWidth={1.5}
-      />
-
-      {/* Restricted area arc (sweep=1=CW=upward) */}
-      <path
-        d={`M ${px(0.42)},${py(0.888)} A ${px(0.08)},${px(0.08)} 0 0 1 ${px(0.58)},${py(0.888)}`}
-        fill="none"
-        stroke="#fff"
-        strokeWidth={1}
-      />
-
-      {/* Basket */}
-      <circle cx={px(0.5)} cy={py(0.888)} r={5} fill="none" stroke="#fff" strokeWidth={1} />
-
-      {/* Offensive players */}
-      {scene.players.offense
-        .filter((p) => p.visible)
-        .map((p) => (
-          <circle
-            key={`o-${p.position}`}
-            cx={px(p.x)}
-            cy={py(p.y)}
-            r={dotR}
-            fill={offenseColor}
-            stroke="#fff"
-            strokeWidth={1}
-          />
-        ))}
-
-      {/* Defensive players */}
-      {scene.players.defense
-        .filter((p) => p.visible)
-        .map((p) => (
-          <circle
-            key={`d-${p.position}`}
-            cx={px(p.x)}
-            cy={py(p.y)}
-            r={dotR}
-            fill={defenseColor}
-            stroke="#fff"
-            strokeWidth={1}
-          />
-        ))}
-    </svg>
-  );
-}
+/** Thumbnail width in px (scaled to the card by CSS). */
+const THUMBNAIL_W = 200;
 
 // ---------------------------------------------------------------------------
 // Category badge colours
@@ -286,10 +141,14 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
         }}
       >
         {firstScene ? (
-          <PlayThumbnail
+          <CourtThumbnail
             scene={firstScene}
+            width={THUMBNAIL_W}
+            variant={play.courtType === "full" ? "full" : "half"}
+            flipped={(firstScene.flipped ?? play.flipped) === true}
             offenseColor={play.colors?.offense}
             defenseColor={play.colors?.defense}
+            fluid
           />
         ) : (
           <div

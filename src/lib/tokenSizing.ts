@@ -37,6 +37,17 @@ export const PLAYER_RADIUS = 18;
 export const BALL_RADIUS = 12;
 
 // ---------------------------------------------------------------------------
+// Token colours (the editor's — one source for tokens, exports and thumbnails)
+// ---------------------------------------------------------------------------
+
+/** Basketball fill. */
+export const COLOR_BALL = "#E05C00";
+/** Offense token fill when the play has no custom team colours. */
+export const DEFAULT_OFFENSE_COLOR = "#E07B39";
+/** Defense token accent (outline / label) when the play has no custom team colours. */
+export const DEFAULT_DEFENSE_COLOR = "#1E3A5F";
+
+// ---------------------------------------------------------------------------
 // Ratios and minimums (the editor's current values)
 // ---------------------------------------------------------------------------
 
@@ -120,11 +131,35 @@ export function ballScale(radius: number): number {
 export const THUMBNAIL_DOT_MIN_RADIUS = 4;
 
 /**
- * Player-dot radius for the SVG mini-courts (PlayCard, SceneStrip). Thumbnails
- * have no out-of-bounds margin, so their SVG width is the inner court width.
+ * Player-dot radius for the SVG mini-courts (CourtThumbnail, used by PlayCard
+ * and SceneStrip). Thumbnails have no out-of-bounds margin, so their SVG width
+ * is the inner court width.
  */
 export function thumbnailDotRadius(thumbnailWidth: number): number {
   return Math.max(THUMBNAIL_DOT_MIN_RADIUS, Math.round(thumbnailWidth * PLAYER_RADIUS_RATIO));
+}
+
+/** Smallest ball radius in px on a thumbnail (stays smaller than the smallest dot). */
+export const THUMBNAIL_BALL_MIN_RADIUS = 3;
+
+/**
+ * Ball radius for the SVG mini-courts — the editor's ball-to-court-width ratio
+ * with a legibility floor, the counterpart of thumbnailDotRadius.
+ */
+export function thumbnailBallRadius(thumbnailWidth: number): number {
+  return Math.max(THUMBNAIL_BALL_MIN_RADIUS, Math.round(thumbnailWidth * BALL_RADIUS_RATIO));
+}
+
+/**
+ * Y offset from a thumbnail dot's centre to the centre of the ball attached to
+ * it (negative: above, in screen space — never negated when flipped).
+ *
+ * Same as ballAttachOffsetY except that the gap scales with the dot instead of
+ * staying BALL_ATTACH_GAP px: 2 px next to an 18 px token is a hairline, next
+ * to a 4 px dot it is half a dot and reads as a detached ball.
+ */
+export function thumbnailBallAttachOffsetY(dotR: number, ballR: number): number {
+  return -(dotR + ballR + BALL_ATTACH_GAP * playerScale(dotR));
 }
 
 // ---------------------------------------------------------------------------

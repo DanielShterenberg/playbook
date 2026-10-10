@@ -46,7 +46,14 @@ import type { PlayerDisplayMode } from "./store";
 import { computeCourtLayout, normToCanvasPx } from "@/lib/courtLayout";
 import type { CourtLayout, CourtVariant } from "@/lib/courtLayout";
 import { paintCourt } from "@/lib/courtRendering";
-import { computeTokenSizes, playerScale, ballScale } from "@/lib/tokenSizing";
+import {
+  computeTokenSizes,
+  playerScale,
+  ballScale,
+  COLOR_BALL,
+  DEFAULT_OFFENSE_COLOR,
+  DEFAULT_DEFENSE_COLOR,
+} from "@/lib/tokenSizing";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -65,11 +72,25 @@ const MAX_COLORS = 128;
 // Player drawing
 // ---------------------------------------------------------------------------
 
-const COLOR_OFFENSE_FILL = "#E07B39";
 const COLOR_OFFENSE_STROKE = "#FFFFFF";
 const COLOR_DEFENSE_FILL = "#FFFFFF";
-const COLOR_DEFENSE_STROKE = "#1E3A5F";
 const COLOR_TEXT_OFFENSE = "#FFFFFF";
+
+/**
+ * How the editor currently shows a play: label mode, player names and team
+ * colours. The one style type of the export pipeline — the PNG, video and PDF
+ * options all extend it and pass it on unchanged to renderSceneToCtx.
+ */
+export interface FrameStyle {
+  /** Player label mode. Default "numbers". */
+  displayMode?: PlayerDisplayMode;
+  /** Names keyed "offense-1" / "defense-4". Default none. */
+  playerNames?: Record<string, string>;
+  /** Offense token fill. Default the editor's orange. */
+  offenseColor?: string;
+  /** Defense token accent. Default the editor's navy. */
+  defenseColor?: string;
+}
 
 const POSITION_ABBRS: Record<number, string> = { 1: "PG", 2: "SG", 3: "SF", 4: "PF", 5: "C" };
 
@@ -80,17 +101,15 @@ function drawPlayer(
   px: number,
   py: number,
   r: number,
-  displayMode: PlayerDisplayMode = "numbers",
-  playerNames: Record<string, string> = {},
-  offenseColor?: string,
-  defenseColor?: string,
+  style: FrameStyle,
 ): void {
+  const { displayMode = "numbers", playerNames = {}, offenseColor, defenseColor } = style;
   const isOffense = side === "offense";
   // Scale all size-based values proportionally to the token radius.
   const s = playerScale(r);
 
-  const offenseFill   = offenseColor ?? COLOR_OFFENSE_FILL;
-  const defenseStroke = defenseColor ?? COLOR_DEFENSE_STROKE;
+  const offenseFill   = offenseColor ?? DEFAULT_OFFENSE_COLOR;
+  const defenseStroke = defenseColor ?? DEFAULT_DEFENSE_COLOR;
 
   ctx.save();
   ctx.globalAlpha = 0.25;
@@ -133,7 +152,6 @@ function drawPlayer(
 // Ball drawing
 // ---------------------------------------------------------------------------
 
-const COLOR_BALL = "#E05C00";
 const COLOR_BALL_HIGHLIGHT = "#F47B2A";
 const COLOR_SEAM = "#FFFFFF";
 
@@ -477,10 +495,7 @@ export function renderSceneToCtx(
   scene: Scene,
   visibleAnnotations: Annotation[],
   flipped = false,
-  displayMode: PlayerDisplayMode = "numbers",
-  playerNames: Record<string, string> = {},
-  offenseColor?: string,
-  defenseColor?: string,
+  style: FrameStyle = {},
 ): void {
   const { playerR, ballR, ballAttachOffsetY } = computeTokenSizes(layout.innerW);
   const pos = (p: { x: number; y: number }) => normToCanvasPx(p.x, p.y, layout, flipped);
@@ -502,7 +517,7 @@ export function renderSceneToCtx(
   for (const p of scene.players.defense) {
     if (p.visible) {
       const { x, y } = pos(p);
-      drawPlayer(ctx, "defense", p.position, x, y, playerR, displayMode, playerNames, offenseColor, defenseColor);
+      drawPlayer(ctx, "defense", p.position, x, y, playerR, style);
     }
   }
 
@@ -510,25 +525,27 @@ export function renderSceneToCtx(
   for (const p of scene.players.offense) {
     if (p.visible) {
       const { x, y } = pos(p);
-      drawPlayer(ctx, "offense", p.position, x, y, playerR, displayMode, playerNames, offenseColor, defenseColor);
+      drawPlayer(ctx, "offense", p.position, x, y, playerR, style);
     }
   }
 
-  // Ball
-  const ball = scene.ball;
-  let ballPx = pos(ball);
-  if (ball.attachedTo) {
-    const pool =
-      ball.attachedTo.side === "offense" ? scene.players.offense : scene.players.defense;
-    const holder = pool.find((p) => p.position === ball.attachedTo!.position);
-    if (holder) {
-      // Screen space: the ball always sits above its holder, flipped or not —
-      // exactly as in the editor.
-      const h = pos(holder);
-      ballPx = { x: h.x, y: h.y + ballAttachOffsetY };
+  // Ball — a scene may have none (older stored plays): draw everything else.
+  const ball = scene.ball ?? null;
+  if (ball) {
+    let ballPx = pos(ball);
+    if (ball.attachedTo) {
+      const pool =
+        ball.attachedTo.side === "offense" ? scene.players.offense : scene.players.defense;
+      const holder = pool.find((p) => p.position === ball.attachedTo!.position);
+      if (holder) {
+        // Screen space: the ball always sits above its holder, flipped or not —
+        // exactly as in the editor.
+        const h = pos(holder);
+        ballPx = { x: h.x, y: h.y + ballAttachOffsetY };
+      }
     }
+    drawBall(ctx, ballPx.x, ballPx.y, ballR);
   }
-  drawBall(ctx, ballPx.x, ballPx.y, ballR);
 
   // Draw screen annotations on top of players so the perpendicular bar is visible
   for (const ann of visibleAnnotations) {
@@ -548,6 +565,7 @@ export function renderSceneToCtx(
  * @param visibleAnnotations  Annotations to draw on this frame (cumulative subset).
  * @param width     Canvas width in px (total, including OOB side margins).
  * @param height    Canvas height in px (unused — derived from the layout).
+ * @param style     Label mode, names and team colours (FrameStyle).
  * @param variant   Court variant; the canvas must be computeCourtLayout(width, variant).totalHeight tall.
  */
 export function renderFrame(
@@ -557,26 +575,13 @@ export function renderFrame(
   width: number,
   height: number,
   flipped = false,
-  displayMode: PlayerDisplayMode = "numbers",
-  playerNames: Record<string, string> = {},
-  offenseColor?: string,
-  defenseColor?: string,
+  style: FrameStyle = {},
   variant: CourtVariant = "half",
 ): void {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-  renderSceneToCtx(
-    ctx,
-    computeCourtLayout(width, variant),
-    scene,
-    visibleAnnotations,
-    flipped,
-    displayMode,
-    playerNames,
-    offenseColor,
-    defenseColor,
-  );
+  renderSceneToCtx(ctx, computeCourtLayout(width, variant), scene, visibleAnnotations, flipped, style);
 }
 
 // ---------------------------------------------------------------------------
@@ -686,7 +691,7 @@ export async function exportPlayAsGIF(
       const rawDuration = group.duration / speed;
       const delayCs = Math.min(Math.max(Math.round(rawDuration / 10), 2), 500);
 
-      renderFrame(canvas, scene, cumulativeAnnotations, width, height, sceneFlipped, "numbers", {}, undefined, undefined, variant);
+      renderFrame(canvas, scene, cumulativeAnnotations, width, height, sceneFlipped, {}, variant);
       encodeFrame(encoder, canvas, delayCs, isFirst);
       isFirst = false;
 
@@ -703,7 +708,7 @@ export async function exportPlayAsGIF(
     const holdDelay = Math.round(holdMs / speed / 10);
 
     // Re-render with all annotations of this scene visible for the hold
-    renderFrame(canvas, scene, cumulativeAnnotations, width, height, sceneFlipped, "numbers", {}, undefined, undefined, variant);
+    renderFrame(canvas, scene, cumulativeAnnotations, width, height, sceneFlipped, {}, variant);
     encodeFrame(encoder, canvas, holdDelay, isFirst);
     isFirst = false;
 

@@ -18,10 +18,10 @@
  */
 
 import type { Scene } from "./types";
-import type { PlayerDisplayMode } from "./store";
 import { computeCourtLayout } from "@/lib/courtLayout";
 import type { CourtVariant } from "@/lib/courtLayout";
 import { renderSceneToCtx } from "./exportGIF";
+import type { FrameStyle } from "./exportGIF";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -35,14 +35,10 @@ const RESOLUTION_SCALE: Record<ExportResolution, number> = {
   "3x": 3,
 };
 
-export interface ExportPNGOptions {
+/** Label mode, names and team colours (FrameStyle) plus the court variant. */
+export interface ExportPNGOptions extends FrameStyle {
   /** Court variant. Default "half". */
   variant?: CourtVariant;
-  /** Player label mode. Default "numbers" (same as a GIF frame). */
-  displayMode?: PlayerDisplayMode;
-  playerNames?: Record<string, string>;
-  offenseColor?: string;
-  defenseColor?: string;
 }
 
 /**
@@ -64,7 +60,7 @@ export function renderPNGToCanvas(
   flipped = false,
   options: ExportPNGOptions = {},
 ): void {
-  const { variant = "half", displayMode = "numbers", playerNames = {}, offenseColor, defenseColor } = options;
+  const { variant = "half", ...style } = options;
   const layout = computeCourtLayout(baseWidth, variant);
 
   canvas.width = Math.round(layout.totalWidth * scale);
@@ -80,10 +76,7 @@ export function renderPNGToCanvas(
     scene,
     scene.timingGroups.flatMap((g) => g.annotations),
     flipped,
-    displayMode,
-    playerNames,
-    offenseColor,
-    defenseColor,
+    style,
   );
 }
 

@@ -20,7 +20,7 @@
  */
 
 import { useRef, useCallback } from "react";
-import { BALL_RADIUS } from "@/lib/tokenSizing";
+import { BALL_RADIUS, COLOR_BALL } from "@/lib/tokenSizing";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -41,7 +41,7 @@ const SNAP_RADIUS = BALL_RADIUS * 2.5;
  */
 const DETACH_RADIUS = BALL_RADIUS * 3.5;
 
-const COLOR_BALL = "#E05C00";
+// COLOR_BALL lives in @/lib/tokenSizing, shared with the exports and thumbnails.
 const COLOR_BALL_HIGHLIGHT = "#F47B2A";
 const COLOR_SEAM = "#FFFFFF";
 

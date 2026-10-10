@@ -95,3 +95,41 @@ describe("ExportMenu PNG export call", () => {
     }
   });
 });
+
+describe("ExportMenu PDF export call (issue #174)", () => {
+  const calls = findCalls("exportPlayToPdf");
+
+  it("has exactly one call site", () => {
+    expect(calls).toHaveLength(1);
+  });
+
+  it("passes the PDF options plus label mode, names and team colours", () => {
+    expect(calls[0].arguments).toHaveLength(2);
+    expect(calls[0].arguments[0].getText(source)).toBe("currentPlay");
+    expect(objectProps(calls[0].arguments[1])).toEqual({
+      exportSteps: "pdfExportSteps",
+      layout: "pdfLayout",
+      displayMode: "displayMode",
+      playerNames: "playerNames",
+      offenseColor: "currentPlay.colors?.offense",
+      defenseColor: "currentPlay.colors?.defense",
+    });
+  });
+
+  it("re-creates the handler when label mode or names change", () => {
+    const deps = enclosingCallbackDeps(calls[0]);
+    expect(deps).toEqual(expect.arrayContaining(["currentPlay", "pdfExportSteps", "pdfLayout", "displayMode", "playerNames"]));
+  });
+
+  it("describes the play to the PDF with exactly the values the video export gets", () => {
+    const videoProps = objectProps(findCalls("exportPlayAsVideo")[0].arguments[2]);
+    const pdfProps = objectProps(calls[0].arguments[1]);
+    for (const key of ["displayMode", "playerNames", "offenseColor", "defenseColor"]) {
+      expect(pdfProps[key], key).toBe(videoProps[key]);
+    }
+  });
+
+  it("offers no GIF export (exportPlayAsGIF stays uncalled until the owner decides)", () => {
+    expect(findCalls("exportPlayAsGIF")).toHaveLength(0);
+  });
+});
