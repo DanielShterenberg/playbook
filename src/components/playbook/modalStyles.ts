@@ -17,7 +17,7 @@ export const FIELD_LABEL = "mb-1.5 block text-[13px] font-semibold text-ink";
 
 /** Text input / select / textarea. Add FIELD_BORDER or FIELD_BORDER_ERROR. */
 export const FIELD =
-  "box-border w-full rounded-lg border bg-app px-3 text-sm text-ink placeholder:text-muted focus:outline focus:outline-2 focus:outline-offset-1 focus:outline-accent-text dark:[color-scheme:dark]";
+  "box-border w-full rounded-lg border bg-app px-3 text-sm text-ink placeholder:text-muted focus:outline focus:outline-2 focus:outline-offset-1 focus:outline-accent-text";
 
 export const FIELD_BORDER = "border-line";
 export const FIELD_BORDER_ERROR = "border-danger";

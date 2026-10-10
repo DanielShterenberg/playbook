@@ -260,7 +260,7 @@ export default function PlaybookPage() {
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search plays"
                 aria-label="Search plays"
-                className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm text-ink outline-none placeholder:text-muted dark:[color-scheme:dark]"
+                className="h-full min-w-0 flex-1 border-0 bg-transparent text-sm text-ink outline-none placeholder:text-muted"
               />
             </label>
           )}
