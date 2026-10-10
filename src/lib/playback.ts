@@ -13,9 +13,12 @@
  *
  * Rules (shared by every consumer):
  *   - `sceneIndex` indexes the `scenes` array exactly as given. The store keeps
- *     `currentPlay.scenes` in `order` order (every scene mutation renumbers
- *     `order` to the array index), so callers must not re-sort before indexing.
- *   - Timing groups are walked in ascending `step` order.
+ *     `currentPlay.scenes` in `order` order (`setCurrentPlay` sorts on load via
+ *     `normalizePlayForPlayback`; every scene mutation renumbers `order` to the
+ *     array index), so callers must not re-sort before indexing.
+ *   - Timing groups are walked in ascending `step` order; the next step is
+ *     always a strictly higher step number, so malformed data (duplicate or
+ *     unknown steps) can never stall or loop playback.
  *   - A step lasts `duration > 0 ? duration : 1000` ms, divided by speed.
  *   - Time left over when a step completes is carried into the next step, so
  *     step changes do not drift by a frame each.
@@ -66,28 +69,118 @@ export function stepDurationMs(group: { duration: number } | undefined): number 
   return group && group.duration > 0 ? group.duration : DEFAULT_STEP_DURATION_MS;
 }
 
-function sortedGroups(scene: PlaybackScene | undefined): PlaybackTimingGroup[] {
-  return scene ? [...scene.timingGroups].sort((a, b) => a.step - b.step) : [];
+const EMPTY_GROUPS: readonly never[] = [];
+
+/** Sorted copies, keyed by the (immutably updated) `timingGroups` array they were built from. */
+const sortedGroupsCache = new WeakMap<object, readonly PlaybackTimingGroup[]>();
+
+/**
+ * A scene's timing groups in playback (ascending `step`) order.
+ *
+ * Memoized per `timingGroups` array: the store replaces that array on every
+ * edit, so the engine can call this on every animation frame without
+ * allocating. The returned array must not be mutated.
+ */
+export function sortedTimingGroups<G extends PlaybackTimingGroup>(
+  scene: { timingGroups: readonly G[] } | null | undefined,
+): readonly G[] {
+  if (!scene) return EMPTY_GROUPS;
+  const groups = scene.timingGroups;
+  let sorted = sortedGroupsCache.get(groups) as readonly G[] | undefined;
+  if (!sorted) {
+    sorted = [...groups].sort((a, b) => a.step - b.step);
+    sortedGroupsCache.set(groups, sorted);
+  }
+  return sorted;
 }
 
 /** Step numbers of a scene in playback order. */
-export function sortedSteps(scene: PlaybackScene | undefined): number[] {
-  return sortedGroups(scene).map((g) => g.step);
+export function sortedSteps(scene: PlaybackScene | null | undefined): number[] {
+  return sortedTimingGroups(scene).map((g) => g.step);
 }
 
 /** The step a scene starts on (1 when it has no timing groups). */
-export function firstStepOf(scene: PlaybackScene | undefined): number {
-  return sortedSteps(scene)[0] ?? 1;
+export function firstStepOf(scene: PlaybackScene | null | undefined): number {
+  return sortedTimingGroups(scene)[0]?.step ?? 1;
 }
 
 /** The step a scene ends on (1 when it has no timing groups). */
-export function lastStepOf(scene: PlaybackScene | undefined): number {
-  const steps = sortedSteps(scene);
-  return steps[steps.length - 1] ?? 1;
+export function lastStepOf(scene: PlaybackScene | null | undefined): number {
+  const groups = sortedTimingGroups(scene);
+  return groups[groups.length - 1]?.step ?? 1;
 }
 
 /**
+ * The step that follows `step` in a scene: the lowest step number strictly
+ * greater than it, or undefined at the end of the scene. Being strictly
+ * increasing is what guarantees playback terminates on malformed data
+ * (duplicate or unknown step numbers).
+ */
+export function nextStepAfter(scene: PlaybackScene | null | undefined, step: number): number | undefined {
+  const groups = sortedTimingGroups(scene);
+  for (let i = 0; i < groups.length; i++) {
+    if (groups[i].step > step) return groups[i].step;
+  }
+  return undefined;
+}
+
+/** Where a play starts: first step of the first scene, no time elapsed. */
+export function startPosition(scenes: readonly PlaybackScene[]): PlaybackPosition {
+  return { sceneIndex: 0, step: firstStepOf(scenes[0]), accMs: 0 };
+}
+
+/** True on the last step of the last scene — where playback ends when loop is off. */
+export function isAtEnd(
+  position: { sceneIndex: number; step: number },
+  scenes: readonly PlaybackScene[],
+): boolean {
+  if (scenes.length === 0 || position.sceneIndex !== scenes.length - 1) return false;
+  return nextStepAfter(scenes[position.sceneIndex], position.step) === undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Normalisation on load
+// ---------------------------------------------------------------------------
+
+/**
+ * Re-number timing steps 1..n in step order (ties keep their stored order),
+ * so legacy data with gaps or duplicate step numbers plays every group once.
+ * Does not mutate its input.
+ */
+export function normalizeTimingSteps<G extends { step: number }>(groups: readonly G[]): G[] {
+  return [...groups]
+    .sort((a, b) => a.step - b.step)
+    .map((g, i) => ({ ...g, step: i + 1 }));
+}
+
+/**
+ * Put a loaded play into the shape playback assumes: scenes in `order` order
+ * with `order` renumbered to the array index (as every store scene mutation
+ * does), and each scene's timing steps numbered 1..n. Applied by the store's
+ * `setCurrentPlay` and by the share viewer, so every consumer agrees on the
+ * sequence. Does not mutate its input.
+ */
+export function normalizePlayForPlayback<
+  S extends { order: number; timingGroups: PlaybackTimingGroup[] },
+  P extends { scenes: S[] },
+>(play: P): P {
+  return {
+    ...play,
+    scenes: [...play.scenes]
+      .sort((a, b) => a.order - b.order)
+      .map((sc, i) => ({ ...sc, order: i, timingGroups: normalizeTimingSteps(sc.timingGroups) })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Reducer
+// ---------------------------------------------------------------------------
+
+/**
  * Advance playback by `dtMs` of wall-clock time.
+ *
+ * Reports `ended` (never spins) when there is nothing to play: no scenes, or
+ * a scene index out of range.
  *
  * @param state - Current position and accumulated time.
  * @param dtMs  - Wall-clock ms since the previous tick (unscaled).
@@ -104,9 +197,12 @@ export function tickPlayback(
     return { state: { ...state, accMs: 0 }, changed: false, ended: true };
   }
 
-  const groups = sortedGroups(scene);
-  const stepIndex = groups.findIndex((g) => g.step === state.step);
-  const duration = stepDurationMs(groups[stepIndex]);
+  const groups = sortedTimingGroups(scene);
+  let current: PlaybackTimingGroup | undefined;
+  for (let i = 0; i < groups.length; i++) {
+    if (groups[i].step === state.step) { current = groups[i]; break; }
+  }
+  const duration = stepDurationMs(current);
   const accMs = state.accMs + dtMs * speed;
 
   if (accMs < duration) {
@@ -115,10 +211,11 @@ export function tickPlayback(
 
   const remainder = accMs - duration;
 
-  // Next step within the scene. An unknown step (index -1) recovers onto the first.
-  if (stepIndex < groups.length - 1) {
+  // Next step within the scene: always a strictly higher step number.
+  const nextStep = nextStepAfter(scene, state.step);
+  if (nextStep !== undefined) {
     return {
-      state: { sceneIndex: state.sceneIndex, step: groups[stepIndex + 1].step, accMs: remainder },
+      state: { sceneIndex: state.sceneIndex, step: nextStep, accMs: remainder },
       changed: true,
       ended: false,
     };
@@ -132,10 +229,10 @@ export function tickPlayback(
     }
     nextSceneIndex = 0;
   }
-  const nextStep = firstStepOf(scenes[nextSceneIndex]);
+  const entryStep = firstStepOf(scenes[nextSceneIndex]);
   return {
-    state: { sceneIndex: nextSceneIndex, step: nextStep, accMs: remainder },
-    changed: nextSceneIndex !== state.sceneIndex || nextStep !== state.step,
+    state: { sceneIndex: nextSceneIndex, step: entryStep, accMs: remainder },
+    changed: nextSceneIndex !== state.sceneIndex || entryStep !== state.step,
     ended: false,
   };
 }

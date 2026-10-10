@@ -24,7 +24,7 @@ import {
   selectSceneCount,
 } from "@/lib/store";
 import type { PlaybackSpeed } from "@/lib/store";
-import { sortedSteps as stepsOf, lastStepOf } from "@/lib/playback";
+import { sortedTimingGroups, nextStepAfter, lastStepOf } from "@/lib/playback";
 import CourtWithPlayers from "@/components/players/CourtWithPlayers";
 import type { CourtVariant } from "@/components/court/Court";
 
@@ -165,10 +165,9 @@ export default function PresentationOverlay() {
     const scenes = state.currentPlay?.scenes ?? [];
     const curScene = scenes[state.currentSceneIndex];
     if (!curScene) return;
-    const steps = stepsOf(curScene);
-    const stepIdx = steps.indexOf(state.currentStep);
-    if (stepIdx < steps.length - 1) {
-      state.setCurrentStep(steps[stepIdx + 1]);
+    const nextStep = nextStepAfter(curScene, state.currentStep);
+    if (nextStep !== undefined) {
+      state.setCurrentStep(nextStep);
     } else {
       // Advance to next scene
       const nextIdx = state.currentSceneIndex + 1;
@@ -185,10 +184,10 @@ export default function PresentationOverlay() {
     const scenes = state.currentPlay?.scenes ?? [];
     const curScene = scenes[state.currentSceneIndex];
     if (!curScene) return;
-    const steps = stepsOf(curScene);
-    const stepIdx = steps.indexOf(state.currentStep);
+    const groups = sortedTimingGroups(curScene);
+    const stepIdx = groups.findIndex((g) => g.step === state.currentStep);
     if (stepIdx > 0) {
-      state.setCurrentStep(steps[stepIdx - 1]);
+      state.setCurrentStep(groups[stepIdx - 1].step);
     } else if (state.currentSceneIndex > 0) {
       // Go to last step of previous scene
       const prevIdx = state.currentSceneIndex - 1;
@@ -261,9 +260,7 @@ export default function PresentationOverlay() {
   const scenes = currentPlay.scenes;
 
   // Step indicators for current scene
-  const sortedSteps = scene
-    ? [...scene.timingGroups].sort((a, b) => a.step - b.step)
-    : [];
+  const sortedSteps = sortedTimingGroups(scene);
   const currentStepIndex = sortedSteps.findIndex((g) => g.step === currentStep);
   const hasMultipleSteps = sortedSteps.length > 1;
 

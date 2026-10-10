@@ -23,6 +23,7 @@
 import { useEffect } from "react";
 import { useStore, selectEditorScene, selectSceneCount } from "@/lib/store";
 import type { PlaybackSpeed } from "@/lib/store";
+import { sortedTimingGroups } from "@/lib/playback";
 
 // ---------------------------------------------------------------------------
 // Speed options
@@ -123,10 +124,13 @@ export default function PlaybackControls() {
   // currentSceneIndex indexes currentPlay.scenes directly — the store keeps
   // that array in `order` order, so it must not be re-sorted here.
   const scenes = currentPlay.scenes;
-  const totalSteps = scene?.timingGroups.length ?? 1;
+  const stepGroups = sortedTimingGroups(scene);
+  const totalSteps = Math.max(stepGroups.length, 1);
+  // Position of the active step in playback order (1-based), not its raw number.
+  const stepNumber = Math.max(stepGroups.findIndex((g) => g.step === currentStep), 0) + 1;
 
   // Build step indicator string
-  const stepLabel = `Scene ${currentSceneIndex + 1} / ${sceneCount}  ·  Step ${currentStep} / ${totalSteps}`;
+  const stepLabel = `Scene ${currentSceneIndex + 1} / ${sceneCount}  ·  Step ${stepNumber} / ${totalSteps}`;
 
   return (
     <div

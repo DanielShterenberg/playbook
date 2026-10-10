@@ -13,9 +13,15 @@ import { describe, it, expect } from "vitest";
 import {
   DEFAULT_STEP_DURATION_MS,
   stepDurationMs,
+  sortedTimingGroups,
   sortedSteps,
   firstStepOf,
   lastStepOf,
+  nextStepAfter,
+  startPosition,
+  isAtEnd,
+  normalizeTimingSteps,
+  normalizePlayForPlayback,
   tickPlayback,
 } from "@/lib/playback";
 import type { PlaybackPosition, PlaybackScene } from "@/lib/playback";
@@ -66,6 +72,102 @@ describe("step helpers", () => {
     expect(lastStepOf(scene())).toBe(1);
     expect(firstStepOf(undefined)).toBe(1);
     expect(lastStepOf(undefined)).toBe(1);
+  });
+});
+
+describe("sortedTimingGroups", () => {
+  it("returns the groups in step order without mutating the scene", () => {
+    const s = scene([3, 100], [1, 200], [2, 300]);
+    expect(sortedTimingGroups(s).map((g) => [g.step, g.duration])).toEqual([[1, 200], [2, 300], [3, 100]]);
+    expect(s.timingGroups.map((g) => g.step)).toEqual([3, 1, 2]);
+  });
+
+  it("is memoized per timingGroups array — no allocation per animation frame", () => {
+    const s = scene([2, 100], [1, 100]);
+    expect(sortedTimingGroups(s)).toBe(sortedTimingGroups(s));
+    // An immutable update (new array) is picked up.
+    const updated = { timingGroups: [...s.timingGroups, { step: 0, duration: 50 }] };
+    expect(sortedTimingGroups(updated)).not.toBe(sortedTimingGroups(s));
+    expect(sortedTimingGroups(updated).map((g) => g.step)).toEqual([0, 1, 2]);
+  });
+
+  it("is empty for a missing scene", () => {
+    expect(sortedTimingGroups(undefined)).toEqual([]);
+    expect(sortedTimingGroups(null)).toEqual([]);
+  });
+});
+
+describe("position helpers", () => {
+  it("nextStepAfter is the lowest step strictly above the given one", () => {
+    const s = scene([1, 100], [1, 100], [4, 100]);
+    expect(nextStepAfter(s, 0)).toBe(1);
+    expect(nextStepAfter(s, 1)).toBe(4);
+    expect(nextStepAfter(s, 4)).toBeUndefined();
+    expect(nextStepAfter(undefined, 1)).toBeUndefined();
+  });
+
+  it("startPosition is the first step of the first scene", () => {
+    expect(startPosition([scene([3, 100], [2, 100]), scene([1, 100])])).toEqual(at(0, 2, 0));
+    expect(startPosition([])).toEqual(at(0, 1, 0));
+  });
+
+  it("isAtEnd is true only on the last step of the last scene", () => {
+    expect(isAtEnd(at(1, 3), SCENES)).toBe(true);
+    expect(isAtEnd(at(1, 2), SCENES)).toBe(false);
+    expect(isAtEnd(at(0, 2), SCENES)).toBe(false);
+    expect(isAtEnd(at(0, 1), [scene([1, 100])])).toBe(true);
+    expect(isAtEnd(at(0, 1), [])).toBe(false);
+  });
+});
+
+describe("normalizeTimingSteps / normalizePlayForPlayback", () => {
+  it("renumbers steps 1..n in step order, keeping stored order for ties", () => {
+    const groups = [
+      { step: 1, duration: 100, tag: "a" },
+      { step: 1, duration: 300, tag: "b" },
+      { step: 2, duration: 100, tag: "c" },
+    ];
+    expect(normalizeTimingSteps(groups).map((g) => [g.step, g.tag])).toEqual([[1, "a"], [2, "b"], [3, "c"]]);
+    expect(normalizeTimingSteps([{ step: 5, duration: 1 }, { step: 2, duration: 2 }]).map((g) => [g.step, g.duration])).toEqual([[1, 2], [2, 1]]);
+  });
+
+  it("does not mutate its input", () => {
+    const groups = [{ step: 3, duration: 1 }, { step: 1, duration: 2 }];
+    normalizeTimingSteps(groups);
+    expect(groups).toEqual([{ step: 3, duration: 1 }, { step: 1, duration: 2 }]);
+  });
+
+  it("sorts scenes by order and normalizes every scene's steps", () => {
+    const play = {
+      title: "t",
+      scenes: [
+        { id: "b", order: 5, timingGroups: [{ step: 1, duration: 100 }] },
+        { id: "a", order: 2, timingGroups: [{ step: 1, duration: 100 }, { step: 1, duration: 200 }, { step: 2, duration: 300 }] },
+      ],
+    };
+    const n = normalizePlayForPlayback(play);
+    expect(n.title).toBe("t");
+    expect(n.scenes.map((s) => s.id)).toEqual(["a", "b"]);
+    // `order` is renumbered to the array index, like every store scene mutation does.
+    expect(n.scenes.map((s) => s.order)).toEqual([0, 1]);
+    expect(play.scenes.map((s) => s.order)).toEqual([5, 2]);
+    expect(n.scenes[0].timingGroups.map((g) => [g.step, g.duration])).toEqual([[1, 100], [2, 200], [3, 300]]);
+    expect(play.scenes.map((s) => s.id)).toEqual(["b", "a"]);
+  });
+
+  it("a normalized [1,1,2] scene plays all three groups, like the old index-based viewer", () => {
+    const { scenes } = normalizePlayForPlayback({
+      scenes: [{ order: 0, timingGroups: [{ step: 1, duration: 100 }, { step: 1, duration: 100 }, { step: 2, duration: 100 }] }],
+    });
+    let state = startPosition(scenes);
+    const visited = [state.step];
+    for (let i = 0; i < 100; i++) {
+      const r = tickPlayback(state, 50, { scenes, speed: 1, loop: false });
+      state = r.state;
+      if (r.changed) visited.push(state.step);
+      if (r.ended) break;
+    }
+    expect(visited).toEqual([1, 2, 3]);
   });
 });
 
@@ -127,11 +229,24 @@ describe("tickPlayback — step advance", () => {
     expect(tickPlayback(at(0, 1), 100, opts({ scenes })).state.step).toBe(3);
   });
 
-  it("recovers from a step that does not exist in the scene: 1000ms, then the first step", () => {
-    const r0 = tickPlayback(at(0, 9), 999, opts());
-    expect(r0.changed).toBe(false);
-    const r1 = tickPlayback(at(0, 9), 1000, opts());
-    expect(r1.state).toEqual(at(0, 1, 0));
+  it("a step that does not exist is held 1000ms, then playback moves strictly forward", () => {
+    // Below the first step: on to the first real step.
+    expect(tickPlayback(at(0, 0), 999, opts()).changed).toBe(false);
+    expect(tickPlayback(at(0, 0), 1000, opts()).state).toEqual(at(0, 1, 0));
+    // Between steps: on to the next higher one.
+    const gap = [scene([1, 100], [5, 100])];
+    expect(tickPlayback(at(0, 3), 1000, opts({ scenes: gap })).state).toEqual(at(0, 5, 0));
+    // Above the last step: on to the next scene — never back to an earlier step.
+    expect(tickPlayback(at(0, 9), 1000, opts()).state).toEqual(at(1, 1, 0));
+  });
+
+  it("duplicate step numbers cannot stall playback", () => {
+    // The old findIndex-based advance bounced 1 -> 1 forever on [1, 1, 2].
+    const scenes = [scene([1, 100], [1, 300], [2, 100])];
+    const r1 = tickPlayback(at(0, 1), 100, opts({ scenes }));
+    expect(r1.state).toEqual(at(0, 2, 0));
+    const r2 = tickPlayback(r1.state, 100, opts({ scenes }));
+    expect(r2.ended).toBe(true);
   });
 });
 
@@ -207,6 +322,32 @@ describe("tickPlayback — end of play and loop", () => {
     expect(tickPlayback(at(0, 1), 16, opts({ scenes: [] })).ended).toBe(true);
     expect(tickPlayback(at(5, 1), 16, opts()).ended).toBe(true);
     expect(tickPlayback(at(-1, 1), 16, opts()).ended).toBe(true);
+  });
+});
+
+describe("tickPlayback — malformed data always terminates", () => {
+  const malformed: PlaybackScene[][] = [
+    [scene([1, 100], [1, 100], [1, 100])],
+    [scene([2, 100], [2, 100]), scene([2, 100], [2, 100])],
+    [scene([NaN, 100], [1, 100])],
+    [scene([1, NaN], [1, -1], [0, 0])],
+    [scene(), scene()],
+  ];
+
+  it.each(malformed.map((scenes, i) => [i, scenes] as const))("case %i ends in a bounded number of ticks", (_i, scenes) => {
+    let state = startPosition(scenes);
+    let ended = false;
+    let changes = 0;
+    for (let i = 0; i < 2000 && !ended; i++) {
+      const r = tickPlayback(state, 250, { scenes, speed: 1, loop: false });
+      state = r.state;
+      if (r.changed) changes++;
+      ended = r.ended;
+    }
+    expect(ended).toBe(true);
+    // Never more position changes than there are timing groups (+1 per scene entry).
+    const groups = scenes.reduce((n, s) => n + s.timingGroups.length + 1, 0);
+    expect(changes).toBeLessThanOrEqual(groups);
   });
 });
 

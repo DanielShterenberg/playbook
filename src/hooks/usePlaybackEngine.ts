@@ -15,7 +15,7 @@
  *     and PresentationOverlay only read state and dispatch actions.
  */
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
 import { tickPlayback } from "@/lib/playback";
 
@@ -56,49 +56,61 @@ export function usePlaybackClock(active: boolean, onTick: (dtMs: number) => void
   }, [active]);
 }
 
+/**
+ * The per-frame step of store playback, without React: reads the store, runs
+ * the pure reducer, dispatches the result. It owns the only piece of playback
+ * state that is not in the store — the time spent in the current step.
+ */
+export function createStorePlaybackDriver() {
+  // Speed-scaled ms spent in the step the driver last saw.
+  let accMs = 0;
+  let last: { sceneIndex: number; step: number } | null = null;
+
+  return {
+    /** Forget accumulated time (called on every play press). */
+    reset() {
+      accMs = 0;
+      last = null;
+    },
+
+    tick(dtMs: number) {
+      const state = useStore.getState();
+      if (!state.isPlaying) return;
+
+      // Position moved underneath us (play started, or the user navigated):
+      // the new step starts from zero.
+      if (!last || last.sceneIndex !== state.currentSceneIndex || last.step !== state.currentStep) {
+        accMs = 0;
+      }
+
+      // No play / no scenes is reported as `ended` by the reducer, so playback
+      // pauses instead of spinning with the UI stuck on "Pause".
+      const result = tickPlayback(
+        { sceneIndex: state.currentSceneIndex, step: state.currentStep, accMs },
+        dtMs,
+        { scenes: state.currentPlay?.scenes ?? [], speed: state.speed, loop: state.loop },
+      );
+      accMs = result.state.accMs;
+      last = { sceneIndex: result.state.sceneIndex, step: result.state.step };
+
+      if (result.ended) {
+        state.pausePlayback();
+      } else if (result.changed) {
+        state.setPlaybackPosition(result.state.sceneIndex, result.state.step);
+      }
+    },
+  };
+}
+
 /** Drive the store's playback slice. Mount once per editor page. */
 export function usePlaybackEngine() {
   const isPlaying = useStore((s) => s.isPlaying);
-
-  // Speed-scaled ms spent in the step the engine last saw.
-  const accMsRef = useRef(0);
-  const lastPosRef = useRef<{ sceneIndex: number; step: number } | null>(null);
-
-  const tick = useCallback((dtMs: number) => {
-    const state = useStore.getState();
-    if (!state.isPlaying) return;
-    const scenes = state.currentPlay?.scenes;
-    if (!scenes || scenes.length === 0) return;
-
-    // Position moved underneath us (play started, or the user navigated):
-    // the new step starts from zero.
-    const last = lastPosRef.current;
-    if (!last || last.sceneIndex !== state.currentSceneIndex || last.step !== state.currentStep) {
-      accMsRef.current = 0;
-    }
-
-    const result = tickPlayback(
-      { sceneIndex: state.currentSceneIndex, step: state.currentStep, accMs: accMsRef.current },
-      dtMs,
-      { scenes, speed: state.speed, loop: state.loop },
-    );
-    accMsRef.current = result.state.accMs;
-    lastPosRef.current = { sceneIndex: result.state.sceneIndex, step: result.state.step };
-
-    if (result.ended) {
-      state.pausePlayback();
-    } else if (result.changed) {
-      state.setPlaybackPosition(result.state.sceneIndex, result.state.step);
-    }
-  }, []);
+  const [driver] = useState(createStorePlaybackDriver);
 
   // Every play press starts the current step from zero.
   useEffect(() => {
-    if (isPlaying) {
-      accMsRef.current = 0;
-      lastPosRef.current = null;
-    }
-  }, [isPlaying]);
+    if (isPlaying) driver.reset();
+  }, [isPlaying, driver]);
 
-  usePlaybackClock(isPlaying, tick);
+  usePlaybackClock(isPlaying, driver.tick);
 }

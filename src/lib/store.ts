@@ -16,7 +16,7 @@ import type {
   BallState,
 } from "./types";
 import { useHistoryStore } from "./history";
-import { firstStepOf } from "./playback";
+import { firstStepOf, isAtEnd, normalizePlayForPlayback, normalizeTimingSteps } from "./playback";
 
 // ---------------------------------------------------------------------------
 // Tool types
@@ -228,9 +228,44 @@ function createEmptyScene(order: number): Scene {
 
 /** Re-number timing group steps starting from 1, sorted by original step order. */
 function normalizeSteps(groups: TimingGroup[]): TimingGroup[] {
-  return groups
-    .sort((a, b) => a.step - b.step)
-    .map((g, i) => ({ ...g, step: i + 1 }));
+  return normalizeTimingSteps(groups);
+}
+
+/**
+ * The one place that turns "go to scene N (step S)" into a store patch:
+ * `currentSceneIndex`, `currentStep` (default: the scene's first timing step)
+ * and `selectedSceneId` always move together. Returns null when the scene
+ * does not exist.
+ */
+function playbackPositionPatch(
+  state: { currentPlay: Play | null },
+  sceneIndex: number,
+  step?: number,
+): { currentSceneIndex: number; currentStep: number; selectedSceneId: string } | null {
+  const scene = state.currentPlay?.scenes[sceneIndex];
+  if (!scene) return null;
+  return {
+    currentSceneIndex: sceneIndex,
+    currentStep: step ?? firstStepOf(scene),
+    selectedSceneId: scene.id,
+  };
+}
+
+/**
+ * Patch for "start playing". Sitting on the last step of the last scene with
+ * loop off, playing would only replay the final hold and stop again, so play
+ * restarts from the beginning instead.
+ */
+function startPlaybackPatch(state: {
+  currentPlay: Play | null;
+  currentSceneIndex: number;
+  currentStep: number;
+  loop: boolean;
+}) {
+  const scenes = state.currentPlay?.scenes ?? [];
+  const atEnd =
+    !state.loop && isAtEnd({ sceneIndex: state.currentSceneIndex, step: state.currentStep }, scenes);
+  return { isPlaying: true, ...(atEnd ? playbackPositionPatch(state, 0) : null) };
 }
 
 /** Apply an updater to a specific scene inside a play and return the new play object. */
@@ -308,16 +343,11 @@ export const useStore = create<AppStore>()(
 
     setCurrentPlay: (play) => {
       useHistoryStore.getState().resetHistory();
-      // Normalize timing step numbers on load so legacy plays with gaps (e.g.
-      // steps 1,3 instead of 1,2) don't cause skipped steps in presentation.
-      const normalized: Play = {
-        ...play,
-        scenes: play.scenes.map((sc) => ({
-          ...sc,
-          timingGroups: normalizeSteps(sc.timingGroups),
-        })),
-      };
-      set({ currentPlay: normalized });
+      // Normalize on load: scenes sorted by `order` (so an index means the
+      // same scene to playback, the scene strip, exports and the share viewer)
+      // and timing steps renumbered 1..n (so legacy plays with gaps or
+      // duplicates, e.g. steps 1,3, don't skip or stall in playback).
+      set({ currentPlay: normalizePlayForPlayback(play) });
     },
 
     clearCurrentPlay: () => {
@@ -907,65 +937,38 @@ export const useStore = create<AppStore>()(
     speed: 1,
     loop: false,
 
-    startPlayback: () => set({ isPlaying: true }),
+    startPlayback: () => set((state) => startPlaybackPatch(state)),
     pausePlayback: () => set({ isPlaying: false }),
-    togglePlayback: () => set((state) => ({ isPlaying: !state.isPlaying })),
+    togglePlayback: () =>
+      set((state) => (state.isPlaying ? { isPlaying: false } : startPlaybackPatch(state))),
 
     stepForward: () =>
       set((state) => {
-        const scenes = state.currentPlay?.scenes ?? [];
+        const sceneCount = state.currentPlay?.scenes.length ?? 0;
         const nextIndex = state.currentSceneIndex + 1;
-        if (nextIndex < scenes.length) {
-          return {
-            currentSceneIndex: nextIndex,
-            currentStep: 1,
-            isPlaying: false,
-            selectedSceneId: scenes[nextIndex]?.id ?? state.selectedSceneId,
-          };
+        if (nextIndex < sceneCount) {
+          return { ...playbackPositionPatch(state, nextIndex), isPlaying: false };
         }
         if (state.loop) {
-          return {
-            currentSceneIndex: 0,
-            currentStep: 1,
-            selectedSceneId: scenes[0]?.id ?? state.selectedSceneId,
-          };
+          // Wrapping does not pause (callers pause first when they want to).
+          return playbackPositionPatch(state, 0) ?? state;
         }
         return { isPlaying: false };
       }),
 
     stepBack: () =>
-      set((state) => {
-        const scenes = state.currentPlay?.scenes ?? [];
-        if (state.currentSceneIndex > 0) {
-          const prevIndex = state.currentSceneIndex - 1;
-          return {
-            currentSceneIndex: prevIndex,
-            currentStep: 1,
-            isPlaying: false,
-            selectedSceneId: scenes[prevIndex]?.id ?? state.selectedSceneId,
-          };
-        }
-        return { isPlaying: false };
-      }),
-
-    setCurrentSceneIndex: (index) =>
       set((state) => ({
-        currentSceneIndex: index,
-        currentStep: 1,
+        ...(state.currentSceneIndex > 0
+          ? playbackPositionPatch(state, state.currentSceneIndex - 1)
+          : null),
         isPlaying: false,
-        selectedSceneId: state.currentPlay?.scenes[index]?.id ?? state.selectedSceneId,
       })),
 
+    setCurrentSceneIndex: (index) =>
+      set((state) => ({ ...playbackPositionPatch(state, index), isPlaying: false })),
+
     setPlaybackPosition: (sceneIndex, step) =>
-      set((state) => {
-        const scene = state.currentPlay?.scenes[sceneIndex];
-        if (!scene) return state;
-        return {
-          currentSceneIndex: sceneIndex,
-          currentStep: step ?? firstStepOf(scene),
-          selectedSceneId: scene.id,
-        };
-      }),
+      set((state) => playbackPositionPatch(state, sceneIndex, step) ?? state),
 
     setCurrentStep: (step) => set({ currentStep: step }),
     setSpeed: (speed) => set({ speed }),
