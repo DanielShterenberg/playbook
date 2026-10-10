@@ -18,10 +18,14 @@ export interface LogoProps {
   wordmarkColor?: string;
 }
 
-/** The mark alone — also the app icon (src/app/icon.svg is the same drawing). */
-export function LogoMark({ size = 34 }: { size?: number }) {
+/**
+ * The mark alone — also the app icon (src/app/icon.svg is the same drawing).
+ * `decorative` hides it from assistive tech, for use next to the wordmark.
+ */
+export function LogoMark({ size = 34, decorative = false }: { size?: number; decorative?: boolean }) {
+  const a11y = decorative ? { "aria-hidden": true } : { role: "img", "aria-label": "Playbook" };
   return (
-    <svg width={size} height={size} viewBox="0 0 34 34" role="img" aria-label="Playbook logo" style={{ flex: "none", display: "block" }}>
+    <svg width={size} height={size} viewBox="0 0 34 34" {...a11y} style={{ flex: "none", display: "block" }}>
       <rect width={34} height={34} rx={8} fill="var(--color-accent)" />
       <g fill="none" stroke="var(--color-accent-ink)" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round">
         <circle cx={11} cy={23} r={4.5} />
@@ -43,7 +47,7 @@ export default function Logo({ size = 34, wordmark = true, stacked = false, word
         gap: Math.round(size * (stacked ? 0.35 : 0.3)),
       }}
     >
-      <LogoMark size={size} />
+      <LogoMark size={size} decorative={wordmark} />
       {wordmark && (
         <span
           className="font-mono"
@@ -53,7 +57,7 @@ export default function Logo({ size = 34, wordmark = true, stacked = false, word
             lineHeight: 1.2,
             letterSpacing: "-0.02em",
             color: wordmarkColor ?? "var(--color-ink)",
-            borderBottom: "3px solid var(--color-accent)",
+            borderBottom: `${Math.max(2, Math.round(size * 0.09))}px solid var(--color-accent)`,
             paddingBottom: 1,
           }}
         >

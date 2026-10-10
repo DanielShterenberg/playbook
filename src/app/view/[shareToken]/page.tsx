@@ -20,6 +20,7 @@
  *     [ / ] (prev/next scene)
  */
 
+import { LogoMark } from "@/components/brand/Logo";
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { loadSharedPlay } from "@/lib/team";
 import type { Play } from "@/lib/types";
@@ -272,11 +273,7 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
       {/* Header */}
       <header style={{ background: "#fff", borderBottom: "1px solid #E5E7EB", padding: "0 20px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 52, gap: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <svg width={20} height={20} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle cx={12} cy={12} r={10} fill="#F97316" />
-            <line x1={12} y1={2} x2={12} y2={22} stroke="#fff" strokeWidth={1.5} />
-            <line x1={2} y1={12} x2={22} y2={12} stroke="#fff" strokeWidth={1.5} />
-          </svg>
+          <LogoMark size={24} />
           <span style={{ fontSize: 15, fontWeight: 700, color: "#111827" }}>{play.title}</span>
         </div>
         <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 99, background: "#EEF2FF", color: "#4338CA", letterSpacing: "0.03em" }}>

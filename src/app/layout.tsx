@@ -8,9 +8,18 @@ import { THEME_INIT_SCRIPT } from "@/lib/theme";
 // Redesign type system: Barlow for UI text, Barlow Condensed for headings,
 // IBM Plex Mono for the wordmark. Exposed as CSS variables for Tailwind
 // (font-sans / font-display / font-mono).
-const body = Barlow({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-body" });
-const display = Barlow_Condensed({ subsets: ["latin"], weight: ["600", "700"], variable: "--font-display" });
-const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["500", "600"], variable: "--font-mono" });
+// adjustFontFallback is off so text these faces cannot draw (Hebrew team and
+// play names) falls through to system-ui, not to a size-adjusted Arial.
+const body = Barlow({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-body", adjustFontFallback: false });
+// Not preloaded: nothing above the fold uses the display face yet.
+const display = Barlow_Condensed({
+  subsets: ["latin"],
+  weight: ["600", "700"],
+  variable: "--font-display",
+  adjustFontFallback: false,
+  preload: false,
+});
+const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "600"], variable: "--font-mono", adjustFontFallback: false });
 
 export const metadata: Metadata = {
   title: "Playbook",
