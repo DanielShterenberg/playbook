@@ -26,13 +26,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   if (loading || !user) {
     return (
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: "100vh",
-          background: "#F9FAFB",
-        }}
+        className="flex min-h-screen items-center justify-center bg-app"
         aria-label="Loading"
         aria-busy="true"
       >
@@ -42,17 +36,16 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
           viewBox="0 0 36 36"
           fill="none"
           aria-hidden="true"
-          style={{ animation: "spin 0.8s linear infinite" }}
+          className="animate-spin"
         >
-          <circle cx={18} cy={18} r={14} stroke="#E5E7EB" strokeWidth={4} />
+          <circle cx={18} cy={18} r={14} stroke="var(--color-line)" strokeWidth={4} />
           <path
             d="M18 4 A14 14 0 0 1 32 18"
-            stroke="#FF7A1A"
+            stroke="var(--color-accent)"
             strokeWidth={4}
             strokeLinecap="round"
           />
         </svg>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
