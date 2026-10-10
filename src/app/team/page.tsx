@@ -1,9 +1,11 @@
 export default function TeamPage() {
   return (
-    <main className="min-h-screen p-8">
-      <div className="mx-auto max-w-4xl">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Team Settings</h1>
-        <p className="text-gray-500">Team configuration and roster management will appear here.</p>
+    <main className="min-h-screen bg-app px-4 py-7 text-ink sm:px-6">
+      <div className="mx-auto max-w-[1200px]">
+        <h1 className="m-0 mb-5 font-display text-[34px] font-bold uppercase leading-[1.2] tracking-[0.03em]">
+          Team Settings
+        </h1>
+        <p className="m-0 text-sm text-muted">Team configuration and roster management will appear here.</p>
       </div>
     </main>
   );

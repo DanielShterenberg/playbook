@@ -16,8 +16,8 @@
  * Clicking the card opens /play/[id] and sets the play as currentPlay.
  */
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useStore } from "@/lib/store";
 import type { Play, Role } from "@/lib/types";
 import CourtThumbnail from "@/components/court/CourtThumbnail";
@@ -31,18 +31,25 @@ import { addPlayToTeam, deletePlay, savePlay } from "@/lib/db";
 const THUMBNAIL_W = 200;
 
 // ---------------------------------------------------------------------------
-// Category badge colours
+// Category badge colours — a light pair and a dark pair per category
+// (complete class names, so Tailwind sees them)
 // ---------------------------------------------------------------------------
 
-const CATEGORY_COLOURS: Record<string, { bg: string; text: string }> = {
-  offense: { bg: "#DBEAFE", text: "#1D4ED8" },
-  defense: { bg: "#FEE2E2", text: "#B91C1C" },
-  inbound: { bg: "#D1FAE5", text: "#065F46" },
-  "press-break": { bg: "#FEF3C7", text: "#92400E" },
-  "fast-break": { bg: "#EDE9FE", text: "#5B21B6" },
-  oob: { bg: "#F3F4F6", text: "#374151" },
-  special: { bg: "#FDF2F8", text: "#9D174D" },
+const CATEGORY_BADGE: Record<string, string> = {
+  offense: "bg-[#DBEAFE] text-[#1E40AF] dark:bg-[#1E2F4D] dark:text-[#93C5FD]",
+  defense: "bg-[#FEE2E2] text-[#991B1B] dark:bg-[#4A1D1D] dark:text-[#FCA5A5]",
+  inbound: "bg-[#D1FAE5] text-[#065F46] dark:bg-[#123A2C] dark:text-[#6EE7B7]",
+  "press-break": "bg-[#FEF3C7] text-[#92400E] dark:bg-[#45300B] dark:text-[#FCD34D]",
+  "fast-break": "bg-[#EDE9FE] text-[#5B21B6] dark:bg-[#2E2456] dark:text-[#C4B5FD]",
+  oob: "bg-chip text-ink",
+  special: "bg-[#FCE7F3] text-[#9D174D] dark:bg-[#4A1936] dark:text-[#F9A8D4]",
 };
+
+const BADGE = "flex-none whitespace-nowrap rounded-full px-2 py-[3px] text-xs font-semibold";
+
+/** Small 44px-tall action in the card's footer row. */
+const ACTION_BTN =
+  "h-11 whitespace-nowrap rounded-lg border bg-transparent px-3 text-[13px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-text";
 
 // ---------------------------------------------------------------------------
 // PlayCard
@@ -56,13 +63,16 @@ interface PlayCardProps {
   role?: Role | null;
 }
 
+/** How long "Sure?" stays armed before it resets to "Delete". */
+const CONFIRM_DELETE_MS = 4000;
+/** Minimum time between arming and confirming, so a double-tap does not delete. */
+const CONFIRM_DELETE_MIN_GAP_MS = 400;
+
 export default function PlayCard({ play, teamId, role }: PlayCardProps) {
-  const router = useRouter();
   const setCurrentPlay = useStore((s) => s.setCurrentPlay);
   const removePlay = useStore((s) => s.removePlay);
   const duplicatePlay = useStore((s) => s.duplicatePlay);
   const updatePlayTeamId = useStore((s) => s.updatePlayTeamId);
-  const [hovered, setHovered] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [addingToTeam, setAddingToTeam] = useState(false);
 
@@ -73,19 +83,25 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
 
   const firstScene = play.scenes[0] ?? null;
   const sceneCount = play.scenes.length;
-  const categoryColour = CATEGORY_COLOURS[play.category] ?? { bg: "#F3F4F6", text: "#374151" };
+  const categoryBadge = CATEGORY_BADGE[play.category] ?? CATEGORY_BADGE.oob;
 
-  function openPlay() {
-    setCurrentPlay(play);
-    router.push(`/play/${play.id}`);
-  }
+  // The confirmation disarms by itself: on touch there is no blur or
+  // mouse-leave to reset it, and an armed card must not wait for a stray tap.
+  const armedAt = useRef(0);
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const timer = setTimeout(() => setConfirmDelete(false), CONFIRM_DELETE_MS);
+    return () => clearTimeout(timer);
+  }, [confirmDelete]);
 
-  function handleDelete(e: React.MouseEvent) {
-    e.stopPropagation();
+  function handleDelete() {
     if (!confirmDelete) {
+      armedAt.current = Date.now();
       setConfirmDelete(true);
       return;
     }
+    // A double-tap must not delete: the second tap has to be a separate decision.
+    if (Date.now() - armedAt.current < CONFIRM_DELETE_MIN_GAP_MS) return;
     removePlay(play.id);
     // Fire-and-forget Firestore delete
     deletePlay(play.id).catch(() => {});
@@ -96,8 +112,7 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
     setConfirmDelete(false);
   }
 
-  async function handleAddToTeam(e: React.MouseEvent) {
-    e.stopPropagation();
+  async function handleAddToTeam() {
     if (!teamId || addingToTeam) return;
     setAddingToTeam(true);
     try {
@@ -112,34 +127,21 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      aria-label={`Open play: ${play.title}`}
-      onClick={openPlay}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") openPlay(); }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => { setHovered(false); setConfirmDelete(false); }}
-      style={{
-        borderRadius: 12,
-        border: `2px solid ${hovered ? "#6366F1" : "#E5E7EB"}`,
-        background: "#fff",
-        cursor: "pointer",
-        overflow: "hidden",
-        transition: "border-color 0.15s, box-shadow 0.15s",
-        boxShadow: hovered ? "0 4px 20px rgba(99,102,241,0.15)" : "0 1px 4px rgba(0,0,0,0.06)",
-        display: "flex",
-        flexDirection: "column",
-        userSelect: "none",
-      }}
+      onMouseLeave={() => setConfirmDelete(false)}
+      className="flex flex-col overflow-hidden rounded-xl border border-line bg-surface text-ink transition-colors hover:border-line-strong"
     >
-      {/* Thumbnail */}
-      <div
-        style={{
-          background: "#F5F3EF",
-          padding: "12px 12px 0",
-          lineHeight: 0,
+      {/* The card itself: thumbnail + title + meta, one link to the editor */}
+      <Link
+        href={`/play/${play.id}`}
+        prefetch={false}
+        onClick={(e) => {
+          // Only a plain click navigates this tab; new-tab / new-window clicks must not touch the store.
+          if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) setCurrentPlay(play);
         }}
+        aria-label={`Open play: ${play.title}`}
+        className="flex flex-1 flex-col text-ink no-underline focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-text"
       >
+        {/* Thumbnail */}
         {firstScene ? (
           <CourtThumbnail
             scene={firstScene}
@@ -148,182 +150,92 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
             flipped={(firstScene.flipped ?? play.flipped) === true}
             offenseColor={play.colors?.offense}
             defenseColor={play.colors?.defense}
+            cornerRadius={0}
             fluid
           />
         ) : (
-          <div
-            style={{
-              width: "100%",
-              paddingBottom: "94%",
-              background: "#E5E7EB",
-              borderRadius: 6,
-            }}
-          />
+          <div className="w-full bg-chip pb-[94%]" />
         )}
-      </div>
 
-      {/* Info — three rows: title / buttons / tags */}
-      <div style={{ padding: "12px 14px 14px", flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
-        {/* Row 1: title */}
-        <h3
-          style={{
-            margin: 0,
-            fontSize: 15,
-            fontWeight: 700,
-            color: "#111827",
-            lineHeight: 1.3,
-            overflowWrap: "break-word",
-          }}
-        >
-          {play.title}
-        </h3>
-
-        {/* Row 2: action buttons — always reserve height, fade in on hover */}
-        <div
-          style={{
-            display: "flex",
-            gap: 4,
-            flexWrap: "wrap",
-            opacity: hovered ? 1 : 0,
-            pointerEvents: hovered ? "auto" : "none",
-            transition: "opacity 0.15s",
-          }}
-        >
-          {canAddToTeam && (
-            <button
-              onClick={(e) => { void handleAddToTeam(e); }}
-              aria-label="Add play to team"
-              title="Add to team"
-              disabled={addingToTeam}
-              style={{
-                padding: "4px 10px",
-                borderRadius: 6,
-                border: "1px solid #A5B4FC",
-                background: "transparent",
-                color: "#4F46E5",
-                fontSize: 12,
-                fontWeight: 500,
-                cursor: addingToTeam ? "default" : "pointer",
-                transition: "all 0.15s",
-                whiteSpace: "nowrap",
-                opacity: addingToTeam ? 0.6 : 1,
-              }}
-              onMouseEnter={(e) => { if (!addingToTeam) { (e.currentTarget as HTMLButtonElement).style.background = "#EEF2FF"; } }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+        {/* Info: title (+ Personal badge) / description / category + scene count */}
+        <div className="flex flex-1 flex-col gap-1 px-3.5 pb-3.5 pt-3">
+          <div className="flex items-start gap-2">
+            <h3
+              dir="auto"
+              className="m-0 min-w-0 flex-1 break-words text-left font-display text-[20px] font-semibold leading-[1.2] tracking-[0.02em]"
             >
-              {addingToTeam ? "Adding…" : "+ Team"}
-            </button>
+              {play.title}
+            </h3>
+            {/* Personal badge — shown when this play has not yet been added to the team */}
+            {isPersonal && (
+              <span
+                title="This play is personal and not yet shared with the team"
+                className={`${BADGE} mt-px bg-chip text-ink`}
+              >
+                Personal
+              </span>
+            )}
+          </div>
+
+          {play.description && (
+            <p dir="auto" className="m-0 line-clamp-2 text-left text-[13px] leading-[1.4] text-muted">
+              {play.description}
+            </p>
           )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              duplicatePlay(play.id);
-              // Persist the newly created copy to Firestore.
-              // The copy is always appended last in the plays list.
-              const { plays } = useStore.getState();
-              const copy = plays[plays.length - 1];
-              if (copy && copy.id !== play.id) savePlay(copy).catch(() => {});
-            }}
-            aria-label="Duplicate play"
-            title="Duplicate play"
-            style={{
-              padding: "4px 10px",
-              borderRadius: 6,
-              border: "1px solid #E5E7EB",
-              background: "transparent",
-              color: "#9CA3AF",
-              fontSize: 12,
-              fontWeight: 500,
-              cursor: "pointer",
-              transition: "all 0.15s",
-              whiteSpace: "nowrap",
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#4F46E5"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#A5B4FC"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#9CA3AF"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#E5E7EB"; }}
-          >
-            Copy
-          </button>
-          <button
-            onClick={handleDelete}
-            onBlur={handleDeleteBlur}
-            aria-label={confirmDelete ? "Confirm delete play" : "Delete play"}
-            title={confirmDelete ? "Click again to confirm delete" : "Delete play"}
-            style={{
-              padding: "4px 10px",
-              borderRadius: 6,
-              border: `1px solid ${confirmDelete ? "#FCA5A5" : "#E5E7EB"}`,
-              background: confirmDelete ? "#FEE2E2" : "transparent",
-              color: confirmDelete ? "#B91C1C" : "#9CA3AF",
-              fontSize: 12,
-              fontWeight: 500,
-              cursor: "pointer",
-              transition: "all 0.15s",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {confirmDelete ? "Sure?" : "Delete"}
-          </button>
-        </div>
 
-        {play.description && (
-          <p
-            style={{
-              margin: 0,
-              fontSize: 12,
-              color: "#6B7280",
-              lineHeight: 1.4,
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical" as const,
-              overflow: "hidden",
-            }}
-          >
-            {play.description}
-          </p>
-        )}
-
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: "auto", paddingTop: 4 }}>
-          {/* Category badge */}
-          <span
-            style={{
-              padding: "2px 8px",
-              borderRadius: 99,
-              background: categoryColour.bg,
-              color: categoryColour.text,
-              fontSize: 11,
-              fontWeight: 600,
-              textTransform: "capitalize",
-              letterSpacing: "0.01em",
-            }}
-          >
-            {play.category.replace("-", " ")}
-          </span>
-
-          {/* Personal badge — shown when this play has not yet been added to the team */}
-          {isPersonal && (
-            <span
-              title="This play is personal and not yet shared with the team"
-              style={{
-                padding: "2px 7px",
-                borderRadius: 99,
-                background: "#FEF9C3",
-                color: "#92400E",
-                fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: "0.01em",
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-              }}
-            >
-              Personal
+          <div className="mt-auto flex items-center gap-2 pt-1 text-[13px] text-muted">
+            {/* Category badge */}
+            <span className={`${BADGE} capitalize ${categoryBadge}`}>{play.category.replace("-", " ")}</span>
+            {/* Scene count */}
+            <span>
+              {sceneCount} {sceneCount === 1 ? "scene" : "scenes"}
             </span>
-          )}
-
-          {/* Scene count */}
-          <span style={{ fontSize: 12, color: "#9CA3AF", marginLeft: "auto" }}>
-            {sceneCount} {sceneCount === 1 ? "scene" : "scenes"}
-          </span>
+          </div>
         </div>
+      </Link>
+
+      {/* Actions */}
+      <div className="flex flex-wrap items-center gap-1 border-t border-line px-1.5 py-1">
+        {canAddToTeam && (
+          <button
+            type="button"
+            onClick={() => { void handleAddToTeam(); }}
+            aria-label="Add play to team"
+            title="Add to team"
+            disabled={addingToTeam}
+            className={`${ACTION_BTN} border-transparent text-accent-text hover:bg-app disabled:cursor-default disabled:opacity-60`}
+          >
+            {addingToTeam ? "Adding…" : "+ Team"}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            duplicatePlay(play.id);
+            // Persist the newly created copy to Firestore.
+            // The copy is always appended last in the plays list.
+            const { plays } = useStore.getState();
+            const copy = plays[plays.length - 1];
+            if (copy && copy.id !== play.id) savePlay(copy).catch(() => {});
+          }}
+          aria-label="Duplicate play"
+          title="Duplicate play"
+          className={`${ACTION_BTN} border-transparent text-muted hover:bg-app hover:text-ink`}
+        >
+          Copy
+        </button>
+        <button
+          type="button"
+          onClick={handleDelete}
+          onBlur={handleDeleteBlur}
+          aria-label={confirmDelete ? "Confirm delete play" : "Delete play"}
+          title={confirmDelete ? "Click again to confirm delete" : "Delete play"}
+          className={`${ACTION_BTN} ml-auto ${
+            confirmDelete ? "border-danger font-semibold text-danger" : "border-transparent text-muted hover:bg-app hover:text-danger"
+          }`}
+        >
+          {confirmDelete ? "Sure?" : "Delete"}
+        </button>
       </div>
     </div>
   );

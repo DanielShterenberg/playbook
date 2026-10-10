@@ -13,6 +13,18 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeam } from "@/contexts/TeamContext";
 import { createTeam } from "@/lib/team";
+import {
+  BTN_PRIMARY,
+  BTN_SECONDARY,
+  FIELD,
+  FIELD_BORDER,
+  FIELD_BORDER_ERROR,
+  FIELD_ERROR,
+  FIELD_LABEL,
+  MODAL_OVERLAY,
+  MODAL_PANEL,
+  MODAL_TITLE,
+} from "./modalStyles";
 
 interface CreateTeamModalProps {
   onClose: () => void;
@@ -75,103 +87,45 @@ export default function CreateTeamModal({ onClose }: CreateTeamModalProps) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-team-title"
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 100,
-        background: "rgba(0,0,0,0.45)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "16px",
-      }}
+      className={MODAL_OVERLAY}
     >
-      <div
-        style={{
-          background: "#fff",
-          borderRadius: 12,
-          boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
-          width: "100%",
-          maxWidth: 420,
-          padding: "28px 28px 24px",
-        }}
-      >
-        <h2
-          id="create-team-title"
-          style={{ margin: "0 0 6px", fontSize: 20, fontWeight: 700, color: "#111827" }}
-        >
+      <div className={`${MODAL_PANEL} max-w-[420px]`}>
+        <h2 id="create-team-title" className={`${MODAL_TITLE} mb-1.5`}>
           Create Team
         </h2>
-        <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6B7280" }}>
+        <p className="m-0 mb-5 text-sm text-muted">
           Create a team to collaborate on plays with your coaching staff.
         </p>
 
         <form onSubmit={handleSubmit} noValidate>
-          <div style={{ marginBottom: 20 }}>
-            <label
-              htmlFor="team-name"
-              style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}
-            >
-              Team name <span style={{ color: "#EF4444" }}>*</span>
+          <div className="mb-5">
+            <label htmlFor="team-name" className={FIELD_LABEL}>
+              Team name <span className="text-danger">*</span>
             </label>
             <input
               id="team-name"
               ref={nameRef}
               type="text"
+              dir="auto"
               value={name}
               onChange={(e) => { setName(e.target.value); if (error) setError(""); }}
               placeholder="e.g. Lakers Coaching Staff"
               maxLength={60}
-              style={{
-                width: "100%",
-                boxSizing: "border-box",
-                padding: "8px 12px",
-                border: error ? "1.5px solid #EF4444" : "1.5px solid #D1D5DB",
-                borderRadius: 8,
-                fontSize: 14,
-                color: "#111827",
-                outline: "none",
-              }}
+              aria-invalid={error ? true : undefined}
+              className={`${FIELD} h-11 ${error ? FIELD_BORDER_ERROR : FIELD_BORDER}`}
             />
             {error && (
-              <p role="alert" style={{ marginTop: 4, fontSize: 12, color: "#EF4444" }}>
+              <p role="alert" className={FIELD_ERROR}>
                 {error}
               </p>
             )}
           </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              style={{
-                padding: "8px 18px",
-                borderRadius: 8,
-                border: "1.5px solid #D1D5DB",
-                background: "#fff",
-                fontSize: 14,
-                fontWeight: 500,
-                color: "#374151",
-                cursor: "pointer",
-              }}
-            >
+          <div className="flex justify-end gap-2.5">
+            <button type="button" onClick={onClose} disabled={loading} className={BTN_SECONDARY}>
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                padding: "8px 22px",
-                borderRadius: 8,
-                border: "none",
-                background: loading ? "#818CF8" : "#4F46E5",
-                fontSize: 14,
-                fontWeight: 600,
-                color: "#fff",
-                cursor: loading ? "not-allowed" : "pointer",
-              }}
-            >
+            <button type="submit" disabled={loading} className={BTN_PRIMARY}>
               {loading ? "Creating…" : "Create Team"}
             </button>
           </div>
