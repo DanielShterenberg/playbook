@@ -140,7 +140,7 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
 
   if (loadingFromDb) {
     return (
-      <div className="flex items-center justify-center gap-2 text-sm text-gray-400">
+      <div className="flex h-full w-full items-center justify-center gap-2 text-sm text-muted">
         <svg
           width={16}
           height={16}
@@ -158,20 +158,20 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
 
   if (notFound) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 p-10 text-center">
-        <svg width={48} height={48} viewBox="0 0 48 48" fill="none" aria-hidden="true">
-          <circle cx={24} cy={24} r={22} stroke="#E5E7EB" strokeWidth={2} />
-          <path d="M24 14v12" stroke="#9CA3AF" strokeWidth={2.5} strokeLinecap="round" />
-          <circle cx={24} cy={33} r={1.5} fill="#9CA3AF" />
+      <div className="flex h-full w-full flex-col items-center justify-center gap-4 p-10 text-center">
+        <svg width={48} height={48} viewBox="0 0 48 48" fill="none" aria-hidden="true" className="text-muted">
+          <circle cx={24} cy={24} r={22} stroke="var(--color-line-strong)" strokeWidth={2} />
+          <path d="M24 14v12" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" />
+          <circle cx={24} cy={33} r={1.5} fill="currentColor" />
         </svg>
-        <p className="text-base font-semibold text-gray-700">Play not found</p>
-        <p className="max-w-xs text-sm text-gray-400">
+        <p className="font-display text-xl font-semibold tracking-[0.02em] text-ink">Play not found</p>
+        <p className="max-w-xs text-sm text-muted">
           This play could not be found. It may have been deleted or you may not have access to it.
           Return to the playbook to open a play or create a new one.
         </p>
         <Link
           href="/playbook"
-          className="mt-1 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+          className="mt-1 flex h-11 items-center rounded-lg bg-accent px-[18px] text-sm font-semibold text-accent-ink transition-opacity hover:opacity-90"
         >
           Back to Playbook
         </Link>

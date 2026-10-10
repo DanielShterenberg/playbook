@@ -4,10 +4,15 @@
  * EditorHeader — client component for the play editor page header.
  *
  * Shows:
- *   - Back arrow to /playbook (syncs currentPlay changes back to the list)
- *   - Current play title (from the Zustand store) or the raw play ID
+ *   - The logo as the link back to /playbook (a chevron on mobile); it syncs
+ *     currentPlay changes back to the list
+ *   - Current play title (from the Zustand store) or the raw play ID, with the
+ *     court type, category and auto-save state under it
  *   - Pencil edit button to edit play metadata (title, description, category, court type) — issue #71
- *   - Slot for action buttons (passed as children by the server page)
+ *   - Theme, undo / redo, comments, shortcuts, save, share, present and export
+ *
+ * Below lg the flip / comments / shortcuts / theme controls move into the
+ * "More options" menu; on mobile share, present and edit details join them.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -18,6 +23,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { createShareToken } from "@/lib/team";
 import PresentationOverlay from "@/components/editor/PresentationOverlay";
 import CommentsPanel from "@/components/editor/CommentsPanel";
+import SaveIndicator from "@/components/editor/SaveIndicator";
+import UndoRedoButtons from "@/components/editor/UndoRedoButtons";
+import ExportMenu from "@/components/editor/ExportMenu";
+import ShortcutsButton, { toggleShortcutsOverlay } from "@/components/editor/ShortcutsButton";
+import { ACCENT_BTN, FIELD, ICON_BTN, MENU_ITEM, POPOVER, TEXT_BTN } from "@/components/editor/chrome";
+import Logo, { LogoMark } from "@/components/brand/Logo";
+import ThemeToggle from "@/components/brand/ThemeToggle";
 import { DEFAULT_OFFENSE_COLOR, DEFAULT_DEFENSE_COLOR } from "@/lib/tokenSizing";
 import { customTeamColor } from "@/lib/courtPalette";
 
@@ -33,10 +45,68 @@ const CATEGORY_OPTIONS: { value: Category; label: string }[] = [
 
 interface EditorHeaderProps {
   playId: string;
-  children?: React.ReactNode;
 }
 
-export default function EditorHeader({ playId, children }: EditorHeaderProps) {
+const LABEL = "mb-1.5 block text-[13px] font-semibold text-ink";
+
+function ShareIcon() {
+  return (
+    <svg width={18} height={18} viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M13 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM7 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM13 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9 8.5l3-2M9 11.5l3 2" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CommentsIcon() {
+  return (
+    <svg width={18} height={18} viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M2 5a2 2 0 012-2h12a2 2 0 012 2v7a2 2 0 01-2 2H6l-4 3V5z" stroke="currentColor" strokeWidth={1.6} strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function PresentIcon() {
+  return (
+    <svg width={18} height={18} viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <rect x="2" y="3" width="16" height="12" rx="1.5" stroke="currentColor" strokeWidth={1.5} />
+      <path d="M7 18h6M10 15v3" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function FlipIcon() {
+  return (
+    <svg width={18} height={18} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M8 2v12M5 5L2 8l3 3M11 5l3 3-3 3" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg width={18} height={18} viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path
+        d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-9 9A2 2 0 0 1 6 16H4a1 1 0 0 1-1-1v-2a2 2 0 0 1 .586-1.414l9-9z"
+        stroke="currentColor"
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Open-comments count pill. */
+function CountBadge({ count, className = "" }: { count: number; className?: string }) {
+  return (
+    <span className={`flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold leading-none text-accent-ink ${className}`}>
+      {count}
+    </span>
+  );
+}
+
+export default function EditorHeader({ playId }: EditorHeaderProps) {
   const { user } = useAuth();
   const currentPlay = useStore((s) => s.currentPlay);
   const updatePlayInList = useStore((s) => s.updatePlayInList);
@@ -137,6 +207,38 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
     if (e.target === overlayRef.current) setShowEdit(false);
   }
 
+  // ---------------------------------------------------------------------------
+  // "More options" menu (below lg)
+  // ---------------------------------------------------------------------------
+
+  const [showMore, setShowMore] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMore) return;
+    function handleDown(e: MouseEvent | TouchEvent) {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setShowMore(false);
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setShowMore(false);
+    }
+    document.addEventListener("mousedown", handleDown);
+    document.addEventListener("touchstart", handleDown);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleDown);
+      document.removeEventListener("touchstart", handleDown);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [showMore]);
+
+  const flipped = currentPlay?.flipped ?? false;
+  const shareLabel = shareMsg ?? (isSharing ? "Sharing…" : "Share");
+  const categoryLabel = CATEGORY_OPTIONS.find((o) => o.value === currentPlay?.category)?.label;
+  const metaLabel = currentPlay
+    ? `${currentPlay.courtType === "full" ? "Full-court" : "Half-court"}${categoryLabel ? ` ${categoryLabel.toLowerCase()}` : ""}`
+    : null;
+
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = editTitle.trim();
@@ -158,164 +260,222 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
 
   return (
     <>
-      <header className="flex min-w-0 items-center justify-between border-b border-gray-200 bg-white px-3 py-2 md:px-4">
-        <div className="flex min-w-0 items-center gap-2">
-          {/* Back to playbook */}
-          <Link
-            href="/playbook"
-            onClick={handleBack}
-            aria-label="Back to playbook"
-            className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
-            title="Back to Playbook"
-          >
-            <svg
-              width={16}
-              height={16}
-              viewBox="0 0 16 16"
-              fill="none"
-              aria-hidden="true"
-            >
-              <path
-                d="M10 3L5 8L10 13"
-                stroke="currentColor"
-                strokeWidth={1.75}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </Link>
+      <header className="relative z-30 flex min-w-0 items-center gap-2 border-b border-line bg-surface px-3 py-2 md:flex-wrap md:gap-4 md:px-5 md:py-2.5">
+        {/* Back to playbook — a chevron on mobile, the logo from md up */}
+        <Link
+          href="/playbook"
+          onClick={handleBack}
+          aria-label="Back to playbook"
+          title="Back to Playbook"
+          className="flex h-11 w-11 flex-none items-center justify-center rounded-lg text-ink transition-colors hover:bg-app md:hidden"
+        >
+          <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m15 5-7 7 7 7" />
+          </svg>
+        </Link>
+        <Link
+          href="/playbook"
+          onClick={handleBack}
+          aria-label="Back to playbook"
+          title="Back to Playbook"
+          className="hidden flex-none items-center rounded-lg md:flex"
+        >
+          <span className="lg:hidden">
+            <LogoMark size={34} decorative />
+          </span>
+          <span className="hidden lg:inline-flex">
+            <Logo size={34} />
+          </span>
+        </Link>
 
-          <div className="mx-1 h-4 w-px bg-gray-200 flex-shrink-0" aria-hidden="true" />
+        <div className="hidden h-7 w-px flex-none bg-line md:block" aria-hidden="true" />
 
-          <h1 className="truncate text-base font-semibold text-gray-900 md:text-lg">
-            {title ? (
-              <>
-                <span className="hidden sm:inline text-gray-400 font-normal">Playbook / </span>
-                {title}
-              </>
-            ) : (
-              <>
-                <span className="hidden sm:inline">Play Editor — </span>
-                <span className="font-mono text-gray-500">{playId}</span>
-              </>
+        {/* Title + meta / save state */}
+        <div className="flex min-w-0 flex-1 flex-col md:basis-[200px] md:gap-0.5">
+          <div className="flex min-w-0 items-center gap-1">
+            <h1 className="truncate font-display text-xl font-semibold leading-6 tracking-[0.02em] text-ink">
+              {title ? (
+                title
+              ) : (
+                <>
+                  <span className="hidden sm:inline">Play Editor — </span>
+                  <span className="font-mono text-base font-normal text-muted">{playId}</span>
+                </>
+              )}
+            </h1>
+
+            {/* Edit metadata button (in the More menu on mobile) */}
+            {currentPlay && (
+              <button
+                type="button"
+                onClick={openEdit}
+                aria-label="Edit play details"
+                title="Edit play details"
+                className="hidden h-7 w-7 flex-none items-center justify-center rounded-md text-muted transition-colors hover:bg-app hover:text-ink md:flex"
+              >
+                <PencilIcon />
+              </button>
             )}
-          </h1>
-
-          {/* Edit metadata button */}
-          {currentPlay && (
-            <button
-              onClick={openEdit}
-              aria-label="Edit play details"
-              title="Edit play details"
-              className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
-            >
-              <svg width={14} height={14} viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <path
-                  d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-9 9A2 2 0 0 1 6 16H4a1 1 0 0 1-1-1v-2a2 2 0 0 1 .586-1.414l9-9z"
-                  stroke="currentColor"
-                  strokeWidth={1.6}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-          )}
+          </div>
+          <p className="flex min-w-0 items-center text-xs leading-4 text-muted">
+            {metaLabel && <span className="hidden truncate md:inline">{metaLabel}</span>}
+            <SaveIndicator separated={metaLabel !== null} />
+          </p>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          {/* Share button (#78) */}
-          <button
-            onClick={handleShare}
-            disabled={!currentPlay || !user || isSharing}
-            aria-label="Share play"
-            title="Create a shareable read-only link"
-            className="flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            {isSharing ? (
-              <svg
-                width={11}
-                height={11}
-                viewBox="0 0 24 24"
-                fill="none"
-                aria-hidden="true"
-                className="animate-spin"
-              >
-                <circle cx={12} cy={12} r={10} stroke="currentColor" strokeWidth={3} strokeDasharray="31.4 31.4" strokeLinecap="round" />
-              </svg>
-            ) : (
-              <svg width={11} height={11} viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <path d="M13 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM7 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM13 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M9 8.5l3-2M9 11.5l3 2" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
-              </svg>
-            )}
-            {shareMsg ?? (isSharing ? "Sharing…" : "Share")}
-          </button>
+        <div className="flex flex-none items-center gap-2 md:flex-wrap">
+          <div className="hidden lg:block">
+            <ThemeToggle />
+          </div>
 
-          {/* Flip court orientation button */}
-          {currentPlay && (
-            <button
-              onClick={() => setPlayFlipped(!(currentPlay.flipped ?? false))}
-              aria-label="Flip court orientation"
-              title="Flip court (basket north/south)"
-              aria-pressed={currentPlay.flipped ?? false}
-              className={`flex items-center justify-center w-7 h-7 rounded-md transition-colors ${
-                currentPlay.flipped
-                  ? "bg-indigo-100 text-indigo-700 hover:bg-indigo-200"
-                  : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-              }`}
-            >
-              <svg width={16} height={16} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M8 2v12M5 5L2 8l3 3M11 5l3 3-3 3" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          )}
+          {/* Undo / Redo buttons (issue #83) — in the tool bar on mobile */}
+          <div className="hidden md:block">
+            <UndoRedoButtons />
+          </div>
 
           {/* Comments button */}
           {currentPlay && (
             <button
+              type="button"
               onClick={() => setShowComments((v) => !v)}
               aria-label="Toggle comments"
               aria-pressed={showComments}
               title="Comments"
-              className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
-                showComments
-                  ? "border-indigo-200 bg-indigo-50 text-indigo-700"
-                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-              }`}
+              className={`${ICON_BTN} relative hidden lg:flex`}
             >
-              <svg width={12} height={12} viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <path
-                  d="M2 5a2 2 0 012-2h12a2 2 0 012 2v7a2 2 0 01-2 2H6l-4 3V5z"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                  strokeLinejoin="round"
-                />
-              </svg>
-              Comments
-              {totalOpenComments > 0 && (
-                <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-400 px-1 text-[10px] font-bold leading-none text-white">
-                  {totalOpenComments}
-                </span>
-              )}
+              <CommentsIcon />
+              {totalOpenComments > 0 && <CountBadge count={totalOpenComments} className="absolute -right-1.5 -top-1.5" />}
             </button>
           )}
 
+          <ShortcutsButton className="hidden lg:flex" />
+
+          <button type="button" className={`${TEXT_BTN} hidden md:flex`} title="Save (Ctrl+S)">
+            Save
+          </button>
+
+          {/* Share button (#78) */}
+          <button
+            type="button"
+            onClick={handleShare}
+            disabled={!currentPlay || !user || isSharing}
+            aria-label="Share play"
+            title="Create a shareable read-only link"
+            className={`${TEXT_BTN} hidden md:flex`}
+          >
+            {shareLabel}
+          </button>
+
           {/* Present button */}
           <button
+            type="button"
             onClick={enterPresentationMode}
             disabled={!currentPlay}
             aria-label="Enter presentation mode"
             title="Present (full-screen view)"
-            className="flex items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 hover:bg-indigo-100 hover:text-indigo-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className={`${TEXT_BTN} hidden md:flex`}
           >
-            <svg width={12} height={12} viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <rect x="2" y="3" width="16" height="12" rx="1.5" stroke="currentColor" strokeWidth={1.5} />
-              <path d="M7 18h6M10 15v3" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
-            </svg>
             Present
           </button>
 
-          {children}
+          {/* More options — everything the bar has no room for below lg */}
+          <div ref={moreRef} className="relative lg:hidden">
+            <button
+              type="button"
+              onClick={() => setShowMore((v) => !v)}
+              aria-label="More options"
+              aria-haspopup="true"
+              aria-expanded={showMore}
+              title="More options"
+              className="relative flex h-11 w-11 flex-none items-center justify-center rounded-lg text-ink transition-colors hover:bg-app md:border md:border-line"
+            >
+              <svg width={20} height={20} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <circle cx={5} cy={12} r={2} />
+                <circle cx={12} cy={12} r={2} />
+                <circle cx={19} cy={12} r={2} />
+              </svg>
+              {totalOpenComments > 0 && <CountBadge count={totalOpenComments} className="absolute -right-1 -top-1" />}
+            </button>
+
+            {showMore && (
+              <div role="menu" aria-label="More options" className={`${POPOVER} absolute right-0 top-full z-50 mt-1 w-64 p-1.5`}>
+                {currentPlay && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setShowMore(false); openEdit(); }}
+                    className={`${MENU_ITEM} md:hidden`}
+                  >
+                    <PencilIcon />
+                    Edit play details
+                  </button>
+                )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={handleShare}
+                  disabled={!currentPlay || !user || isSharing}
+                  title="Create a shareable read-only link"
+                  className={`${MENU_ITEM} md:hidden`}
+                >
+                  <ShareIcon />
+                  {shareLabel}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setShowMore(false); enterPresentationMode(); }}
+                  disabled={!currentPlay}
+                  className={`${MENU_ITEM} md:hidden`}
+                >
+                  <PresentIcon />
+                  Present
+                </button>
+                {currentPlay && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setShowMore(false); setShowComments((v) => !v); }}
+                    className={MENU_ITEM}
+                  >
+                    <CommentsIcon />
+                    <span className="flex-1">{showComments ? "Hide comments" : "Comments"}</span>
+                    {totalOpenComments > 0 && <CountBadge count={totalOpenComments} />}
+                  </button>
+                )}
+                {/* Flip court orientation (a checkbox in the roster panel on lg+) */}
+                {currentPlay && (
+                  <button
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={flipped}
+                    onClick={() => setPlayFlipped(!flipped)}
+                    title="Flip court (basket north/south)"
+                    className={MENU_ITEM}
+                  >
+                    <FlipIcon />
+                    <span className="flex-1">Flip court</span>
+                    <span className="text-xs text-muted">{flipped ? "On" : "Off"}</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { setShowMore(false); toggleShortcutsOverlay(); }}
+                  className={`${MENU_ITEM} hidden md:flex`}
+                >
+                  <span className="flex w-[18px] justify-center font-semibold" aria-hidden="true">?</span>
+                  Keyboard shortcuts
+                </button>
+                <div className="mt-1 flex items-center justify-between border-t border-line px-3 pt-1.5">
+                  <span className="text-sm text-ink">Theme</span>
+                  <ThemeToggle />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <ExportMenu />
         </div>
       </header>
 
@@ -341,42 +501,18 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
           role="dialog"
           aria-modal="true"
           aria-labelledby="edit-play-title"
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 100,
-            background: "rgba(0,0,0,0.45)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "16px",
-          }}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
         >
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: 12,
-              boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
-              width: "100%",
-              maxWidth: 460,
-              padding: "28px 28px 24px",
-            }}
-          >
-            <h2
-              id="edit-play-title"
-              style={{ margin: "0 0 20px", fontSize: 20, fontWeight: 700, color: "#111827" }}
-            >
+          <div className="max-h-full w-full max-w-[460px] overflow-y-auto rounded-xl border border-line bg-surface p-7 pb-6 text-ink shadow-2xl">
+            <h2 id="edit-play-title" className="mb-5 font-display text-2xl font-semibold tracking-[0.02em] text-ink">
               Edit Play
             </h2>
 
             <form onSubmit={handleSave} noValidate>
               {/* Title */}
-              <div style={{ marginBottom: 16 }}>
-                <label
-                  htmlFor="edit-title"
-                  style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}
-                >
-                  Title <span style={{ color: "#EF4444" }}>*</span>
+              <div className="mb-4">
+                <label htmlFor="edit-title" className={LABEL}>
+                  Title <span className="text-danger">*</span>
                 </label>
                 <input
                   id="edit-title"
@@ -386,31 +522,19 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
                   onChange={(e) => { setEditTitle(e.target.value); if (editError) setEditError(""); }}
                   placeholder="e.g. Horns Set, Box Out, 1-3-1 Zone"
                   maxLength={80}
-                  style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    padding: "8px 12px",
-                    border: editError ? "1.5px solid #EF4444" : "1.5px solid #D1D5DB",
-                    borderRadius: 8,
-                    fontSize: 14,
-                    color: "#111827",
-                    outline: "none",
-                  }}
+                  className={`${FIELD} h-11 ${editError ? "border-danger" : ""}`}
                 />
                 {editError && (
-                  <p role="alert" style={{ marginTop: 4, fontSize: 12, color: "#EF4444" }}>
+                  <p role="alert" className="mt-1 text-xs text-danger">
                     {editError}
                   </p>
                 )}
               </div>
 
               {/* Description */}
-              <div style={{ marginBottom: 16 }}>
-                <label
-                  htmlFor="edit-description"
-                  style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}
-                >
-                  Description <span style={{ color: "#9CA3AF", fontWeight: 400 }}>(optional)</span>
+              <div className="mb-4">
+                <label htmlFor="edit-description" className={LABEL}>
+                  Description <span className="font-normal text-muted">(optional)</span>
                 </label>
                 <textarea
                   id="edit-description"
@@ -419,46 +543,21 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
                   placeholder="Brief notes about this play…"
                   rows={2}
                   maxLength={300}
-                  style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    padding: "8px 12px",
-                    border: "1.5px solid #D1D5DB",
-                    borderRadius: 8,
-                    fontSize: 14,
-                    color: "#111827",
-                    resize: "vertical",
-                    outline: "none",
-                    fontFamily: "inherit",
-                  }}
+                  className={`${FIELD} resize-y py-2`}
                 />
               </div>
 
               {/* Court type + Category row */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+              <div className="mb-4 grid grid-cols-2 gap-3">
                 <div>
-                  <label
-                    htmlFor="edit-court-type"
-                    style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}
-                  >
+                  <label htmlFor="edit-court-type" className={LABEL}>
                     Court
                   </label>
                   <select
                     id="edit-court-type"
                     value={editCourtType}
                     onChange={(e) => setEditCourtType(e.target.value as CourtType)}
-                    style={{
-                      width: "100%",
-                      boxSizing: "border-box",
-                      padding: "8px 10px",
-                      border: "1.5px solid #D1D5DB",
-                      borderRadius: 8,
-                      fontSize: 14,
-                      color: "#111827",
-                      background: "#fff",
-                      outline: "none",
-                      cursor: "pointer",
-                    }}
+                    className={`${FIELD} h-11 cursor-pointer`}
                   >
                     <option value="half">Half Court</option>
                     <option value="full">Full Court</option>
@@ -466,28 +565,14 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
                 </div>
 
                 <div>
-                  <label
-                    htmlFor="edit-category"
-                    style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}
-                  >
+                  <label htmlFor="edit-category" className={LABEL}>
                     Category
                   </label>
                   <select
                     id="edit-category"
                     value={editCategory}
                     onChange={(e) => setEditCategory(e.target.value as Category)}
-                    style={{
-                      width: "100%",
-                      boxSizing: "border-box",
-                      padding: "8px 10px",
-                      border: "1.5px solid #D1D5DB",
-                      borderRadius: 8,
-                      fontSize: 14,
-                      color: "#111827",
-                      background: "#fff",
-                      outline: "none",
-                      cursor: "pointer",
-                    }}
+                    className={`${FIELD} h-11 cursor-pointer`}
                   >
                     {CATEGORY_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -499,44 +584,24 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
               </div>
 
               {/* Team colors row */}
-              <div style={{ marginBottom: 24 }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
-                  Team Colors
-                </p>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div className="mb-6">
+                <p className={LABEL}>Team Colors</p>
+                <div className="grid grid-cols-2 gap-3">
                   {/* Offense color */}
                   <div>
-                    <label
-                      htmlFor="edit-offense-color"
-                      style={{ display: "block", fontSize: 12, fontWeight: 500, color: "#6B7280", marginBottom: 6 }}
-                    >
+                    <label htmlFor="edit-offense-color" className="mb-1.5 block text-xs font-medium text-muted">
                       Offense
                     </label>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div className="flex items-center gap-2">
                       <input
                         id="edit-offense-color"
                         type="color"
                         value={editOffenseColor}
                         onChange={(e) => setEditOffenseColor(e.target.value)}
-                        style={{
-                          width: 36,
-                          height: 36,
-                          padding: 2,
-                          border: "1.5px solid #D1D5DB",
-                          borderRadius: 6,
-                          cursor: "pointer",
-                          background: "none",
-                        }}
+                        className="h-11 w-11 flex-none cursor-pointer rounded-md border border-line-strong bg-transparent p-0.5"
                         aria-label="Offense team color"
                       />
-                      <span
-                        style={{
-                          fontSize: 12,
-                          color: "#6B7280",
-                          fontFamily: "monospace",
-                          userSelect: "all",
-                        }}
-                      >
+                      <span className="select-all font-mono text-xs text-muted">
                         {editOffenseColor.toUpperCase()}
                       </span>
                       {editOffenseColor !== DEFAULT_OFFENSE_COLOR && (
@@ -544,15 +609,7 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
                           type="button"
                           onClick={() => setEditOffenseColor(DEFAULT_OFFENSE_COLOR)}
                           title="Reset to default"
-                          style={{
-                            fontSize: 11,
-                            color: "#9CA3AF",
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: 0,
-                            textDecoration: "underline",
-                          }}
+                          className="text-xs text-accent-text underline"
                         >
                           Reset
                         </button>
@@ -562,37 +619,19 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
 
                   {/* Defense color */}
                   <div>
-                    <label
-                      htmlFor="edit-defense-color"
-                      style={{ display: "block", fontSize: 12, fontWeight: 500, color: "#6B7280", marginBottom: 6 }}
-                    >
+                    <label htmlFor="edit-defense-color" className="mb-1.5 block text-xs font-medium text-muted">
                       Defense
                     </label>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div className="flex items-center gap-2">
                       <input
                         id="edit-defense-color"
                         type="color"
                         value={editDefenseColor}
                         onChange={(e) => setEditDefenseColor(e.target.value)}
-                        style={{
-                          width: 36,
-                          height: 36,
-                          padding: 2,
-                          border: "1.5px solid #D1D5DB",
-                          borderRadius: 6,
-                          cursor: "pointer",
-                          background: "none",
-                        }}
+                        className="h-11 w-11 flex-none cursor-pointer rounded-md border border-line-strong bg-transparent p-0.5"
                         aria-label="Defense team color"
                       />
-                      <span
-                        style={{
-                          fontSize: 12,
-                          color: "#6B7280",
-                          fontFamily: "monospace",
-                          userSelect: "all",
-                        }}
-                      >
+                      <span className="select-all font-mono text-xs text-muted">
                         {editDefenseColor.toUpperCase()}
                       </span>
                       {editDefenseColor !== DEFAULT_DEFENSE_COLOR && (
@@ -600,15 +639,7 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
                           type="button"
                           onClick={() => setEditDefenseColor(DEFAULT_DEFENSE_COLOR)}
                           title="Reset to default"
-                          style={{
-                            fontSize: 11,
-                            color: "#9CA3AF",
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: 0,
-                            textDecoration: "underline",
-                          }}
+                          className="text-xs text-accent-text underline"
                         >
                           Reset
                         </button>
@@ -619,36 +650,11 @@ export default function EditorHeader({ playId, children }: EditorHeaderProps) {
               </div>
 
               {/* Actions */}
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                <button
-                  type="button"
-                  onClick={() => setShowEdit(false)}
-                  style={{
-                    padding: "8px 18px",
-                    borderRadius: 8,
-                    border: "1.5px solid #D1D5DB",
-                    background: "#fff",
-                    fontSize: 14,
-                    fontWeight: 500,
-                    color: "#374151",
-                    cursor: "pointer",
-                  }}
-                >
+              <div className="flex justify-end gap-2.5">
+                <button type="button" onClick={() => setShowEdit(false)} className={TEXT_BTN}>
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  style={{
-                    padding: "8px 22px",
-                    borderRadius: 8,
-                    border: "none",
-                    background: "#4F46E5",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: "#fff",
-                    cursor: "pointer",
-                  }}
-                >
+                <button type="submit" className={ACCENT_BTN}>
                   Save
                 </button>
               </div>

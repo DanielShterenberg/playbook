@@ -19,6 +19,17 @@ import { useStore, selectEditorScene } from "@/lib/store";
 import { exportSceneAsPNG, type ExportResolution } from "@/lib/exportPNG";
 import { exportPlayAsVideo, type VideoResolution } from "@/lib/exportVideo";
 import { exportPlayToPdf, type PdfLayout } from "@/lib/exportPdf";
+import { ACCENT_BTN, ACCENT_CONTROL, POPOVER } from "./chrome";
+
+/** Section heading inside the menu. */
+const HEADING = "font-display text-sm font-semibold uppercase tracking-[0.08em] text-muted";
+/** Small option chip (speed, resolution, layout); selected state follows aria-pressed. */
+const CHIP =
+  "flex min-h-11 min-w-11 items-center justify-center rounded-md bg-chip px-2.5 text-xs font-medium text-ink transition-colors hover:bg-line aria-pressed:bg-accent aria-pressed:text-accent-ink md:min-h-7 md:min-w-0";
+/** One export action row (icon tile + title + summary). */
+const ACTION =
+  "flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-ink transition-colors hover:bg-chip disabled:cursor-not-allowed disabled:opacity-40";
+const ACTION_ICON = "flex h-8 w-8 flex-none items-center justify-center rounded-md bg-chip text-accent-text";
 
 // ---------------------------------------------------------------------------
 // Resolution options (PNG)
@@ -97,12 +108,12 @@ function ProgressBar({ fraction }: { fraction: number }) {
   return (
     <div className="px-4 py-3">
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-xs font-medium text-gray-600">Rendering video…</span>
-        <span className="text-xs text-gray-500">{pct}%</span>
+        <span className="text-xs font-medium text-ink">Rendering video…</span>
+        <span className="text-xs tabular-nums text-muted">{pct}%</span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
         <div
-          className="h-full rounded-full bg-blue-500 transition-all duration-150"
+          className="h-full rounded-full bg-accent transition-all duration-150"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -228,7 +239,8 @@ export default function ExportMenu() {
   return (
     <div ref={menuRef} className="relative">
       <button
-        className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        type="button"
+        className={ACCENT_BTN}
         onClick={() => setOpen((v) => !v)}
         disabled={isExporting || !scene}
         aria-haspopup="true"
@@ -243,34 +255,34 @@ export default function ExportMenu() {
 
       {/* Video progress — shown below the button while rendering */}
       {exportMode === "video" && (
-        <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-lg border border-gray-200 bg-white shadow-lg">
+        <div className={`${POPOVER} absolute right-0 top-full z-50 mt-1 w-56`}>
           <ProgressBar fraction={videoProgress} />
         </div>
       )}
 
       {open && !isExporting && (
         <div
-          className="absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-gray-200 bg-white shadow-lg"
+          className={`${POPOVER} absolute right-0 top-full z-50 mt-1 max-h-[calc(100vh-76px)] w-72 overflow-y-auto`}
           role="menu"
           aria-label="Export options"
         >
           {/* ---------------------------------------------------------------- */}
           {/* PNG section                                                       */}
           {/* ---------------------------------------------------------------- */}
-          <div className="border-b border-gray-100 px-4 py-2.5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+          <div className="border-b border-line px-4 py-2.5">
+            <p className={HEADING}>
               Export Scene
             </p>
           </div>
 
           {/* PNG resolution picker */}
           <div className="px-4 py-3">
-            <p className="mb-2 text-xs font-medium text-gray-600">PNG Resolution</p>
+            <p className="mb-2 text-xs font-medium text-muted">PNG Resolution</p>
             <div className="flex flex-col gap-1.5">
               {PNG_RESOLUTION_OPTIONS.map((opt) => (
                 <label
                   key={opt.value}
-                  className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-gray-50"
+                  className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-md px-2 hover:bg-app md:min-h-8"
                 >
                   <input
                     type="radio"
@@ -278,29 +290,30 @@ export default function ExportMenu() {
                     value={opt.value}
                     checked={pngResolution === opt.value}
                     onChange={() => setPngResolution(opt.value)}
-                    className="accent-blue-600"
+                    className={ACCENT_CONTROL}
                   />
-                  <span className="flex-1 text-sm text-gray-700">{opt.label}</span>
-                  <span className="text-xs text-gray-400">{opt.description}</span>
+                  <span className="flex-1 text-sm text-ink">{opt.label}</span>
+                  <span className="text-xs text-muted">{opt.description}</span>
                 </label>
               ))}
             </div>
           </div>
 
           {/* PNG export button */}
-          <div className="border-t border-gray-100 p-2">
+          <div className="border-t border-line p-2">
             <button
-              className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700"
+              type="button"
+              className={ACTION}
               role="menuitem"
               onClick={handleExportPNG}
               disabled={!scene}
             >
-              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-100 text-blue-600">
+              <span className={ACTION_ICON}>
                 <DownloadIcon />
               </span>
               <span>
                 <span className="block font-medium">Export as PNG</span>
-                <span className="block text-xs text-gray-500">
+                <span className="block text-xs text-muted">
                   Current scene · {pngResolution} resolution
                 </span>
               </span>
@@ -310,8 +323,8 @@ export default function ExportMenu() {
           {/* ---------------------------------------------------------------- */}
           {/* Video section                                                     */}
           {/* ---------------------------------------------------------------- */}
-          <div className="border-t border-gray-200 px-4 py-2.5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+          <div className="border-y border-line px-4 py-2.5">
+            <p className={HEADING}>
               Export Play Animation
             </p>
           </div>
@@ -319,19 +332,15 @@ export default function ExportMenu() {
           {/* Video speed + resolution */}
           <div className="px-4 py-3">
             <div className="mb-3">
-              <p className="mb-1.5 text-xs font-medium text-gray-600">Playback Speed</p>
+              <p className="mb-1.5 text-xs font-medium text-muted">Playback Speed</p>
               <div className="flex gap-1.5">
                 {VIDEO_SPEED_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
+                    type="button"
                     onClick={() => setVideoSpeed(opt.value)}
                     aria-pressed={videoSpeed === opt.value}
-                    className={[
-                      "rounded px-2.5 py-1 text-xs font-medium transition-colors",
-                      videoSpeed === opt.value
-                        ? "bg-green-100 text-green-700"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200",
-                    ].join(" ")}
+                    className={CHIP}
                   >
                     {opt.label}
                   </button>
@@ -340,45 +349,42 @@ export default function ExportMenu() {
             </div>
 
             <div>
-              <p className="mb-1.5 text-xs font-medium text-gray-600">Resolution</p>
+              <p className="mb-1.5 text-xs font-medium text-muted">Resolution</p>
               <div className="flex gap-1.5">
                 {VIDEO_RESOLUTION_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
+                    type="button"
                     onClick={() => setVideoResolution(opt.value)}
                     aria-pressed={videoResolution === opt.value}
                     title={opt.description}
-                    className={[
-                      "rounded px-2.5 py-1 text-xs font-medium transition-colors",
-                      videoResolution === opt.value
-                        ? "bg-green-100 text-green-700"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200",
-                    ].join(" ")}
+                    className={CHIP}
                   >
                     {opt.label}
                   </button>
                 ))}
               </div>
-              <p className="mt-1 text-xs text-gray-400">
+              <p className="mt-1 text-xs text-muted">
                 {VIDEO_RESOLUTION_OPTIONS.find((o) => o.value === videoResolution)?.description}
               </p>
             </div>
           </div>
 
           {/* Video export button */}
-          <div className="border-t border-gray-100 p-2">
+          <div className="border-t border-line p-2">
             <button
-              className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-green-50 hover:text-green-700"
+              type="button"
+              className={ACTION}
               role="menuitem"
               onClick={handleExportVideo}
               disabled={!currentPlay}
             >
-              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-green-100 text-green-600">
+              <span className={ACTION_ICON}>
                 <VideoIcon />
               </span>
               <span>
                 <span className="block font-medium">Export as Video</span>
-                <span className="block text-xs text-gray-500">
+                <span className="block text-xs text-muted">
                   All {currentPlay?.scenes.length ?? 0} scene
                   {(currentPlay?.scenes.length ?? 0) !== 1 ? "s" : ""} · {videoSpeed}× speed ·{" "}
                   {videoResolution.toUpperCase()} · MP4/WebM
@@ -390,56 +396,53 @@ export default function ExportMenu() {
           {/* ---------------------------------------------------------------- */}
           {/* PDF section                                                       */}
           {/* ---------------------------------------------------------------- */}
-          <div className="border-t border-gray-200 px-4 py-2.5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+          <div className="border-y border-line px-4 py-2.5">
+            <p className={HEADING}>
               Export Play Document
             </p>
           </div>
           <div className="px-4 py-3 flex flex-col gap-3">
             <div>
-              <p className="mb-1.5 text-xs font-medium text-gray-600">Layout</p>
+              <p className="mb-1.5 text-xs font-medium text-muted">Layout</p>
               <div className="flex gap-1.5 flex-wrap">
                 {(["1x1", "2x1", "2x2", "3x2"] as PdfLayout[]).map((l) => (
                   <button
                     key={l}
+                    type="button"
                     onClick={() => setPdfLayout(l)}
                     aria-pressed={pdfLayout === l}
-                    className={[
-                      "rounded px-2.5 py-1 text-xs font-medium transition-colors",
-                      pdfLayout === l
-                        ? "bg-orange-100 text-orange-700"
-                        : "bg-gray-100 text-gray-600 hover:bg-gray-200",
-                    ].join(" ")}
+                    className={CHIP}
                   >
                     {l}
                   </button>
                 ))}
               </div>
             </div>
-            <label className="flex cursor-pointer items-center gap-2.5">
+            <label className="flex min-h-11 cursor-pointer items-center gap-2.5 md:min-h-0">
               <input
                 type="checkbox"
                 checked={pdfExportSteps}
                 onChange={(e) => setPdfExportSteps(e.target.checked)}
-                className="accent-orange-600"
+                className={ACCENT_CONTROL}
               />
-              <span className="text-sm text-gray-700">Export steps</span>
-              <span className="text-xs text-gray-400">(cumulative reveal)</span>
+              <span className="text-sm text-ink">Export steps</span>
+              <span className="text-xs text-muted">(cumulative reveal)</span>
             </label>
           </div>
-          <div className="border-t border-gray-100 p-2">
+          <div className="border-t border-line p-2">
             <button
-              className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-orange-50 hover:text-orange-700"
+              type="button"
+              className={ACTION}
               role="menuitem"
               onClick={handleExportPDF}
               disabled={!currentPlay}
             >
-              <span className="flex h-8 w-8 items-center justify-center rounded-md bg-orange-100 text-orange-600">
+              <span className={ACTION_ICON}>
                 <PdfIcon />
               </span>
               <span>
                 <span className="block font-medium">Export as PDF</span>
-                <span className="block text-xs text-gray-500">
+                <span className="block text-xs text-muted">
                   All {currentPlay?.scenes.length ?? 0} scene
                   {(currentPlay?.scenes.length ?? 0) !== 1 ? "s" : ""}
                   {pdfExportSteps ? " · per step" : " · per scene"} · {pdfLayout} layout

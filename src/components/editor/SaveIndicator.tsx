@@ -4,24 +4,30 @@
  * SaveIndicator — shows the current auto-save status in the editor header.
  *
  * Implements issue #68: "Saving…" / "Saved" / "Offline" indicator.
+ *
+ * Mount exactly once: useAutoSave is the hook that writes the play.
  */
 
 import { useAutoSave } from "@/hooks/useAutoSave";
 
-export default function SaveIndicator() {
-  const status = useAutoSave();
+interface SaveIndicatorProps {
+  /** Draw a "·" before the status on md+ (it follows the play's meta text there). */
+  separated?: boolean;
+}
 
-  if (status === "idle" || status === "saved") {
-    return (
-      <span className="hidden text-xs text-gray-400 sm:inline-block">
-        {status === "saved" ? "Saved" : ""}
-      </span>
-    );
+export default function SaveIndicator({ separated = false }: SaveIndicatorProps) {
+  const status = useAutoSave();
+  const sep = separated ? " md:before:mx-1.5 md:before:text-muted md:before:content-['·']" : "";
+
+  if (status === "idle") return null;
+
+  if (status === "saved") {
+    return <span className={`flex-none${sep}`}>Saved</span>;
   }
 
   if (status === "pending" || status === "saving") {
     return (
-      <span className="hidden items-center gap-1 text-xs text-gray-400 sm:inline-flex">
+      <span className={`inline-flex flex-none items-center gap-1${sep}`}>
         <svg
           width={11}
           height={11}
@@ -40,7 +46,7 @@ export default function SaveIndicator() {
   // error
   return (
     <span
-      className="hidden items-center gap-1 text-xs text-red-500 sm:inline-flex"
+      className={`inline-flex flex-none items-center gap-1 text-danger${sep}`}
       title="Auto-save failed — check your connection"
     >
       <svg width={11} height={11} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">

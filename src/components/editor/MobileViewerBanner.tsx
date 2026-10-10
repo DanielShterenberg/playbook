@@ -12,7 +12,7 @@
 export default function MobileViewerBanner() {
   return (
     <div
-      className="flex items-center gap-2 bg-amber-50 px-3 py-2 text-xs text-amber-800 md:hidden"
+      className="flex items-center gap-2 border-b border-line bg-chip px-3 py-2 text-xs text-ink md:hidden"
       role="status"
       aria-live="polite"
     >
@@ -23,7 +23,7 @@ export default function MobileViewerBanner() {
         height={14}
         fill="currentColor"
         aria-hidden="true"
-        className="shrink-0"
+        className="shrink-0 text-accent-text"
       >
         <path
           fillRule="evenodd"
