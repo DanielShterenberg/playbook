@@ -91,6 +91,13 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   const [notFound, setNotFound] = useState(false);
 
   const [isPlaying, setIsPlaying] = useState(false);
+  // Read through a ref so two quick toggles before a re-render do not both
+  // see the same stale value.
+  const isPlayingRef = useRef(false);
+  const setPlaying = useCallback((playing: boolean) => {
+    isPlayingRef.current = playing;
+    setIsPlaying(playing);
+  }, []);
   const [speed, setSpeed] = useState<0.5 | 1 | 1.5 | 2>(1);
 
   // The one playback position (scene, step, time spent in the step). It lives
@@ -136,8 +143,8 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   const tick = useCallback((dtMs: number) => {
     const result = tickPlayback(positionRef.current, dtMs, { scenes, speed, loop: false });
     moveTo(result.state);
-    if (result.ended) setIsPlaying(false);
-  }, [scenes, speed, moveTo]);
+    if (result.ended) setPlaying(false);
+  }, [scenes, speed, moveTo, setPlaying]);
 
   usePlaybackClock(isPlaying, tick);
 
@@ -146,16 +153,16 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   // ---------------------------------------------------------------------------
 
   const togglePlay = useCallback(() => {
-    if (isPlaying) {
-      setIsPlaying(false);
+    if (isPlayingRef.current) {
+      setPlaying(false);
       return;
     }
     // Play pressed on the final step restarts the play instead of replaying
     // only the final hold. Either way the current step starts from zero.
     const position = positionRef.current;
     moveTo(isAtEnd(position, scenes) ? startPosition(scenes) : { ...position, accMs: 0 });
-    setIsPlaying(true);
-  }, [isPlaying, scenes, moveTo]);
+    setPlaying(true);
+  }, [scenes, moveTo, setPlaying]);
 
   /**
    * Pause and move one step back / forward within the current scene. The
@@ -163,20 +170,20 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
    * disabled state is derived from (`prevStep` / `nextStep` below).
    */
   const stepBy = useCallback((delta: 1 | -1) => {
-    setIsPlaying(false);
+    setPlaying(false);
     const position = positionRef.current;
     const scene = scenes[position.sceneIndex];
     const target = delta > 0 ? nextStepAfter(scene, position.step) : prevStepBefore(scene, position.step);
     if (target !== undefined) moveTo({ sceneIndex: position.sceneIndex, step: target, accMs: 0 });
-  }, [scenes, moveTo]);
+  }, [scenes, moveTo, setPlaying]);
 
   /** Pause and go to the first step of a scene (no-op move if already on that scene). */
   const goToScene = useCallback((index: number) => {
-    setIsPlaying(false);
+    setPlaying(false);
     const target = Math.min(Math.max(index, 0), scenes.length - 1);
     if (target < 0 || target === positionRef.current.sceneIndex) return;
     moveTo({ sceneIndex: target, step: firstStepOf(scenes[target]), accMs: 0 });
-  }, [scenes, moveTo]);
+  }, [scenes, moveTo, setPlaying]);
 
   const sceneBy = useCallback(
     (delta: 1 | -1) => goToScene(positionRef.current.sceneIndex + delta),
@@ -184,9 +191,9 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   );
 
   const goToBeginning = useCallback(() => {
-    setIsPlaying(false);
+    setPlaying(false);
     moveTo(startPosition(scenes));
-  }, [scenes, moveTo]);
+  }, [scenes, moveTo, setPlaying]);
 
   // Keyboard shortcuts. The window listener is registered once; it reaches the
   // current handlers through a ref so play/pause does not re-register it.
