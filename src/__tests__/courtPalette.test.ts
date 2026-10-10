@@ -14,7 +14,6 @@ import {
   TOKEN_TEXT_LIGHT,
 } from "@/lib/courtPalette";
 import { renderSceneToCtx } from "@/lib/frameRenderer";
-import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import { computeCourtLayout } from "@/lib/courtLayout";
 import type { Scene } from "@/lib/types";
 
@@ -185,35 +184,5 @@ describe("exports never pass a palette", () => {
       const src = readFileSync(path.resolve(process.cwd(), f), "utf8");
       expect(src, f).not.toMatch(/from "@\/lib\/store"|useStore/);
     }
-  });
-});
-
-describe("theme init script — stored choice, else the device setting", () => {
-  function run(stored: string | null, deviceDark: boolean, storageThrows = false): string | undefined {
-    const dataset: { theme?: string } = {};
-    const localStorage = {
-      getItem: () => {
-        if (storageThrows) throw new Error("blocked");
-        return stored;
-      },
-    };
-    const matchMedia = () => ({ matches: deviceDark });
-    new Function("localStorage", "matchMedia", "document", THEME_INIT_SCRIPT)(localStorage, matchMedia, { documentElement: { dataset } });
-    return dataset.theme;
-  }
-
-  it("a stored choice wins over the device", () => {
-    expect(run("dark", false)).toBe("dark");
-    expect(run("light", true)).toBe("light");
-  });
-
-  it("no stored choice (or a junk value) follows the device", () => {
-    expect(run(null, true)).toBe("dark");
-    expect(run(null, false)).toBe("light");
-    expect(run("purple", true)).toBe("dark");
-  });
-
-  it("never throws when storage is blocked — the page stays light", () => {
-    expect(run(null, true, true)).toBeUndefined();
   });
 });

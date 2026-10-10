@@ -8,6 +8,7 @@
  * must get light.
  */
 :root {
+  color-scheme: light;
   --background: #ffffff;
   --foreground: #171717;
 
@@ -27,6 +28,8 @@
 }
 
 [data-theme="dark"] {
+  /* Native UI too: scrollbars, select popups, checkboxes, autofill */
+  color-scheme: dark;
   --background: #0E1116;
   --foreground: #E8ECF1;
 

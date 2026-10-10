@@ -28,7 +28,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Sets data-theme before first paint so a stored dark choice never flashes light */}
+        {/* Sets data-theme before first paint: the stored choice, else the device setting */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body className={`${body.variable} ${display.variable} ${mono.variable} font-sans antialiased`}>
