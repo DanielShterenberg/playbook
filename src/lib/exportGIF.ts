@@ -71,7 +71,7 @@ const COLOR_DEFENSE_FILL = "#FFFFFF";
 const COLOR_DEFENSE_STROKE = "#1E3A5F";
 const COLOR_TEXT_OFFENSE = "#FFFFFF";
 
-const OFFENSE_ABBRS: Record<number, string> = { 1: "PG", 2: "SG", 3: "SF", 4: "PF", 5: "C" };
+const POSITION_ABBRS: Record<number, string> = { 1: "PG", 2: "SG", 3: "SF", 4: "PF", 5: "C" };
 
 function drawPlayer(
   ctx: CanvasRenderingContext2D,
@@ -105,46 +105,28 @@ function drawPlayer(
   ctx.fillStyle = isOffense ? offenseFill : COLOR_DEFENSE_FILL;
   ctx.fill();
   ctx.strokeStyle = isOffense ? COLOR_OFFENSE_STROKE : defenseStroke;
-  ctx.lineWidth = (isOffense ? 2 : 2.5) * s;
+  ctx.lineWidth = Math.max(1.5, (isOffense ? 2 : 2.5) * s);
   ctx.stroke();
 
-  if (!isOffense) {
-    const xSize = 7 * s;
-    ctx.strokeStyle = defenseStroke;
-    ctx.lineWidth = 2.5 * s;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(px - xSize, py - xSize);
-    ctx.lineTo(px + xSize, py + xSize);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(px + xSize, py - xSize);
-    ctx.lineTo(px - xSize, py + xSize);
-    ctx.stroke();
-  }
-
+  // Label rules mirror PlayerToken.tsx so a taped play reads like the editor.
   let label: string;
   if (displayMode === "names") {
     const key = `${side}-${position}`;
     label = playerNames[key] ?? (isOffense ? String(position) : `X${position}`);
   } else if (displayMode === "abbreviations") {
-    label = OFFENSE_ABBRS[position] ?? String(position);
+    label = POSITION_ABBRS[position] ?? String(position);
   } else {
     // "numbers"
-    label = isOffense ? String(position) : `X${position}`;
+    label = String(position);
   }
-  const baseFontSize = isOffense ? 11 : 9;
-  const fontSize =
-    (label.length > 2
-      ? Math.max(6, baseFontSize - (label.length - 2) * 1.5)
-      : baseFontSize) * s;
+  const baseFontSize = Math.max(6, Math.round(11 * s));
+  const fontSize = label.length > 2 ? Math.max(5, baseFontSize - (label.length - 2) * 1.5) : baseFontSize;
 
   ctx.fillStyle = isOffense ? COLOR_TEXT_OFFENSE : defenseStroke;
   ctx.font = `700 ${fontSize}px system-ui, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const dyOffset = isOffense ? 0 : -9 * s;
-  ctx.fillText(label, px, py + dyOffset);
+  ctx.fillText(label, px, py);
 }
 
 // ---------------------------------------------------------------------------

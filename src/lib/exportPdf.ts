@@ -92,7 +92,7 @@ function drawPlayer(
     ctx.textBaseline = "middle";
     ctx.fillText(String(position), px, py);
   } else {
-    // White circle with navy X
+    // White circle with navy outline and number, as in the editor
     ctx.beginPath();
     ctx.arc(px, py, r, 0, Math.PI * 2);
     ctx.fillStyle = "#FFFFFF";
@@ -101,22 +101,11 @@ function drawPlayer(
     ctx.lineWidth = r * 0.18;
     ctx.stroke();
 
-    const x = r * 0.42;
-    ctx.beginPath();
-    ctx.moveTo(px - x, py - x);
-    ctx.lineTo(px + x, py + x);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(px + x, py - x);
-    ctx.lineTo(px - x, py + x);
-    ctx.stroke();
-
-    // Label above the X
     ctx.fillStyle = "#1E3A5F";
-    ctx.font = `bold ${Math.round(r * 0.58)}px system-ui, sans-serif`;
+    ctx.font = `bold ${Math.round(r * 0.78)}px system-ui, sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(`X${position}`, px, py - x - r * 0.22);
+    ctx.fillText(String(position), px, py);
   }
 
   ctx.restore();
@@ -518,11 +507,12 @@ export async function exportPlayToPdf(play: Play, options: ExportPdfOptions = {}
   const items: RenderItem[] = [];
   const scenes = [...play.scenes].sort((a, b) => a.order - b.order);
   for (const scene of scenes) {
+    const sceneIdx = scenes.indexOf(scene);
     const sortedGroups = [...scene.timingGroups].sort((a, b) => a.step - b.step);
     const steps = exportSteps ? sortedGroups.map((g) => g.step) : [Infinity];
     for (const maxStep of steps) {
       const stepLabel = exportSteps && maxStep !== Infinity ? ` · Step ${maxStep}` : "";
-      items.push({ scene, maxStep, label: `Scene ${scene.order}${stepLabel}` });
+      items.push({ scene, maxStep, label: `Scene ${sceneIdx + 1}${stepLabel}` });
     }
   }
 

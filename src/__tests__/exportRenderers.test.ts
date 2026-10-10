@@ -223,6 +223,28 @@ describe("GIF/MP4 frame (renderSceneToCtx)", () => {
 // MP4 / WebM frame size
 // ---------------------------------------------------------------------------
 
+describe("defender tokens read like the editor's (PlayerToken.tsx)", () => {
+  const layout = computeCourtLayout(480, "half");
+  const court = record((ctx) => paintCourt(ctx, layout, { flipped: false }));
+  const scene = makeScene(false);
+  const texts = (log: LogEntry[]) => log.filter((e) => e[0] === "fillText").map((e) => e[1]);
+
+  it("GIF/MP4/PNG frame: plain numbers in \"numbers\" mode, no X mark", () => {
+    const log = record((ctx) => renderSceneToCtx(ctx, layout, scene, [], false)).slice(court.length);
+    expect(texts(log).some((t) => /^X\d/.test(String(t)))).toBe(false);
+    // The X was two straight strokes; with no annotations nothing else draws a lineTo.
+    expect(log.some((e) => e[0] === "lineTo")).toBe(false);
+  });
+
+  it("PDF: plain numbers on both sides", () => {
+    const log = record((ctx) => drawPdfSceneOnCanvas(fakeCanvas(ctx), scene, "half", false)).slice(court.length);
+    expect(texts(log).some((t) => /^X\d/.test(String(t)))).toBe(false);
+    expect(texts(log).filter((t) => /^[1-5]$/.test(String(t))).length).toBe(
+      [...scene.players.offense, ...scene.players.defense].filter((p) => p.visible).length,
+    );
+  });
+});
+
 describe("video frame size", () => {
   it("is the shared layout's size for both encoder paths", () => {
     for (const res of ["sd", "hd"] as const) {
