@@ -6,6 +6,9 @@ const config: Config = {
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+    // The two lib modules that hold class names (not all of src/lib: other
+    // strings there would be mistaken for classes)
+    "./src/lib/{categories,uiClasses}.ts",
   ],
   theme: {
     extend: {
@@ -30,6 +33,8 @@ const config: Config = {
         "line-strong": "var(--color-line-strong)",
         danger: "var(--color-danger)",
         success: "var(--color-success)",
+        control: "var(--color-control)",
+        "ball-tag": "var(--color-ball-tag)",
       },
     },
   },

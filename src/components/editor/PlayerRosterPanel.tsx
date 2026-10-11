@@ -21,6 +21,7 @@ import { useStore, selectEditorScene } from "@/lib/store";
 import type { PlayerDisplayMode } from "@/lib/store";
 import { contrastText, customTeamColor } from "@/lib/courtPalette";
 import { useCourtPalette } from "@/hooks/useTheme";
+import { FOCUS_RING } from "@/lib/uiClasses";
 import { ACCENT_CONTROL, SECTION_LABEL, SEGMENT, SEGMENTED } from "./chrome";
 
 const POSITION_ABBRS: Record<number, string> = { 1: "PG", 2: "SG", 3: "SF", 4: "PF", 5: "C" };
@@ -46,9 +47,6 @@ type Side = "offense" | "defense";
 
 const SIDE_WORD: Record<Side, string> = { offense: "offensive", defense: "defensive" };
 const SIDE_PREFIX: Record<Side, string> = { offense: "O", defense: "X" };
-
-const FOCUS =
-  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text";
 
 /** Eye / crossed-eye glyph for the per-player visibility toggle. */
 function EyeIcon({ visible }: { visible: boolean }) {
@@ -138,7 +136,7 @@ export default function PlayerRosterPanel() {
                 </span>
               )}
               {hasBall && (
-                <span className="flex-none text-xs font-semibold text-[#8A5A00] dark:font-normal dark:text-[#F2B33D]">
+                <span className="flex-none text-xs font-semibold text-ball-tag dark:font-normal">
                   Ball
                 </span>
               )}
@@ -148,7 +146,7 @@ export default function PlayerRosterPanel() {
                 aria-label={`${p.visible ? "Hide" : "Show"} ${SIDE_WORD[side]} player ${p.position}`}
                 aria-pressed={p.visible}
                 title={p.visible ? "Visible — click to hide" : "Hidden — click to show"}
-                className={`flex h-8 w-8 flex-none items-center justify-center rounded-md transition-colors hover:bg-chip ${FOCUS} ${p.visible ? "text-ink" : "text-muted"}`}
+                className={`flex h-8 w-8 flex-none items-center justify-center rounded-md transition-colors hover:bg-chip ${FOCUS_RING} ${p.visible ? "text-ink" : "text-muted"}`}
               >
                 <EyeIcon visible={p.visible} />
               </button>
@@ -166,7 +164,7 @@ export default function PlayerRosterPanel() {
       title={collapsed ? "Expand roster panel" : "Collapse roster panel"}
       aria-label={collapsed ? "Expand roster panel" : "Collapse roster panel"}
       aria-expanded={!collapsed}
-      className={`flex h-8 w-8 flex-none items-center justify-center rounded-lg text-muted transition-colors hover:bg-chip hover:text-ink ${FOCUS}`}
+      className={`flex h-8 w-8 flex-none items-center justify-center rounded-lg text-muted transition-colors hover:bg-chip hover:text-ink ${FOCUS_RING}`}
     >
       {/* Right-pointing chevron; rotated when collapsed to point left */}
       <svg

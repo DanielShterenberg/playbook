@@ -20,6 +20,7 @@ import { useTeam } from "@/contexts/TeamContext";
 import { joinTeamByInviteCode } from "@/lib/team";
 import Logo from "@/components/brand/Logo";
 import ThemeToggle from "@/components/brand/ThemeToggle";
+import Spinner from "@/components/brand/Spinner";
 
 interface JoinTeamPageProps {
   params: { inviteCode: string };
@@ -33,17 +34,7 @@ function JoinStatus({ label }: { label: string }) {
     <main className={PAGE}>
       <ThemeToggle className="absolute right-4 top-4" />
       <div role="status" className="flex items-center gap-2.5 text-[15px] text-muted">
-        <svg width={18} height={18} viewBox="0 0 24 24" fill="none" aria-hidden="true" className="animate-spin">
-          <circle
-            cx={12}
-            cy={12}
-            r={10}
-            stroke="currentColor"
-            strokeWidth={3}
-            strokeDasharray="31 31"
-            strokeLinecap="round"
-          />
-        </svg>
+        <Spinner size={18} />
         {label}
       </div>
     </main>

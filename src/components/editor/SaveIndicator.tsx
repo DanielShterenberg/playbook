@@ -9,6 +9,7 @@
  */
 
 import { useAutoSave } from "@/hooks/useAutoSave";
+import Spinner from "@/components/brand/Spinner";
 
 interface SaveIndicatorProps {
   /** Draw a "·" before the status on md+ (it follows the play's meta text there). */
@@ -28,16 +29,7 @@ export default function SaveIndicator({ separated = false }: SaveIndicatorProps)
   if (status === "pending" || status === "saving") {
     return (
       <span className={`inline-flex flex-none items-center gap-1${sep}`}>
-        <svg
-          width={11}
-          height={11}
-          viewBox="0 0 24 24"
-          fill="none"
-          aria-hidden="true"
-          className="animate-spin"
-        >
-          <circle cx={12} cy={12} r={10} stroke="currentColor" strokeWidth={3} strokeDasharray="31 31" strokeLinecap="round" />
-        </svg>
+        <Spinner size={11} />
         Saving…
       </span>
     );

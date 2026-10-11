@@ -3,8 +3,7 @@
  * Colours come from the theme tokens (globals.css), so both themes are covered.
  */
 
-const FOCUS_RING =
-  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text";
+import { FOCUS_RING } from "@/lib/uiClasses";
 
 export const MODAL_OVERLAY = "fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/60 p-4";
 

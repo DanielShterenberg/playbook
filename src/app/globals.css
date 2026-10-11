@@ -25,6 +25,10 @@
   --color-line-strong: #8A94A1;
   --color-danger: #B42318;
   --color-success: #1F5A35;
+  /* Checkbox / radio tint — the fill accent is too light on white */
+  --color-control: #C85A0A;
+  /* Roster "Ball" tag */
+  --color-ball-tag: #8A5A00;
 }
 
 [data-theme="dark"] {
@@ -43,6 +47,8 @@
   --color-line-strong: #3A4453;
   --color-danger: #F87171;
   --color-success: #34D399;
+  --color-control: var(--color-accent);
+  --color-ball-tag: #F2B33D;
 }
 
 body {

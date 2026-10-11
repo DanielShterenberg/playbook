@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
 import type { Play, Role } from "@/lib/types";
+import { CATEGORY_BADGE, CATEGORY_SHORT_LABELS } from "@/lib/categories";
 import CourtThumbnail from "@/components/court/CourtThumbnail";
 import { addPlayToTeam, deletePlay, savePlay } from "@/lib/db";
 import { isPersonalPlay } from "@/lib/playFilter";
@@ -30,21 +31,6 @@ import { isPersonalPlay } from "@/lib/playFilter";
 
 /** Thumbnail width in px (scaled to the card by CSS). */
 const THUMBNAIL_W = 200;
-
-// ---------------------------------------------------------------------------
-// Category badge colours — a light pair and a dark pair per category
-// (complete class names, so Tailwind sees them)
-// ---------------------------------------------------------------------------
-
-const CATEGORY_BADGE: Record<string, string> = {
-  offense: "bg-[#DBEAFE] text-[#1E40AF] dark:bg-[#1E2F4D] dark:text-[#93C5FD]",
-  defense: "bg-[#FEE2E2] text-[#991B1B] dark:bg-[#4A1D1D] dark:text-[#FCA5A5]",
-  inbound: "bg-[#D1FAE5] text-[#065F46] dark:bg-[#123A2C] dark:text-[#6EE7B7]",
-  "press-break": "bg-[#FEF3C7] text-[#92400E] dark:bg-[#45300B] dark:text-[#FCD34D]",
-  "fast-break": "bg-[#EDE9FE] text-[#5B21B6] dark:bg-[#2E2456] dark:text-[#C4B5FD]",
-  oob: "bg-chip text-ink",
-  special: "bg-[#FCE7F3] text-[#9D174D] dark:bg-[#4A1936] dark:text-[#F9A8D4]",
-};
 
 const BADGE = "flex-none whitespace-nowrap rounded-full px-2 py-[3px] text-xs font-semibold";
 
@@ -84,7 +70,9 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
 
   const firstScene = play.scenes[0] ?? null;
   const sceneCount = play.scenes.length;
+  // A stored play can carry a category this build does not know: neutral badge, raw name.
   const categoryBadge = CATEGORY_BADGE[play.category] ?? CATEGORY_BADGE.oob;
+  const categoryLabel = CATEGORY_SHORT_LABELS[play.category] ?? play.category;
 
   // The confirmation disarms by itself: on touch there is no blur or
   // mouse-leave to reset it, and an armed card must not wait for a stray tap.
@@ -186,7 +174,7 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
 
           <div className="mt-auto flex items-center gap-2 pt-1 text-[13px] text-muted">
             {/* Category badge */}
-            <span className={`${BADGE} capitalize ${categoryBadge}`}>{play.category.replace("-", " ")}</span>
+            <span className={`${BADGE} capitalize ${categoryBadge}`}>{categoryLabel}</span>
             {/* Scene count */}
             <span>
               {sceneCount} {sceneCount === 1 ? "scene" : "scenes"}
