@@ -59,6 +59,9 @@ export const PLAYER_RADIUS_RATIO = 0.03;
 /** Smallest player radius in px (keeps tokens tappable on narrow screens). */
 export const PLAYER_RADIUS_MIN = 10;
 
+/** Pointer travel (px) before a press on a token or the ball counts as a drag, not a tap. */
+export const DRAG_THRESHOLD_PX = 3;
+
 /** Ball radius as a fraction of the inner court width. */
 export const BALL_RADIUS_RATIO = 0.02;
 /** Smallest ball radius in px. */

@@ -32,6 +32,8 @@
 ### Rendering pipeline (editor, viewer, thumbnails, exports)
 - One recipe everywhere: `computeCourtLayout(width, variant)` → `paintCourt(ctx, layout, { flipped })` → `normToCanvasPx(x, y, layout, flipped)` → `computeTokenSizes(layout.innerW)` (`src/lib/courtLayout.ts`, `courtRendering.ts`, `tokenSizing.ts`)
 - PNG / MP4 / PDF frames are all drawn by `renderSceneToCtx` in `src/lib/frameRenderer.ts`; its annotation drawing mirrors `AnnotationLayer.tsx` — change both together
+- Annotation sizes are written for a 600px-wide court and scaled by `annotationScale(innerW)` in both places (the editor scales an SVG group, the exporter multiplies), so lines keep their proportion to the tokens at any size
+- PDF text goes through `drawPdfText` (`exportPdf.ts`): Latin stays vector text, anything else (Hebrew) is drawn by the browser on a canvas. Export file names come from `exportFileBase` (`src/lib/export.ts`)
 - The editor's on-screen frame **in the light theme** is the reference. Never add a private court-drawing copy or an `oobBot` compensation in an exporter
 - Colours come from a `CourtPalette` (`src/lib/courtPalette.ts`, light + dark). On screen use `useCourtPalette()`; exporters never pass a palette, so PNG / MP4 / PDF are always light
 - Team colours go through `customTeamColor(stored) ?? palette.offenseFill / defenseFill` — stored default colours mean "no custom colour"
@@ -43,10 +45,16 @@
 
 ### Theme and UI chrome
 - Light / dark theme = `data-theme` on `<html>` (`src/lib/theme.ts`): stored choice from the toggle, else the device setting, set before first paint. It is NOT in the Zustand store (a toggle must not be an undo step)
-- Chrome colours are Tailwind tokens from `globals.css` (`bg-app`, `bg-surface`, `border-line`, `text-ink`, `text-muted`, `bg-accent` + `text-accent-ink`, `text-accent-text`, `bg-chip`, `text-danger`, `text-success`); `dark:` variants work. No light-only hex colours in components
+- Chrome colours are Tailwind tokens from `globals.css` (`bg-app`, `bg-surface`, `border-line`, `text-ink`, `text-muted`, `bg-accent` + `text-accent-ink`, `text-accent-text`, `bg-chip`, `text-danger`, `text-success`, `accent-control`, `text-ball-tag`); `dark:` variants work. No light-only hex colours in components
+- Categories (labels, order, badge colours) live in `src/lib/categories.ts`; the shared focus ring in `src/lib/uiClasses.ts`; spinners in `components/brand/Spinner.tsx`. Tailwind only scans the two lib files listed in `tailwind.config.ts` — class names in any other `src/lib` file are not generated
 - Fonts: `font-sans` Barlow, `font-display` Barlow Condensed (headings, uppercase labels), `font-mono` IBM Plex Mono (wordmark). Logo and `ThemeToggle` live in `src/components/brand/`
 - Dark annotation tints are CSS overrides in `globals.css` keyed on the hex literals in `AnnotationLayer.tsx` (a test ties them together) — change both
 - Approved mockups: https://claude.ai/artifact/HzAh218mbgkGicAQCcZ4NK (design A, light + dark)
+
+### Editing input
+- The drawing layer (`AnnotationLayer.tsx`) uses pointer events with pointer capture — one path for mouse, finger and pen. The click after a captured gesture lands on the layer, not on the element under the pointer
+- Phones (<768px) edit too: `MobileToolBar` is the bottom tool bar (five rail tools + Undo). Team viewers get no tools on any screen
+- A scene's name is its `note` (`sceneName()` in `types.ts`, max `SCENE_NAME_MAX`); renamed from the scene strip (double-click, F2 or the menu), shown in the share viewer and the PDF
 
 ### Coordinates
 - Court positions are normalized `[0, 1]` (x=0 left, x=1 right, y=0 half-court line, y=1 baseline)
@@ -70,9 +78,12 @@
 - Email: test@playbook.com
 - Password: Test1234!
 - Team: מכבי קדימה (admin role)
+- Drills against localhost only — never sign in to the production site with a script
 
 ## Open Issues (as of 2026-10-11)
-- #167 Full app redesign + new logo — shipped in #182–#187; left: mobile drawing tool bar (needs touch drawing), owner sign-off on mockup deviations
+- #167 Full app redesign + new logo — shipped (#182–#195). Deliberate differences from the mockups, for the owner to confirm: real-proportion thumbnails (taller cards), no team switcher (one team per user), phone tool bar says "Move" where the mockup says "Cut"
 - #173 Flipped full court inverts the formation relative to the basket (needs a product decision; fixing moves stored plays)
-- #179 Playback/store cleanup after #177
-- #180 Rendering cleanup after #178
+- #179 Playback/store cleanup after #177 — left: one stored scene selection instead of two, MP4 holds vs on-screen timing
+- #180 Rendering cleanup after #178 — left: one annotation colour map (three copies today, tied by a test)
+- `firestore.rules` changed in #188 (bounds `teamName` on share links): deploy with `firebase deploy --only firestore:rules`
+- Phones: no redo, and no way to reach the scene menu (duplicate / delete scene) on iOS, which sends no `contextmenu` on long press

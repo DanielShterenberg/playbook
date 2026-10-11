@@ -21,11 +21,8 @@
  */
 
 import { useRef, useCallback } from "react";
-import { BALL_RADIUS, ballScale } from "@/lib/tokenSizing";
+import { BALL_RADIUS, ballScale, DRAG_THRESHOLD_PX } from "@/lib/tokenSizing";
 import { useCourtPalette } from "@/hooks/useTheme";
-
-/** Pointer travel (px) before a press on the token counts as a drag. */
-const DRAG_THRESHOLD_PX = 3;
 
 // ---------------------------------------------------------------------------
 // Constants

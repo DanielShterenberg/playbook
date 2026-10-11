@@ -15,12 +15,9 @@
 
 import { useRef, useCallback } from "react";
 import type { PlayerDisplayMode } from "@/lib/store";
-import { PLAYER_RADIUS, playerScale, playerLabelFontSize } from "@/lib/tokenSizing";
+import { PLAYER_RADIUS, playerScale, playerLabelFontSize, DRAG_THRESHOLD_PX } from "@/lib/tokenSizing";
 import { contrastText, customTeamColor } from "@/lib/courtPalette";
 import { useCourtPalette } from "@/hooks/useTheme";
-
-/** Pointer travel (px) before a press on the token counts as a drag. */
-const DRAG_THRESHOLD_PX = 3;
 
 // ---------------------------------------------------------------------------
 // Constants
