@@ -128,8 +128,4 @@ describe("ExportMenu PDF export call (issue #174)", () => {
       expect(pdfProps[key], key).toBe(videoProps[key]);
     }
   });
-
-  it("offers no GIF export (exportPlayAsGIF stays uncalled until the owner decides)", () => {
-    expect(findCalls("exportPlayAsGIF")).toHaveLength(0);
-  });
 });

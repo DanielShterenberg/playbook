@@ -590,7 +590,6 @@ describe("frame style", () => {
   it("is declared once (frameRenderer.ts) and imported by the exporters", () => {
     const read = (f: string) => readFileSync(path.resolve(process.cwd(), "src/lib", f), "utf8");
     expect(read("frameRenderer.ts")).toMatch(/export interface FrameStyle \{/);
-    expect(read("exportGIF.ts")).not.toMatch(/interface FrameStyle/);
     for (const f of ["exportPNG.ts", "exportVideo.ts", "exportPdf.ts"]) {
       const src = read(f);
       expect(src, f).toMatch(/FrameStyle/);
@@ -599,7 +598,7 @@ describe("frame style", () => {
       expect(src, f).not.toMatch(/interface (PdfSceneStyle|VideoFrameStyle)/);
     }
     // No renderer is called with the style unpacked into positional arguments.
-    for (const f of ["frameRenderer.ts", "exportGIF.ts", "exportPNG.ts", "exportVideo.ts", "exportPdf.ts"]) {
+    for (const f of ["frameRenderer.ts", "exportPNG.ts", "exportVideo.ts", "exportPdf.ts"]) {
       expect(read(f), f).not.toMatch(/playerNames,\s*offenseColor,\s*defenseColor,?\s*\)/);
     }
   });
@@ -657,26 +656,15 @@ describe("scene without a ball", () => {
 
 describe("exporter sources", () => {
   const read = (f: string) => readFileSync(path.resolve(process.cwd(), "src/lib", f), "utf8");
-  const files = ["frameRenderer.ts", "exportGIF.ts", "exportPNG.ts", "exportVideo.ts", "exportPdf.ts"];
+  const files = ["frameRenderer.ts", "exportPNG.ts", "exportVideo.ts", "exportPdf.ts"];
 
-  // Review item 7: the painter lives in a neutral module; only the GIF encoder
-  // touches gifenc, and nobody reaches the painter through the GIF module.
-  it("the frame painter is neutral: no gifenc, and no exporter imports it via exportGIF", () => {
+  // Review item 7: the painter lives in a neutral module that no exporter owns.
+  it("the frame painter is neutral: it imports no exporter", () => {
     const painter = read("frameRenderer.ts");
-    expect(painter).not.toMatch(/gifenc/);
     expect(painter).not.toMatch(/from "\.\/export/);
     for (const name of ["FrameStyle", "renderSceneToCtx", "renderFrame", "annotationScale"]) {
       expect(painter, name).toMatch(new RegExp(`export (interface|function) ${name}\\b`));
     }
-    for (const f of ["exportPNG.ts", "exportVideo.ts", "exportPdf.ts"]) {
-      expect(read(f), f).not.toMatch(/exportGIF"/);
-      expect(read(f), f).not.toMatch(/gifenc/);
-    }
-    const gif = read("exportGIF.ts");
-    expect(gif).toMatch(/from "gifenc"/);
-    expect(gif).toMatch(/import \{[^}]*renderFrame[^}]*\} from "\.\/frameRenderer"/);
-    expect(gif).not.toMatch(/function (drawPlayer|drawBall|drawAnnotation|renderSceneToCtx|renderFrame|annotationScale)\b/);
-    expect(gif).not.toMatch(/ctx\.(arc|stroke|moveTo|lineTo|setLineDash|fillText)\(/);
   });
 
   it.each(files)("%s has no court-drawing, layout or sizing copy", (file) => {
@@ -956,11 +944,9 @@ describe("pdfPanels", () => {
 });
 
 describe("export step timing follows on-screen playback", () => {
-  it("exporters take step durations from the playback helper, not the raw field", () => {
-    for (const rel of ["src/lib/exportVideo.ts", "src/lib/exportGIF.ts"]) {
-      const src = readFileSync(path.join(process.cwd(), rel), "utf8");
-      expect(src, rel).toMatch(/stepDurationMs\(/);
-      expect(src, rel).not.toMatch(/\b(group|g)\.duration\b/);
-    }
+  it("the video exporter takes step durations from the playback helper, not the raw field", () => {
+    const src = readFileSync(path.join(process.cwd(), "src/lib/exportVideo.ts"), "utf8");
+    expect(src).toMatch(/stepDurationMs\(/);
+    expect(src).not.toMatch(/\b(group|g)\.duration\b/);
   });
 });

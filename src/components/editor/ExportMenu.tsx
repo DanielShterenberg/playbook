@@ -10,8 +10,6 @@
  *   - Export Image (PNG) — current scene, configurable resolution
  *   - Export Video       — full play animation, configurable speed + resolution
  *   - Export PDF         — play document, configurable layout
- *
- * Note: GIF export code is preserved in exportGIF.ts for potential future use.
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";

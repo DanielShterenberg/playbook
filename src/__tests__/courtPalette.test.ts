@@ -172,8 +172,8 @@ describe("frame painter palette", () => {
 });
 
 describe("exports never pass a palette", () => {
-  it("exportPNG / exportVideo / exportPdf / exportGIF do not reference one", () => {
-    for (const f of ["exportPNG.ts", "exportVideo.ts", "exportPdf.ts", "exportGIF.ts"]) {
+  it("exportPNG / exportVideo / exportPdf do not reference one", () => {
+    for (const f of ["exportPNG.ts", "exportVideo.ts", "exportPdf.ts"]) {
       const src = readFileSync(path.resolve(process.cwd(), "src/lib", f), "utf8");
       expect(src, f).not.toMatch(/CourtPalette|courtPalette|useTheme|COURT_PALETTE/);
     }

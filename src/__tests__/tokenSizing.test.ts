@@ -133,7 +133,7 @@ describe("scale helpers", () => {
     }
   });
 
-  it("ballScale is r / 12 (exportGIF drawBall)", () => {
+  it("ballScale is r / 12", () => {
     expect(ballScale(15)).toBe(15 / 12);
   });
 });
@@ -192,7 +192,6 @@ describe("token colours — one exported source", () => {
       "src/components/editor/SceneStrip.tsx",
       "src/app/play/[id]/EditorHeader.tsx",
       "src/lib/frameRenderer.ts",
-      "src/lib/exportGIF.ts",
     ];
     for (const f of files) {
       const src = readFileSync(path.resolve(process.cwd(), f), "utf8");

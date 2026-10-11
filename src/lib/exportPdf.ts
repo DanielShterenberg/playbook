@@ -13,7 +13,7 @@
  * avoid loading it on the server.
  *
  * A PDF panel is one frame of the export pipeline (issue #174): it is drawn by
- * the same frame painter as GIF / MP4 / PNG (renderSceneToCtx in frameRenderer.ts)
+ * the same frame painter as MP4 / PNG (renderSceneToCtx in frameRenderer.ts)
  * on the shared layout at EXPORT_W, so a panel is the same picture as a video
  * frame of that scene — court frame and flip, token positions and sizes, label
  * mode, player names, team colours and annotation styling included. The only

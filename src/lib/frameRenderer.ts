@@ -2,9 +2,9 @@
  * Frame renderer — the single painter of the export pipeline.
  *
  * renderSceneToCtx draws one complete frame (court, players, ball,
- * annotations) on any 2D context. PNG, MP4 / WebM, PDF and GIF all call it, so
+ * annotations) on any 2D context. PNG, MP4 / WebM and PDF all call it, so
  * every export is the same picture. It is a neutral module: no encoder, no
- * DOM lookups, nothing format-specific — exportGIF.ts keeps only GIF encoding.
+ * DOM lookups, nothing format-specific.
  *
  * It follows the shared recipe exactly, so the output matches the editor:
  *   court       → paintCourt(ctx, layout, { flipped })           (courtRendering)
@@ -42,13 +42,13 @@ import {
 import { LIGHT_COURT_PALETTE, contrastText, customTeamColor, type CourtPalette } from "@/lib/courtPalette";
 
 // ---------------------------------------------------------------------------
-// Animation frame presets (shared by the GIF and video encoders)
+// Animation frame presets (video encoder)
 // ---------------------------------------------------------------------------
 
 /** Brief pause between scenes (ms). */
 export const SCENE_HOLD_MS = 400;
 
-/** Longer pause at the very end of the animation before it loops (ms). */
+/** Longer hold on the last frame at the end of the video (ms). */
 export const FINAL_HOLD_MS = 1200;
 
 /** Resolution preset of an animated export. */

@@ -1,6 +1,6 @@
 /**
  * Court rendering — the single implementation of the court drawing, shared by
- * the editor canvas (Court.tsx) and every export path (GIF, MP4, PNG, PDF).
+ * the editor canvas (Court.tsx) and every export path (MP4, PNG, PDF).
  *
  * Everything here draws through a plain CanvasRenderingContext2D, so it works
  * on an on-screen canvas, an offscreen export canvas, or a recording mock in
