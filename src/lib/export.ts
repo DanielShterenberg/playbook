@@ -8,13 +8,28 @@
  * file name) dropped and spaces turned into dashes. "play" when nothing is left.
  */
 export function exportFileBase(title: string | null | undefined): string {
-  // ASCII and Latin-1 punctuation, control characters and general punctuation
-  // (U+2000–206F) go; "-" and "_" stay. No \p{…} classes: the build targets ES5.
   const safe = (title ?? "")
+    // Any whitespace (tabs, line breaks, NBSP) and any dash separates words.
+    .replace(/[\s\u00a0\u2010-\u2015]+/g, " ")
+    // ASCII and Latin-1 punctuation, control characters and general punctuation
+    // (U+2000–206F) go; "-" and "_" stay. No \p{…} classes: the build targets ES5.
     .replace(/[\u0000-\u001f!-,.\/:-@[-^`{-\u00bf\u2000-\u206f]/g, "")
     .trim()
-    .replace(/\s+/g, "-");
+    .replace(/ +/g, "-");
   return safe || "play";
+}
+
+/**
+ * Typographic characters a keyboard inserts on its own (curly quotes, long
+ * dashes, the ellipsis) as their ASCII look-alikes, so an otherwise Latin
+ * title stays real PDF text.
+ */
+export function asciiPunctuation(text: string): string {
+  return text
+    .replace(/[\u2018\u2019\u201a\u2032]/g, "'")
+    .replace(/[\u201c\u201d\u201e\u2033]/g, '"')
+    .replace(/[\u2010-\u2015]/g, "-")
+    .replace(/\u2026/g, "...");
 }
 
 /**
@@ -23,15 +38,31 @@ export function exportFileBase(title: string | null | undefined): string {
  * would come out as garbage. Such text is drawn through a canvas instead.
  */
 export function needsRasterText(text: string): boolean {
-  return /[^ -~ -ÿ]/.test(text);
+  return /[^\u0020-\u007e\u00a0-\u00ff]/.test(text);
 }
 
-/** Shorten `text` with an ellipsis until `width(text)` fits `max`. */
+/** True when the first strong character of `text` is right-to-left (Hebrew, Arabic …). */
+export function startsRightToLeft(text: string): boolean {
+  const strong = /[A-Za-z\u00c0-\u024f\u0370-\u058f\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/.exec(text);
+  return strong !== null && /[\u0590-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/.test(strong[0]);
+}
+
+/** `text` split into user-perceived characters (a letter with its marks, a whole emoji). */
+function graphemes(text: string): string[] {
+  const Segmenter = (Intl as unknown as { Segmenter?: new () => { segment(t: string): Iterable<{ segment: string }> } }).Segmenter;
+  return Segmenter ? Array.from(new Segmenter().segment(text), (s) => s.segment) : Array.from(text);
+}
+
+/**
+ * Shorten `text` with an ellipsis until `width(text)` fits `max`. At least one
+ * character is kept, so a hopelessly narrow slot still shows something.
+ */
 export function fitText(text: string, max: number, width: (t: string) => number, ellipsis = "…"): string {
   if (width(text) <= max) return text;
-  const chars = Array.from(text);
-  while (chars.length > 1 && width(chars.join("") + ellipsis) > max) chars.pop();
-  return chars.join("") + ellipsis;
+  const chars = graphemes(text);
+  const cut = () => chars.join("").trimEnd() + ellipsis;
+  while (chars.length > 1 && width(cut()) > max) chars.pop();
+  return cut();
 }
 
 export interface TextImage {
@@ -71,6 +102,10 @@ export function rasterTextImage(
   ctx.font = font;
   ctx.fillStyle = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
   ctx.textBaseline = "alphabetic";
+  // Base direction from the text itself, as dir="auto" does on screen: it
+  // decides the order of mixed Hebrew / Latin runs and which end "…" is on.
+  ctx.direction = startsRightToLeft(fitted) ? "rtl" : "ltr";
+  ctx.textAlign = "left";
   ctx.fillText(fitted, 1, baseline);
   return { dataUrl: canvas.toDataURL("image/png"), width: canvas.width, height: canvas.height, baseline };
 }

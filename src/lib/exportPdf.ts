@@ -27,7 +27,7 @@ import type { CourtVariant } from "@/lib/courtLayout";
 import type { Play, Scene } from "@/lib/types";
 import { renderSceneToCtx } from "./frameRenderer";
 import type { FrameStyle } from "./frameRenderer";
-import { exportFileBase, fitText, needsRasterText, rasterTextImage } from "./export";
+import { asciiPunctuation, exportFileBase, fitText, needsRasterText, rasterTextImage } from "./export";
 import type { jsPDF } from "jspdf";
 
 // ---------------------------------------------------------------------------
@@ -106,7 +106,8 @@ interface PdfTextOptions {
 }
 
 /**
- * Draw one line of user text (play title, scene note) with its baseline at
+ * Draw user text (play title, scene note) on one line — line breaks become
+ * spaces, and what does not fit `maxWidth` is cut — with its baseline at
  * (x, y) mm. Latin text is real PDF text in helvetica. Anything jsPDF's
  * built-in fonts cannot draw — Hebrew team and play names above all — is
  * drawn by the browser on a canvas (which shapes right-to-left text
@@ -116,18 +117,28 @@ function drawPdfText(pdf: jsPDF, raw: string, x: number, y: number, opts: PdfTex
   const single = raw.replace(/\s+/g, " ").trim();
   if (!single) return;
   const { size, color, align = "left", maxWidth } = opts;
+  if (maxWidth <= 0) return;
 
-  if (!needsRasterText(single)) {
+  const vector = (text: string) => {
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(size);
     pdf.setTextColor(color[0], color[1], color[2]);
     // "…" is outside Latin-1, so vector text is cut with three dots.
-    pdf.text(fitText(single, maxWidth, (t) => pdf.getTextWidth(t), "..."), x, y, { align });
+    pdf.text(fitText(text, maxWidth, (t) => pdf.getTextWidth(t), "..."), x, y, { align });
+  };
+
+  const latin = asciiPunctuation(single);
+  if (!needsRasterText(latin)) {
+    vector(latin);
     return;
   }
 
   const image = rasterTextImage(single, size * MM_PER_PT * TEXT_PX_PER_MM, color, maxWidth * TEXT_PX_PER_MM);
-  if (!image) return;
+  if (!image) {
+    // No canvas to draw on: imperfect text beats a missing title.
+    vector(latin);
+    return;
+  }
   const wMm = image.width / TEXT_PX_PER_MM;
   const left = align === "right" ? x - wMm : x;
   pdf.addImage(image.dataUrl, "PNG", left, y - image.baseline / TEXT_PX_PER_MM, wMm, image.height / TEXT_PX_PER_MM);
@@ -223,7 +234,8 @@ export async function exportPlayToPdf(play: Play, options: ExportPdfOptions = {}
       size: cols === 1 && rows === 1 ? 9 : 8,
       color: [156, 163, 175],
       align: "right",
-      maxWidth: usableW,
+      // In 1×1 the scene label and note share this line: the title gets the right half.
+      maxWidth: cols === 1 && rows === 1 ? usableW / 2 : usableW,
     });
     pdf.setDrawColor(229, 231, 235);
     pdf.setLineWidth(0.3);
