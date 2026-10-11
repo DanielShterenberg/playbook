@@ -24,6 +24,9 @@ import { useRef, useCallback } from "react";
 import { BALL_RADIUS, ballScale } from "@/lib/tokenSizing";
 import { useCourtPalette } from "@/hooks/useTheme";
 
+/** Pointer travel (px) before a press on the token counts as a drag. */
+const DRAG_THRESHOLD_PX = 3;
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -127,7 +130,7 @@ export default function BallToken({
 }: BallTokenProps) {
   const palette = useCourtPalette();
   const isDragging = useRef(false);
-  /** Whether the current press has moved the token (a press without a move is a tap). */
+  /** Whether the current press has moved the token past the drag threshold (otherwise it is a tap). */
   const didMove = useRef(false);
   const dragStart = useRef<{ mouseX: number; mouseY: number; ballCx: number; ballCy: number }>({
     mouseX: 0,
@@ -153,6 +156,8 @@ export default function BallToken({
       if (!isDragging.current) return;
       const dx = e.clientX - dragStart.current.mouseX;
       const dy = e.clientY - dragStart.current.mouseY;
+      // Below the threshold it is still a tap (fingers and mice jitter).
+      if (!didMove.current && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
       const { x, y } = clamp(dragStart.current.ballCx + dx, dragStart.current.ballCy + dy);
       didMove.current = true;
       onDrag(x, y);
@@ -202,6 +207,8 @@ export default function BallToken({
       if (!touch) return;
       const dx = touch.clientX - dragStart.current.mouseX;
       const dy = touch.clientY - dragStart.current.mouseY;
+      // Below the threshold it is still a tap (fingers and mice jitter).
+      if (!didMove.current && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
       const { x, y } = clamp(dragStart.current.ballCx + dx, dragStart.current.ballCy + dy);
       didMove.current = true;
       onDrag(x, y);

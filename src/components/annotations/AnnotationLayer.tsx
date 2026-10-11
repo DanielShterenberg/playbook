@@ -30,6 +30,7 @@ import type { DrawingTool } from "@/lib/store";
 import type { Annotation, Point, Scene } from "@/lib/types";
 import { TOOL_CURSOR } from "@/components/editor/DrawingToolsPanel";
 import { useHistoryStore } from "@/lib/history";
+import { annotationScale } from "@/lib/frameRenderer";
 
 // ---------------------------------------------------------------------------
 // Multi-leg path helpers
@@ -1189,6 +1190,9 @@ export default function AnnotationLayer({
 
   const cursor = (cpDragging || toDragging) ? "grabbing" : TOOL_CURSOR[selectedTool];
 
+  // Lines scale with the court (1 at the reference width); guards a zero-width first layout.
+  const lineScale = annotationScale(paWidth) || 1;
+
   // Find the selected annotation for control-point handle rendering
   const selectedAnnotation = selectedAnnotationId
     ? annotations.find((a) => a.id === selectedAnnotationId) ?? null
@@ -1247,22 +1251,31 @@ export default function AnnotationLayer({
       onPointerCancel={readOnly ? undefined : handlePointerCancel}
       onClick={readOnly ? undefined : handleSVGClick}
     >
-      {/* Existing annotations */}
-      {annotations.map((ann) => (
-        <RenderedAnnotation
-          key={ann.id}
-          ann={ann}
-          selected={selectedAnnotationId === ann.id}
-          onSelect={handleAnnotationSelect}
-          step={annotationStepMap.get(ann.id)}
-          showStepBadge={showStepBadges}
-          width={paWidth}
-          height={paHeight}
-          offsetX={offsetX}
-          offsetY={offsetY}
-          flipped={flipped}
-        />
-      ))}
+      {/*
+       * Existing annotations, drawn in a reference space and scaled to the
+       * court: every size in RenderedAnnotation (strokes, dashes, arrowheads,
+       * zigzag, badges) is written for the reference court width, and the
+       * group scale makes them grow and shrink with the court exactly as the
+       * tokens and the exported frames do (frameRenderer multiplies the same
+       * sizes by the same annotationScale).
+       */}
+      <g transform={`scale(${lineScale})`}>
+        {annotations.map((ann) => (
+          <RenderedAnnotation
+            key={ann.id}
+            ann={ann}
+            selected={selectedAnnotationId === ann.id}
+            onSelect={handleAnnotationSelect}
+            step={annotationStepMap.get(ann.id)}
+            showStepBadge={showStepBadges}
+            width={paWidth / lineScale}
+            height={paHeight / lineScale}
+            offsetX={offsetX / lineScale}
+            offsetY={offsetY / lineScale}
+            flipped={flipped}
+          />
+        ))}
+      </g>
 
       {/* Control-point drag handle for selected annotation */}
       {showCpHandle && cpHandlePx && selectedAnnotation && (
@@ -1357,11 +1370,13 @@ export default function AnnotationLayer({
 
       {/* In-progress preview */}
       {drawing && (
-        <PreviewAnnotation
-          tool={selectedTool}
-          from={drawing.from}
-          to={drawing.to}
-        />
+        <g transform={`scale(${lineScale})`}>
+          <PreviewAnnotation
+            tool={selectedTool}
+            from={{ x: drawing.from.x / lineScale, y: drawing.from.y / lineScale }}
+            to={{ x: drawing.to.x / lineScale, y: drawing.to.y / lineScale }}
+          />
+        </g>
       )}
     </svg>
   );
