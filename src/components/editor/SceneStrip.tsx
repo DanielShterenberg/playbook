@@ -52,7 +52,13 @@ const POPOVER_MARGIN = 8;
  * editor, so upward is the usual case). Transparent until measured — not
  * `visibility: hidden`, which would refuse the rename field's focus.
  */
-function usePopoverPosition(ref: React.RefObject<HTMLElement>, x: number, y: number): React.CSSProperties {
+function usePopoverPosition(
+  ref: React.RefObject<HTMLElement>,
+  x: number,
+  y: number,
+  /** Open upward from the point even when there is room below (the point is a card's top edge). */
+  above = false,
+): React.CSSProperties {
   const [style, setStyle] = useState<React.CSSProperties>({ left: x, top: y, opacity: 0 });
   useLayoutEffect(() => {
     const el = ref.current;
@@ -60,12 +66,12 @@ function usePopoverPosition(ref: React.RefObject<HTMLElement>, x: number, y: num
     const { width, height } = el.getBoundingClientRect();
     const maxLeft = window.innerWidth - width - POPOVER_MARGIN;
     const maxTop = window.innerHeight - height - POPOVER_MARGIN;
-    const top = y + height <= window.innerHeight - POPOVER_MARGIN ? y : y - height;
+    const top = !above && y + height <= window.innerHeight - POPOVER_MARGIN ? y : y - height;
     setStyle({
       left: Math.max(POPOVER_MARGIN, Math.min(x, maxLeft)),
       top: Math.max(POPOVER_MARGIN, Math.min(top, maxTop)),
     });
-  }, [ref, x, y]);
+  }, [ref, x, y, above]);
   return style;
 }
 
@@ -191,6 +197,7 @@ function ContextMenu({
 const SCENE_NAME_MAX = 28;
 
 interface RenamePopoverProps {
+  /** Left edge and top edge of the scene card: the form opens above it. */
   x: number;
   y: number;
   sceneId: string;
@@ -199,39 +206,43 @@ interface RenamePopoverProps {
   onClose: () => void;
 }
 
-/** Small form at the pointer for naming a scene. Enter or clicking away saves, Esc cancels. */
+/** Small form above a scene card for naming it. Enter or leaving the field saves, Esc cancels. */
 function RenamePopover({ x, y, sceneId, sceneNumber, initial, onClose }: RenamePopoverProps) {
   const updateSceneNote = useStore((s) => s.updateSceneNote);
   const [value, setValue] = useState(initial);
   const inputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
-  const position = usePopoverPosition(formRef, x, y);
+  const position = usePopoverPosition(formRef, x, y, true);
+  // Enter, blur and resize can all end the edit; only the first one counts.
+  const done = useRef(false);
 
   useEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();
   }, []);
 
-  // Only what the user typed is saved: opening and leaving the field must not
-  // rewrite a note (a single-line input flattens a multi-line one).
-  const save = useCallback(() => {
-    if (value !== initial) updateSceneNote(sceneId, value.trim());
+  /** Close, saving the name if the user changed it (never rewrites an untouched note). */
+  const finish = (save: boolean) => {
+    if (done.current) return;
+    done.current = true;
+    const next = value.trim();
+    if (save && next !== initial.trim()) updateSceneNote(sceneId, next);
     onClose();
-  }, [value, initial, sceneId, updateSceneNote, onClose]);
+  };
+  const finishRef = useRef(finish);
+  finishRef.current = finish;
 
-  // Clicking away saves, like leaving a field
+  // The form is positioned once; if the window changes under it, end the edit.
   useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (formRef.current && !formRef.current.contains(e.target as Node)) save();
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [save]);
+    const onResize = () => finishRef.current(true);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   return (
     <form
       ref={formRef}
-      onSubmit={(e) => { e.preventDefault(); save(); }}
+      onSubmit={(e) => { e.preventDefault(); finish(true); }}
       className={`${POPOVER} fixed z-50 flex w-[240px] flex-col gap-1.5 p-3`}
       style={position}
     >
@@ -243,10 +254,13 @@ function RenamePopover({ x, y, sceneId, sceneNumber, initial, onClose }: RenameP
         ref={inputRef}
         dir="auto"
         value={value}
-        maxLength={SCENE_NAME_MAX}
+        // A longer note written before names had a limit stays editable as it is
+        maxLength={Math.max(SCENE_NAME_MAX, initial.length)}
+        // Leaving the field (click away, Tab) saves, so shortcuts never act on a half-typed name
+        onBlur={() => finish(true)}
         placeholder="e.g. Flare"
         onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+        onKeyDown={(e) => { if (e.key === "Escape") finish(false); }}
         className="h-9 rounded-md border border-line bg-app px-2.5 text-[13px] text-ink outline-none focus:border-accent-text"
       />
     </form>
@@ -276,6 +290,7 @@ interface SceneCardProps {
 function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, variant, flipped, offenseColor, defenseColor, commentCount = 0 }: SceneCardProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [rename, setRename] = useState<{ x: number; y: number } | null>(null);
+  const cardRef = useRef<HTMLButtonElement>(null);
   // Plays stored before notes existed can lack the field.
   const name = scene.note ?? "";
 
@@ -291,12 +306,13 @@ function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, vari
   const renameAtCard = (card: HTMLElement) => {
     if (!canEdit()) return;
     const rect = card.getBoundingClientRect();
-    setRename({ x: rect.left, y: rect.top });
+    setRename({ x: rect.left, y: rect.top - 6 });
   };
 
   return (
     <>
       <button
+        ref={cardRef}
         type="button"
         onClick={onClick}
         onContextMenu={handleContextMenu}
@@ -347,7 +363,7 @@ function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, vari
           sceneId={scene.id}
           sceneIndex={index}
           totalScenes={totalScenes}
-          onRename={() => setRename(menu)}
+          onRename={() => cardRef.current && renameAtCard(cardRef.current)}
           onClose={() => setMenu(null)}
         />
       )}
@@ -398,7 +414,7 @@ export default function SceneStrip() {
   const playColors = useStore((s) => s.currentPlay?.colors);
 
   // Open comments per scene, for the dot indicators on scene cards
-  const commentCounts = useOpenCommentCounts(currentPlay?.id);
+  const { byScene: commentCounts } = useOpenCommentCounts(currentPlay?.id);
 
   /**
    * Issue #81 — at tablet widths use compact (smaller) scene thumbnails

@@ -39,10 +39,6 @@ export default function EditorKeyboardManager() {
     setShowHelp(false);
   }, []);
 
-  // Ctrl+S: the play auto-saves (useAutoSave), so there is nothing to do —
-  // the shortcut only keeps the browser's "Save page" dialog from opening.
-  const handleSave = useCallback(() => {}, []);
-
   // Undo / Redo — wired to history store (issue #83)
   const handleUndo = useCallback(() => {
     undo();
@@ -55,7 +51,6 @@ export default function EditorKeyboardManager() {
   useKeyboardShortcuts({
     enabled: !isPresentationMode,
     onToggleHelp: handleToggleHelp,
-    onSave: handleSave,
     onUndo: handleUndo,
     onRedo: handleRedo,
   });

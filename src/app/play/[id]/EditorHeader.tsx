@@ -134,7 +134,7 @@ export default function EditorHeader({ playId }: EditorHeaderProps) {
 
   const selectedSceneId = useStore((s) => s.selectedSceneId);
   const [showComments, setShowComments] = useState(false);
-  const commentCounts = useOpenCommentCounts(currentPlay?.id);
+  const { total: totalOpenComments } = useOpenCommentCounts(currentPlay?.id);
 
   const sceneLabels = useMemo<Record<string, string>>(() => {
     if (!currentPlay) return {};
@@ -144,7 +144,6 @@ export default function EditorHeader({ playId }: EditorHeaderProps) {
     return labels;
   }, [currentPlay]);
 
-  const totalOpenComments = Object.values(commentCounts).reduce((s, n) => s + n, 0);
 
   const [isSharing, setIsSharing] = useState(false);
   const [shareMsg, setShareMsg] = useState<string | null>(null);
