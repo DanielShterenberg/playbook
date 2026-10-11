@@ -26,8 +26,9 @@ import CreateTeamModal from "@/components/playbook/CreateTeamModal";
 import { useCourtPalette } from "@/hooks/useTheme";
 import Logo from "@/components/brand/Logo";
 import ThemeToggle from "@/components/brand/ThemeToggle";
+import { effectivePlayFilter, filterPlays, type PlayFilter } from "@/lib/playFilter";
 
-const CATEGORY_FILTERS: { value: Category | "all"; label: string }[] = [
+const CATEGORY_FILTERS: { value: PlayFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "offense", label: "Offense" },
   { value: "defense", label: "Defense" },
@@ -37,9 +38,6 @@ const CATEGORY_FILTERS: { value: Category | "all"; label: string }[] = [
   { value: "oob", label: "OOB" },
   { value: "special", label: "Special" },
 ];
-
-/** A category, everything, or the member's own plays that are not in the team playbook. */
-type PlayFilter = Category | "all" | "personal";
 
 const PERSONAL_FILTER: { value: PlayFilter; label: string } = { value: "personal", label: "Personal" };
 
@@ -71,7 +69,7 @@ export default function PlaybookPage() {
   const [showModal, setShowModal] = useState(false);
   const [showCreateTeam, setShowCreateTeam] = useState(false);
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<PlayFilter>("all");
+  const [selectedFilter, setPlayFilter] = useState<PlayFilter>("all");
   const [, setLoadingPlays] = useState(false);
 
   // Auth guard — redirect to sign-in if not authenticated
@@ -136,23 +134,18 @@ export default function PlaybookPage() {
 
   if (loading || !user) return null;
 
-  const hasFilters = Boolean(search) || categoryFilter !== "all";
-  const filteredPlays = [...plays]
-    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-    .filter((p) => {
-      const matchesSearch = !search || p.title.toLowerCase().includes(search.toLowerCase());
-      const matchesCategory =
-        categoryFilter === "all" ||
-        (categoryFilter === "personal" ? Boolean(teamId) && !p.teamId : p.category === categoryFilter);
-      return matchesSearch && matchesCategory;
-    });
+  // "Personal" (plays not yet added to the team) only means something in a
+  // team: the chip shows with the team header, and a stale selection is ignored.
+  const inTeam = Boolean(team && teamId);
+  const playFilter = effectivePlayFilter(selectedFilter, inTeam ? teamId : null);
+  const filters = inTeam ? [...CATEGORY_FILTERS, PERSONAL_FILTER] : CATEGORY_FILTERS;
 
-  // "Personal" (plays not yet added to the team) only means something in a team.
-  const filters = teamId ? [...CATEGORY_FILTERS, PERSONAL_FILTER] : CATEGORY_FILTERS;
+  const hasFilters = Boolean(search) || playFilter !== "all";
+  const filteredPlays = filterPlays(plays, { search, filter: playFilter, teamId: inTeam ? teamId : null });
 
   function clearFilters() {
     setSearch("");
-    setCategoryFilter("all");
+    setPlayFilter("all");
   }
 
   return (
@@ -309,16 +302,16 @@ export default function PlaybookPage() {
           </div>
         ) : (
           <>
-            {/* Category filter chips */}
-            <div role="group" aria-label="Filter by category" className="flex flex-wrap gap-2">
+            {/* Filter chips: categories, plus Personal for team members */}
+            <div role="group" aria-label="Filter plays" className="flex flex-wrap gap-2">
               {filters.map(({ value, label }) => (
                 <button
                   key={value}
                   type="button"
-                  onClick={() => setCategoryFilter(value)}
-                  aria-pressed={categoryFilter === value}
+                  onClick={() => setPlayFilter(value)}
+                  aria-pressed={playFilter === value}
                   className={`h-11 whitespace-nowrap rounded-full border px-4 text-sm transition-colors ${FOCUS_RING} ${
-                    categoryFilter === value
+                    playFilter === value
                       ? "border-ink bg-ink font-semibold text-app"
                       : "border-line bg-transparent font-medium text-ink hover:bg-chip"
                   }`}
