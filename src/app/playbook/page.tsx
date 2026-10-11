@@ -14,7 +14,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
-import type { Category } from "@/lib/types";
 import NewPlayModal from "@/components/playbook/NewPlayModal";
 import PlayCard from "@/components/playbook/PlayCard";
 import { useAuth } from "@/contexts/AuthContext";
