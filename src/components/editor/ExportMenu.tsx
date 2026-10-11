@@ -20,6 +20,7 @@ import { exportSceneAsPNG, type ExportResolution } from "@/lib/exportPNG";
 import { exportPlayAsVideo, type VideoResolution } from "@/lib/exportVideo";
 import { exportPlayToPdf, type PdfLayout } from "@/lib/exportPdf";
 import { ACCENT_BTN, ACCENT_CONTROL, POPOVER } from "./chrome";
+import { exportFileBase } from "@/lib/export";
 
 /** Section heading inside the menu. */
 const HEADING = "font-display text-sm font-semibold uppercase tracking-[0.08em] text-muted";
@@ -178,8 +179,7 @@ export default function ExportMenu() {
     setExportMode("png");
     setOpen(false);
     try {
-      const title = currentPlay?.title ?? "play";
-      const safeTitle = title.replace(/[^a-zA-Z0-9-_\s]/g, "").trim().replace(/\s+/g, "-");
+      const safeTitle = exportFileBase(currentPlay?.title);
       const sceneIndex = (currentPlay?.scenes.findIndex((s) => s.id === scene.id) ?? 0) + 1;
       const filename = `${safeTitle}-scene-${sceneIndex}`;
       const flipped = (scene.flipped ?? currentPlay?.flipped) === true;
@@ -219,8 +219,7 @@ export default function ExportMenu() {
     setVideoProgress(0);
     setOpen(false);
     try {
-      const title = currentPlay.title ?? "play";
-      const safeTitle = title.replace(/[^a-zA-Z0-9-_\s]/g, "").trim().replace(/\s+/g, "-") || "play";
+      const safeTitle = exportFileBase(currentPlay.title);
       await exportPlayAsVideo(currentPlay, safeTitle, {
         speed: videoSpeed,
         resolution: videoResolution,
