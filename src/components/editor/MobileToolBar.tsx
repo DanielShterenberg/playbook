@@ -9,7 +9,7 @@
  * so a tool is the same thing on every screen size. Guard, hand-off and the
  * dashed cut stay rail-only: six slots is what fits a phone.
  *
- * With an annotation selected, a Delete row appears above the bar — phones
+ * With an annotation selected, a Delete button floats above the bar — phones
  * have no Delete key.
  */
 
@@ -18,21 +18,13 @@ import type { DrawingTool } from "@/lib/store";
 import { useHistoryStore } from "@/lib/history";
 import { useTeam } from "@/contexts/TeamContext";
 import { TOOLS } from "./DrawingToolsPanel";
+import { UndoIcon } from "./UndoRedoButtons";
 
 /** The five tools of the phone bar, in order (Undo takes the sixth slot). */
 const PHONE_TOOLS: DrawingTool[] = ["select", "movement", "pass", "dribble", "screen"];
 
 const SLOT =
   "flex h-14 flex-col items-center justify-center gap-[3px] rounded-[10px] text-xs transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text disabled:opacity-40";
-
-function UndoIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M9 14 4 9l5-5" />
-      <path d="M4 9h10a6 6 0 0 1 0 12h-3" />
-    </svg>
-  );
-}
 
 export default function MobileToolBar() {
   const selectedTool = useStore((s) => s.selectedTool);
@@ -51,13 +43,14 @@ export default function MobileToolBar() {
   const tools = PHONE_TOOLS.map((id) => TOOLS.find((t) => t.id === id)).filter((t) => t !== undefined);
 
   return (
-    <div className="flex-none md:hidden">
+    <div className="relative flex-none md:hidden">
+      {/* Floats over the scene strip: taking layout space would resize the court on every selection */}
       {selectedAnnotationId && selectedSceneId && !isPlaying && (
-        <div className="flex justify-center border-t border-line bg-surface px-3 pt-2">
+        <div className="pointer-events-none absolute inset-x-0 bottom-full flex justify-center pb-2">
           <button
             type="button"
             onClick={() => removeAnnotation(selectedSceneId, selectedAnnotationId)}
-            className="flex h-11 items-center rounded-lg border border-line px-4 text-sm font-medium text-danger"
+            className="pointer-events-auto flex h-11 items-center rounded-lg border border-line bg-surface px-4 text-sm font-medium text-danger shadow-lg shadow-black/10 dark:shadow-black/40"
           >
             Delete selected line
           </button>
@@ -80,7 +73,7 @@ export default function MobileToolBar() {
           </button>
         ))}
         <button type="button" onClick={undo} disabled={!canUndo} className={`${SLOT} bg-transparent font-medium text-ink`}>
-          <UndoIcon />
+          <UndoIcon size={20} />
           Undo
         </button>
       </nav>

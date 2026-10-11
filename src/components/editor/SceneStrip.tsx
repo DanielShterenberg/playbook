@@ -406,6 +406,8 @@ function useIsTablet() {
 }
 
 export default function SceneStrip() {
+  // Team viewers cannot edit (#76): no add-scene tile for them.
+  const { role } = useTeam();
   const currentPlay = useStore((s) => s.currentPlay);
   const selectedSceneId = useStore((s) => s.selectedSceneId);
   const setSelectedSceneId = useStore((s) => s.setSelectedSceneId);
@@ -465,13 +467,14 @@ export default function SceneStrip() {
       ))}
 
       {/* Empty-state hint */}
-      {scenes.length === 1 && (
+      {scenes.length === 1 && role !== "viewer" && (
         <span className="hidden flex-none self-center text-xs text-muted md:inline">
           Add a scene for the next moment →
         </span>
       )}
 
       {/* Add scene button — a "+" tile on phones, a labelled one from md up */}
+      {role !== "viewer" && (
       <button
         type="button"
         onClick={addScene}
@@ -488,6 +491,7 @@ export default function SceneStrip() {
         </svg>
         <span className="hidden md:inline">Add scene</span>
       </button>
+      )}
     </div>
   );
 }
