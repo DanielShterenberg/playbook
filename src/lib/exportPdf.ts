@@ -27,6 +27,8 @@ import type { CourtVariant } from "@/lib/courtLayout";
 import type { Play, Scene } from "@/lib/types";
 import { renderSceneToCtx } from "./frameRenderer";
 import type { FrameStyle } from "./frameRenderer";
+import { asciiPunctuation, exportFileBase, fitText, needsRasterText, rasterTextImage } from "./export";
+import type { jsPDF } from "jspdf";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -84,6 +86,62 @@ function renderScene(
   const canvas = document.createElement("canvas");
   drawPdfSceneOnCanvas(canvas, scene, courtType, flipped, maxStep, style);
   return canvas;
+}
+
+// ---------------------------------------------------------------------------
+// Text
+// ---------------------------------------------------------------------------
+
+const MM_PER_PT = 25.4 / 72;
+/** Canvas pixels per mm for rasterised text (~300 dpi). */
+const TEXT_PX_PER_MM = 12;
+
+interface PdfTextOptions {
+  /** Font size in pt. */
+  size: number;
+  color: [number, number, number];
+  align?: "left" | "right";
+  /** Widest the text may be, in mm; longer text is cut with an ellipsis. */
+  maxWidth: number;
+}
+
+/**
+ * Draw user text (play title, scene note) on one line — line breaks become
+ * spaces, and what does not fit `maxWidth` is cut — with its baseline at
+ * (x, y) mm. Latin text is real PDF text in helvetica. Anything jsPDF's
+ * built-in fonts cannot draw — Hebrew team and play names above all — is
+ * drawn by the browser on a canvas (which shapes right-to-left text
+ * correctly) and placed as an image of the same size and colour.
+ */
+function drawPdfText(pdf: jsPDF, raw: string, x: number, y: number, opts: PdfTextOptions): void {
+  const single = raw.replace(/\s+/g, " ").trim();
+  if (!single) return;
+  const { size, color, align = "left", maxWidth } = opts;
+  if (maxWidth <= 0) return;
+
+  const vector = (text: string) => {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(size);
+    pdf.setTextColor(color[0], color[1], color[2]);
+    // "…" is outside Latin-1, so vector text is cut with three dots.
+    pdf.text(fitText(text, maxWidth, (t) => pdf.getTextWidth(t), "..."), x, y, { align });
+  };
+
+  const latin = asciiPunctuation(single);
+  if (!needsRasterText(latin)) {
+    vector(latin);
+    return;
+  }
+
+  const image = rasterTextImage(single, size * MM_PER_PT * TEXT_PX_PER_MM, color, maxWidth * TEXT_PX_PER_MM);
+  if (!image) {
+    // No canvas to draw on: imperfect text beats a missing title.
+    vector(latin);
+    return;
+  }
+  const wMm = image.width / TEXT_PX_PER_MM;
+  const left = align === "right" ? x - wMm : x;
+  pdf.addImage(image.dataUrl, "PNG", left, y - image.baseline / TEXT_PX_PER_MM, wMm, image.height / TEXT_PX_PER_MM);
 }
 
 // ---------------------------------------------------------------------------
@@ -172,10 +230,13 @@ export async function exportPlayToPdf(play: Play, options: ExportPdfOptions = {}
     if (pageIdx > 0) pdf.addPage();
 
     // Page header: play title + divider
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(cols === 1 && rows === 1 ? 9 : 8);
-    pdf.setTextColor(156, 163, 175);
-    pdf.text(play.title, PAGE_W - MARGIN, MARGIN + (PAGE_HEADER_H - 4), { align: "right" });
+    drawPdfText(pdf, play.title, PAGE_W - MARGIN, MARGIN + (PAGE_HEADER_H - 4), {
+      size: cols === 1 && rows === 1 ? 9 : 8,
+      color: [156, 163, 175],
+      align: "right",
+      // In 1×1 the scene label and note share this line: the title gets the right half.
+      maxWidth: cols === 1 && rows === 1 ? usableW / 2 : usableW,
+    });
     pdf.setDrawColor(229, 231, 235);
     pdf.setLineWidth(0.3);
     pdf.line(MARGIN, MARGIN + PAGE_HEADER_H - 2, PAGE_W - MARGIN, MARGIN + PAGE_HEADER_H - 2);
@@ -197,11 +258,12 @@ export async function exportPlayToPdf(play: Play, options: ExportPdfOptions = {}
         pdf.setTextColor(31, 41, 55);
         pdf.text(label, cellX, cellY + 5);
         if (scene.note) {
-          pdf.setFont("helvetica", "normal");
-          pdf.setFontSize(6);
-          pdf.setTextColor(107, 114, 128);
           const labelW = pdf.getTextWidth(label);
-          pdf.text(scene.note, cellX + labelW + 2, cellY + 5);
+          drawPdfText(pdf, scene.note, cellX + labelW + 2, cellY + 5, {
+            size: 6,
+            color: [107, 114, 128],
+            maxWidth: cellW - labelW - 2,
+          });
         }
       } else {
         // 1×1: full-width header with scene label + divider
@@ -211,10 +273,12 @@ export async function exportPlayToPdf(play: Play, options: ExportPdfOptions = {}
         pdf.text(label, MARGIN, MARGIN + 8);
         if (scene.note) {
           const labelW = pdf.getTextWidth(label);
-          pdf.setFont("helvetica", "normal");
-          pdf.setFontSize(9);
-          pdf.setTextColor(107, 114, 128);
-          pdf.text(scene.note, MARGIN + labelW + 3, MARGIN + 8);
+          // The play title is right-aligned on the same line; the note gets the left half.
+          drawPdfText(pdf, scene.note, MARGIN + labelW + 3, MARGIN + 8, {
+            size: 9,
+            color: [107, 114, 128],
+            maxWidth: usableW / 2 - labelW - 3,
+          });
         }
       }
 
@@ -241,6 +305,5 @@ export async function exportPlayToPdf(play: Play, options: ExportPdfOptions = {}
     }
   }
 
-  const safe = play.title.replace(/[^\w\s-]/g, "").trim() || "play";
-  pdf.save(`${safe}.pdf`);
+  pdf.save(`${exportFileBase(play.title)}.pdf`);
 }
