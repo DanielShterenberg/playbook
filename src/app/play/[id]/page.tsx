@@ -6,7 +6,7 @@ import SceneStrip from "@/components/editor/SceneStrip";
 import PlaybackControls from "@/components/editor/PlaybackControls";
 import TimingStripPanel from "@/components/editor/TimingStripPanel";
 import EditorKeyboardManager from "@/components/editor/EditorKeyboardManager";
-import MobileViewerBanner from "@/components/editor/MobileViewerBanner";
+import MobileToolBar from "@/components/editor/MobileToolBar";
 import EditorHeader from "./EditorHeader";
 import PlaybackEngine from "./PlaybackEngine";
 import EditorCoachMark from "@/components/editor/EditorCoachMark";
@@ -34,13 +34,6 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
        * action (theme, undo / redo, comments, share, present, export …).
        */}
       <EditorHeader playId={params.id} />
-
-      {/*
-       * Mobile viewer-only banner (<768px).
-       * On small screens editing is disabled; a banner explains this and
-       * the full controls are hidden. Playback controls remain accessible.
-       */}
-      <MobileViewerBanner />
 
       {/* ── Main editor area: tool rail / court + playback / roster ─────── */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -88,6 +81,9 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
           <TimingStripPanel />
         </div>
       </footer>
+
+      {/* Phones: the drawing tools as a bottom bar (the rail is md+ only) */}
+      <MobileToolBar />
     </main>
     </EditorAuthGate>
   );

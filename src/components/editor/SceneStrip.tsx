@@ -5,8 +5,8 @@
  *
  * Implements issue #63: Scene management — add, remove, duplicate, reorder.
  *
- * On mobile (<768px, viewer-only) the strip shows the thumbnails only: no
- * labels and no add button.
+ * On phones (<768px) the strip shows the thumbnails without labels and a
+ * compact "+" tile for adding a scene.
  *
  * Features:
  *   - Renders a mini SVG court thumbnail for each scene showing player dots and
@@ -31,6 +31,7 @@ import CourtThumbnail from "@/components/court/CourtThumbnail";
 import InfoTooltip from "./InfoTooltip";
 import { POPOVER, SECTION_LABEL } from "./chrome";
 import { useOpenCommentCounts } from "@/hooks/useOpenCommentCounts";
+import { useTeam } from "@/contexts/TeamContext";
 
 // ---------------------------------------------------------------------------
 // Mini court thumbnail (the court itself is the shared CourtThumbnail)
@@ -292,17 +293,19 @@ function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, vari
   // Plays stored before notes existed can lack the field.
   const name = scene.note ?? "";
 
-  // Phones are viewer-only: no Rename / Duplicate / Move / Delete there.
-  const canEdit = () => window.matchMedia("(min-width: 768px)").matches;
+  // Team viewers cannot edit (#76).
+  const { role } = useTeam();
+  const canEdit = role !== "viewer";
 
+  // Right-click, or a long press on touch screens that send contextmenu.
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (canEdit()) setMenu({ x: e.clientX, y: e.clientY });
+    if (canEdit) setMenu({ x: e.clientX, y: e.clientY });
   };
 
   /** Rename from the card itself (double-click / double-tap, or F2 when focused). */
   const renameAtCard = (card: HTMLElement) => {
-    if (!canEdit()) return;
+    if (!canEdit) return;
     const rect = card.getBoundingClientRect();
     setRename({ x: rect.left, y: rect.top - 6 });
   };
@@ -468,19 +471,22 @@ export default function SceneStrip() {
         </span>
       )}
 
-      {/* Add scene button — md+ only: the editor is viewer-only on mobile (issue #81) */}
+      {/* Add scene button — a "+" tile on phones, a labelled one from md up */}
       <button
         type="button"
         onClick={addScene}
         aria-label="Add scene"
         title="Add scene"
         className={[
-          "hidden flex-none items-center justify-center self-stretch rounded-lg border-2 border-dashed border-line-strong text-[13px] text-muted transition-colors md:flex",
+          "flex w-12 flex-none items-center justify-center self-stretch rounded-lg border-2 border-dashed border-line-strong text-[13px] text-muted transition-colors",
           "hover:border-accent-text hover:text-accent-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text",
-          isTablet ? "w-20" : "w-[116px]",
+          isTablet ? "md:w-20" : "md:w-[116px]",
         ].join(" ")}
       >
-        Add scene
+        <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" aria-hidden="true" className="md:hidden">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+        <span className="hidden md:inline">Add scene</span>
       </button>
     </div>
   );

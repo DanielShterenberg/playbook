@@ -137,7 +137,8 @@ function HandoffIcon() {
   );
 }
 
-const TOOLS: ToolDef[] = [
+/** Every drawing tool, in rail order. The phone tool bar (MobileToolBar) picks from this list. */
+export const TOOLS: ToolDef[] = [
   { id: "select",   label: "Select",   shortcut: "V", Icon: SelectIcon   },
   { id: "movement", label: "Move",     shortcut: "M", Icon: MovementIcon },
   { id: "dribble",  label: "Dribble",  shortcut: "D", Icon: DribbleIcon  },

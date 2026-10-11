@@ -309,11 +309,15 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
   );
 
   // -------------------------------------------------------------------------
-  // Reinitialise pixel positions when the active scene changes or when the
-  // court flip changes. We track the previous values via refs so we only
-  // reinitialise on actual changes, not on every render.
+  // Reinitialise pixel positions when the active scene changes, when the
+  // court flip changes, or when the scene's stored positions change under us
+  // (undo / redo — the store only writes positions when a drag ends, so this
+  // never fights a drag in progress). We track the previous values via refs
+  // so we only reinitialise on actual changes, not on every render.
   // -------------------------------------------------------------------------
   const prevFlippedRef = useRef<boolean>(false);
+  const prevPlayersRef = useRef<Scene["players"] | undefined>(undefined);
+  const prevBallRef = useRef<Scene["ball"] | undefined>(undefined);
 
   useEffect(() => {
     const newSceneId = scene?.id ?? null;
@@ -323,17 +327,23 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
     if (prevSceneIdRef.current === null) {
       prevSceneIdRef.current = newSceneId;
       prevFlippedRef.current = newFlipped;
+      prevPlayersRef.current = scene?.players;
+      prevBallRef.current = scene?.ball;
       return;
     }
 
     const sceneChanged = newSceneId !== prevSceneIdRef.current;
     const flipChanged  = newFlipped !== prevFlippedRef.current;
+    // The store updates immutably: a new players / ball object means new positions.
+    const positionsChanged = scene?.players !== prevPlayersRef.current || scene?.ball !== prevBallRef.current;
 
     // No relevant change — bail
-    if (!sceneChanged && !flipChanged) return;
+    if (!sceneChanged && !flipChanged && !positionsChanged) return;
 
     prevSceneIdRef.current = newSceneId;
     prevFlippedRef.current = newFlipped;
+    prevPlayersRef.current = scene?.players;
+    prevBallRef.current = scene?.ball;
 
     // Reinitialise pixel positions from the scene's normalised data.
     const layout = layoutRef.current;
