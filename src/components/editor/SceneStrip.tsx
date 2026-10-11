@@ -24,6 +24,7 @@
 
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { useStore, selectEditorScene } from "@/lib/store";
+import { SCENE_NAME_MAX } from "@/lib/types";
 import type { Scene } from "@/lib/types";
 import type { CourtVariant } from "@/lib/courtLayout";
 import CourtThumbnail from "@/components/court/CourtThumbnail";
@@ -192,9 +193,6 @@ function ContextMenu({
 // ---------------------------------------------------------------------------
 // Rename popover
 // ---------------------------------------------------------------------------
-
-/** Longest scene name. Short enough to sit next to "Scene n of m" in the share viewer. */
-const SCENE_NAME_MAX = 28;
 
 interface RenamePopoverProps {
   /** Left edge and top edge of the scene card: the form opens above it. */
