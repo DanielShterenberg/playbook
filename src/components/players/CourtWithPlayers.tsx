@@ -309,11 +309,17 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
   );
 
   // -------------------------------------------------------------------------
-  // Reinitialise pixel positions when the active scene changes or when the
-  // court flip changes. We track the previous values via refs so we only
-  // reinitialise on actual changes, not on every render.
+  // Reinitialise pixel positions when the active scene changes, when the
+  // court flip changes, or when the scene's stored positions change under us
+  // (undo / redo — the store only writes positions when a drag ends, so this
+  // rarely meets a drag in progress; see draggingRef). We track the previous values via refs
+  // so we only reinitialise on actual changes, not on every render.
   // -------------------------------------------------------------------------
   const prevFlippedRef = useRef<boolean>(false);
+  /** True between a token's / the ball's first drag move and its drag end. */
+  const draggingRef = useRef(false);
+  const prevPlayersRef = useRef<Scene["players"] | undefined>(undefined);
+  const prevBallRef = useRef<Scene["ball"] | undefined>(undefined);
 
   useEffect(() => {
     const newSceneId = scene?.id ?? null;
@@ -323,17 +329,27 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
     if (prevSceneIdRef.current === null) {
       prevSceneIdRef.current = newSceneId;
       prevFlippedRef.current = newFlipped;
+      prevPlayersRef.current = scene?.players;
+      prevBallRef.current = scene?.ball;
       return;
     }
 
     const sceneChanged = newSceneId !== prevSceneIdRef.current;
     const flipChanged  = newFlipped !== prevFlippedRef.current;
+    // The store updates immutably: a new players / ball object means new positions.
+    const positionsChanged = scene?.players !== prevPlayersRef.current || scene?.ball !== prevBallRef.current;
 
     // No relevant change — bail
-    if (!sceneChanged && !flipChanged) return;
+    if (!sceneChanged && !flipChanged && !positionsChanged) return;
+    // Positions changed under a drag in progress (a second finger dropped
+    // another token, a visibility toggle): leave the tokens alone. The drag's
+    // own store write re-runs this effect, which then picks everything up.
+    if (!sceneChanged && !flipChanged && draggingRef.current) return;
 
     prevSceneIdRef.current = newSceneId;
     prevFlippedRef.current = newFlipped;
+    prevPlayersRef.current = scene?.players;
+    prevBallRef.current = scene?.ball;
 
     // Reinitialise pixel positions from the scene's normalised data.
     const layout = layoutRef.current;
@@ -363,6 +379,7 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
   // -------------------------------------------------------------------------
 
   const handleOffenseDrag = useCallback((position: number, newCx: number, newCy: number) => {
+    draggingRef.current = true;
     setOffensePx((prev) =>
       prev
         ? prev.map((p) => (p.position === position ? { ...p, px: newCx, py: newCy } : p))
@@ -372,6 +389,7 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
 
   const handleOffenseDragEnd = useCallback(
     (position: number, newCx: number, newCy: number) => {
+      draggingRef.current = false;
       // The store write must not happen inside the setState updater: React runs
       // updaters while rendering this component, and a Zustand write there
       // updates SaveIndicator mid-render (and runs twice under StrictMode).
@@ -395,6 +413,7 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
   );
 
   const handleDefenseDrag = useCallback((position: number, newCx: number, newCy: number) => {
+    draggingRef.current = true;
     setDefensePx((prev) =>
       prev
         ? prev.map((p) => (p.position === position ? { ...p, px: newCx, py: newCy } : p))
@@ -404,6 +423,7 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
 
   const handleDefenseDragEnd = useCallback(
     (position: number, newCx: number, newCy: number) => {
+      draggingRef.current = false;
       // The store write must not happen inside the setState updater: React runs
       // updaters while rendering this component, and a Zustand write there
       // updates SaveIndicator mid-render (and runs twice under StrictMode).
@@ -458,6 +478,7 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
 
   const handleBallDrag = useCallback(
     (newCx: number, newCy: number) => {
+      draggingRef.current = true;
       // Reads the current attachment and player positions from refs: no state
       // setter runs inside another setter's updater (React runs updaters while
       // rendering), and the handler is not re-created on every drag frame.
@@ -486,6 +507,7 @@ export default function CourtWithPlayers({ sceneId, scene, variant = "half", cla
 
   const handleBallDragEnd = useCallback(
     (newCx: number, newCy: number, nearest: NearbyPlayer | null) => {
+      draggingRef.current = false;
       let newBallState: BallState;
 
       if (nearest) {

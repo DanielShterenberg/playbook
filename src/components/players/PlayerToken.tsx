@@ -112,6 +112,8 @@ export default function PlayerToken({
 }: PlayerTokenProps) {
   const palette = useCourtPalette();
   const isDragging = useRef(false);
+  /** Whether the current press has moved the token (a press without a move is a tap). */
+  const didMove = useRef(false);
   const dragStart = useRef<{ mouseX: number; mouseY: number; playerCx: number; playerCy: number }>({
     mouseX: 0,
     mouseY: 0,
@@ -133,6 +135,7 @@ export default function PlayerToken({
       const dx = e.clientX - dragStart.current.mouseX;
       const dy = e.clientY - dragStart.current.mouseY;
       const { x, y } = clamp(dragStart.current.playerCx + dx, dragStart.current.playerCy + dy);
+      didMove.current = true;
       onDrag(x, y);
     },
     [clamp, onDrag],
@@ -144,8 +147,11 @@ export default function PlayerToken({
       isDragging.current = false;
       const dx = e.clientX - dragStart.current.mouseX;
       const dy = e.clientY - dragStart.current.mouseY;
+      // A click / tap is not a drag: nothing moved, nothing to store or undo.
+      // (A tap also arrives twice — as a touch, then as a compatibility click.)
+      const moved = didMove.current;
       const { x, y } = clamp(dragStart.current.playerCx + dx, dragStart.current.playerCy + dy);
-      onDragEnd(x, y);
+      if (moved) onDragEnd(x, y);
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     },
@@ -156,6 +162,7 @@ export default function PlayerToken({
     (e: React.MouseEvent<SVGGElement>) => {
       e.preventDefault();
       isDragging.current = true;
+      didMove.current = false;
       dragStart.current = { mouseX: e.clientX, mouseY: e.clientY, playerCx: cx, playerCy: cy };
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
@@ -173,6 +180,7 @@ export default function PlayerToken({
       const dx = touch.clientX - dragStart.current.mouseX;
       const dy = touch.clientY - dragStart.current.mouseY;
       const { x, y } = clamp(dragStart.current.playerCx + dx, dragStart.current.playerCy + dy);
+      didMove.current = true;
       onDrag(x, y);
     },
     [clamp, onDrag],
@@ -183,7 +191,7 @@ export default function PlayerToken({
       if (!isDragging.current) return;
       isDragging.current = false;
       const touch = e.changedTouches[0];
-      if (touch) {
+      if (touch && didMove.current) {
         const dx = touch.clientX - dragStart.current.mouseX;
         const dy = touch.clientY - dragStart.current.mouseY;
         const { x, y } = clamp(dragStart.current.playerCx + dx, dragStart.current.playerCy + dy);
@@ -200,6 +208,7 @@ export default function PlayerToken({
       const touch = e.touches[0];
       if (!touch) return;
       isDragging.current = true;
+      didMove.current = false;
       dragStart.current = {
         mouseX: touch.clientX,
         mouseY: touch.clientY,

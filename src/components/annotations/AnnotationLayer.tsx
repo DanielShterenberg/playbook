@@ -269,7 +269,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
   if (type === "movement") {
     const d = hasWaypoints ? polylinePath(allPxPoints) : bezierPath(from, to, cp);
     return (
-      <g onClick={handleClick} style={hitStyle}>
+      <g onClick={handleClick} style={hitStyle} data-annotation-id={ann.id}>
         {selectRing}
         {/* Invisible wide hit-area */}
         <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
@@ -294,7 +294,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
       // Multi-leg dribble: render as dashed polyline (no zigzag for multi-leg)
       const d = polylinePath(allPxPoints);
       return (
-        <g onClick={handleClick} style={hitStyle}>
+        <g onClick={handleClick} style={hitStyle} data-annotation-id={ann.id}>
           {selectRing}
           <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
           <path
@@ -315,7 +315,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
       // Curved dribble: render as bezier path (smooth) + arrowhead
       const d = bezierPath(from, to, cp);
       return (
-        <g onClick={handleClick} style={hitStyle}>
+        <g onClick={handleClick} style={hitStyle} data-annotation-id={ann.id}>
           {selectRing}
           <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
           <path
@@ -351,7 +351,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
     }
     const d = `M ${pts.join(" L ")}`;
     return (
-      <g onClick={handleClick} style={hitStyle}>
+      <g onClick={handleClick} style={hitStyle} data-annotation-id={ann.id}>
         {selectRing}
         <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
         <path
@@ -372,7 +372,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
     // Straight/curved line with solid triangle tip
     const d = bezierPath(from, to, cp);
     return (
-      <g onClick={handleClick} style={hitStyle}>
+      <g onClick={handleClick} style={hitStyle} data-annotation-id={ann.id}>
         {selectRing}
         <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
         <path
@@ -397,7 +397,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
     const uy = len > 0 ? dy / len : 0;
     const perp = { x: -uy * 10, y: ux * 10 };
     return (
-      <g onClick={handleClick} style={hitStyle}>
+      <g onClick={handleClick} style={hitStyle} data-annotation-id={ann.id}>
         {selectRing}
         <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="transparent" strokeWidth={14} />
         <line
@@ -418,7 +418,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
   if (type === "cut") {
     const d = hasWaypoints ? polylinePath(allPxPoints) : bezierPath(from, to, cp);
     return (
-      <g onClick={handleClick} style={hitStyle}>
+      <g onClick={handleClick} style={hitStyle} data-annotation-id={ann.id}>
         {selectRing}
         <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
         <path
@@ -442,7 +442,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
     // and from movement (solid navy). No arrowhead — it is a static assignment link.
     const d = bezierPath(from, to, cp);
     return (
-      <g onClick={handleClick} style={hitStyle}>
+      <g onClick={handleClick} style={hitStyle} data-annotation-id={ann.id}>
         {selectRing}
         <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
         <path
@@ -482,7 +482,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
     const { pux: pux1, puy: puy1 } = getTick(tick1, tangent1Before);
     const { pux: pux2, puy: puy2 } = getTick(tick2, tangent2Before);
     return (
-      <g onClick={handleClick} style={hitStyle}>
+      <g onClick={handleClick} style={hitStyle} data-annotation-id={ann.id}>
         {selectRing}
         {/* Invisible wide hit-area */}
         <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
@@ -653,6 +653,25 @@ export interface SnapPlayer {
   position: number;
 }
 
+/** The annotation drawn at a viewport point, if any (lines mark their group with data-annotation-id). */
+function annotationIdAt(clientX: number, clientY: number): string | null {
+  const hit = document.elementFromPoint(clientX, clientY)?.closest("[data-annotation-id]");
+  return hit?.getAttribute("data-annotation-id") ?? null;
+}
+
+/**
+ * Route every later event of this pointer to `el` until it is released, so a
+ * stroke keeps tracking outside the court and a touch is not lost mid-drag.
+ */
+function capturePointer(el: Element, pointerId: number): void {
+  try {
+    el.setPointerCapture(pointerId);
+  } catch {
+    // The pointer is already gone (or synthetic): drawing works without capture.
+  }
+}
+
+
 function findNearestPlayer(
   x: number,
   y: number,
@@ -806,7 +825,18 @@ export default function AnnotationLayer({
 
   const isDrawingTool = selectedTool !== "select";
 
-  // Get SVG-local coordinates from a mouse event
+  // The pointer that owns the stroke or handle drag in progress (null: none).
+  const activePointerRef = useRef<number | null>(null);
+  // Set when a handle drag ends, for the click that follows it (see handleSVGClick).
+  const keepSelectionRef = useRef(false);
+
+  const keepSelectionAfterDrag = () => {
+    keepSelectionRef.current = true;
+    // No click follows a touch drag: do not let the flag eat a later, real one.
+    window.setTimeout(() => { keepSelectionRef.current = false; }, 300);
+  };
+
+  // Get SVG-local coordinates from a mouse / pointer event
   const svgRef = useRef<SVGSVGElement>(null);
   const getSVGCoords = useCallback((e: React.MouseEvent | MouseEvent): Point => {
     const svg = svgRef.current;
@@ -821,6 +851,12 @@ export default function AnnotationLayer({
   // Handle annotation selection / deselect click on background
   const handleSVGClick = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
+      // The click that ends a handle drag lands on the layer (it holds the
+      // pointer capture), not on the handle: that is not a background click.
+      if (keepSelectionRef.current) {
+        keepSelectionRef.current = false;
+        return;
+      }
       if (selectedTool === "select") {
         // Deselect if clicking background
         if (e.target === svgRef.current) {
@@ -840,11 +876,16 @@ export default function AnnotationLayer({
   const defenseOnly = players.filter((p) => p.side === "defense");
   const offenseOnly = players.filter((p) => p.side === "offense");
 
-  // Mouse down — start drawing
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
+  // Pointer down (mouse, finger or pen) — start drawing
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent<SVGSVGElement>) => {
       if (!isDrawingTool) return;
+      // Left button only; a second finger does not start a second stroke.
+      if ((e.pointerType === "mouse" && e.button !== 0) || !e.isPrimary) return;
       e.preventDefault();
+      // Keep receiving this pointer's moves and its release outside the court.
+      capturePointer(e.currentTarget, e.pointerId);
+      activePointerRef.current = e.pointerId;
 
       legExtensionRef.current = null;
 
@@ -890,9 +931,12 @@ export default function AnnotationLayer({
     [isDrawingTool, selectedTool, getSVGCoords, players, defenseOnly, scene, paWidth, paHeight, offsetX, offsetY, flipped],
   );
 
-  // Mouse move — update preview or drag control point
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
+  // Pointer move — update preview or drag control point
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent<SVGSVGElement>) => {
+      // A stroke or handle drag belongs to the pointer that started it: a
+      // second finger or a resting palm must not move or finish it.
+      if (activePointerRef.current !== null && e.pointerId !== activePointerRef.current) return;
       const pt = getSVGCoords(e);
 
       // If dragging a control point, update the annotation
@@ -965,13 +1009,17 @@ export default function AnnotationLayer({
     [getSVGCoords, players, offenseOnly, selectedTool, sceneId, updateAnnotation, paWidth, paHeight, offsetX, offsetY, flipped, scene],
   );
 
-  // Mouse up — commit annotation or finish CP drag
-  const handleMouseUp = useCallback(
-    (e: React.MouseEvent<SVGSVGElement>) => {
+  // Pointer up — commit annotation or finish CP drag
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent<SVGSVGElement>) => {
+      if (activePointerRef.current !== null && e.pointerId !== activePointerRef.current) return;
+      activePointerRef.current = null;
+
       // Finish control-point drag
       if (cpDragRef.current) {
         cpDragRef.current = null;
         setCpDragging(false);
+        keepSelectionAfterDrag();
         return;
       }
 
@@ -980,6 +1028,7 @@ export default function AnnotationLayer({
         toDragRef.current = null;
         setToDragging(false);
         setSnapTarget(null);
+        keepSelectionAfterDrag();
         return;
       }
 
@@ -999,7 +1048,12 @@ export default function AnnotationLayer({
       // Ignore tiny strokes (accidental clicks)
       const dx = to.x - from.x;
       const dy = to.y - from.y;
-      if (Math.sqrt(dx * dx + dy * dy) > 8) {
+      if (Math.sqrt(dx * dx + dy * dy) <= 8) {
+        // A tap, not a stroke. The pointer is captured by the layer, so the
+        // click will not reach the line under it: select that line here.
+        const id = annotationIdAt(e.clientX, e.clientY);
+        if (id) setSelectedAnnotationId(id);
+      } else {
         // Convert SVG pixel coords to normalised [0-1] court coords.
         // Accounts for OOB side margins (offsetX) and flip.
         const svgToNorm = (svgX: number, svgY: number) => ({
@@ -1062,12 +1116,33 @@ export default function AnnotationLayer({
     ],
   );
 
-  // Mouse down on a control-point drag handle
-  const handleCpMouseDown = useCallback(
-    (e: React.MouseEvent, ann: Annotation) => {
+  /**
+   * The gesture was taken away (the browser claimed the touch, a call came
+   * in …): drop the stroke in progress without committing it and end any
+   * handle drag where it is.
+   */
+  const handlePointerCancel = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
+    if (activePointerRef.current !== null && e.pointerId !== activePointerRef.current) return;
+    activePointerRef.current = null;
+    cpDragRef.current = null;
+    toDragRef.current = null;
+    setCpDragging(false);
+    setToDragging(false);
+    setDrawing(null);
+    drawingRef.current = null;
+    legExtensionRef.current = null;
+    setSnapTarget(null);
+  }, []);
+
+  // Pointer down on a control-point drag handle
+  const handleCpPointerDown = useCallback(
+    (e: React.PointerEvent, ann: Annotation) => {
       e.stopPropagation();
       e.preventDefault();
       if (!sceneId) return;
+      // The layer handles the drag: route this pointer's moves to it.
+      if (svgRef.current) capturePointer(svgRef.current, e.pointerId);
+      activePointerRef.current = e.pointerId;
       // Push undo snapshot before the drag begins
       const state = useStore.getState();
       const { currentPlay, selectedSceneId: sid } = state;
@@ -1083,12 +1158,14 @@ export default function AnnotationLayer({
     [sceneId],
   );
 
-  // Mouse down on the to-endpoint drag handle
-  const handleToMouseDown = useCallback(
-    (e: React.MouseEvent, ann: Annotation) => {
+  // Pointer down on the to-endpoint drag handle
+  const handleToPointerDown = useCallback(
+    (e: React.PointerEvent, ann: Annotation) => {
       e.stopPropagation();
       e.preventDefault();
       if (!sceneId) return;
+      if (svgRef.current) capturePointer(svgRef.current, e.pointerId);
+      activePointerRef.current = e.pointerId;
       const state = useStore.getState();
       const { currentPlay, selectedSceneId: sid } = state;
       if (currentPlay) {
@@ -1159,12 +1236,15 @@ export default function AnnotationLayer({
         // Capture events when drawing, when dragging a control point, or when
         // in select mode with an annotation selected (so the CP handle is clickable).
         pointerEvents: readOnly ? "none" : (isDrawingTool || cpDragging || toDragging || showCpHandle) ? "all" : "none",
+        // While the layer takes input a finger draws; it must not scroll or zoom the page.
+        touchAction: "none",
       }}
       viewBox={`0 0 ${width} ${height}`}
       aria-label="Annotation drawing layer"
-      onMouseDown={readOnly ? undefined : handleMouseDown}
-      onMouseMove={readOnly ? undefined : handleMouseMove}
-      onMouseUp={readOnly ? undefined : handleMouseUp}
+      onPointerDown={readOnly ? undefined : handlePointerDown}
+      onPointerMove={readOnly ? undefined : handlePointerMove}
+      onPointerUp={readOnly ? undefined : handlePointerUp}
+      onPointerCancel={readOnly ? undefined : handlePointerCancel}
       onClick={readOnly ? undefined : handleSVGClick}
     >
       {/* Existing annotations */}
@@ -1213,7 +1293,7 @@ export default function AnnotationLayer({
             stroke="#3B82F6"
             strokeWidth={1.5}
             style={{ cursor: "grab", pointerEvents: "all" }}
-            onMouseDown={(e) => handleCpMouseDown(e, selectedAnnotation)}
+            onPointerDown={(e) => handleCpPointerDown(e, selectedAnnotation)}
           />
           {/* Inner dot */}
           <circle
@@ -1236,7 +1316,7 @@ export default function AnnotationLayer({
           stroke="#6B7280"
           strokeWidth={1.5}
           style={{ cursor: "grab", pointerEvents: "all" }}
-          onMouseDown={(e) => handleToMouseDown(e, selectedAnnotation)}
+          onPointerDown={(e) => handleToPointerDown(e, selectedAnnotation)}
         />
       )}
 
