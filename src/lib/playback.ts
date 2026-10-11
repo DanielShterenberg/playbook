@@ -196,7 +196,8 @@ export function normalizePlayForPlayback<
  * How far through its scene a position is, by time: 0 at the start of the
  * first step, approaching 1 as the last step runs out. Steps count by their
  * duration (stepDurationMs), so a long step fills the bar more slowly.
- * 0 when there is no scene.
+ * 0 when there is no scene. A view helper for progress bars — the reducer
+ * below does not use it.
  */
 export function sceneProgress(
   scene: PlaybackScene | null | undefined,

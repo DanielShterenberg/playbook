@@ -6,7 +6,7 @@
  * Data model:
  *   teams/{teamId}           — { name, createdBy, createdAt, members: { [uid]: { role } }, inviteCode }
  *   users/{userId}           — { teamId, role } cached fields updated on join/create
- *   sharedPlays/{shareToken} — { playId, createdBy, snapshot: Play }
+ *   sharedPlays/{shareToken} — { playId, createdBy, snapshot: Play, teamName? }
  */
 
 import {
@@ -41,6 +41,8 @@ export interface ShareToken {
   playId: string;
   createdBy: string;
   snapshot: Play;
+  /** Team the play belonged to when shared; absent for personal plays and older links. */
+  teamName?: string;
   createdAt: Date;
 }
 
@@ -195,6 +197,12 @@ export async function loadUserTeamInfo(
 // Share tokens (#78)
 // ---------------------------------------------------------------------------
 
+/** A team name as stored on / read from a share link: trimmed, bounded text, or null. */
+function cleanTeamName(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  return value.trim().slice(0, 80) || null;
+}
+
 /**
  * Create a share token for a play. Stores a snapshot of the play so the
  * read-only view works even without the viewer having Firestore access to
@@ -211,7 +219,7 @@ export async function createShareToken(
     createdBy,
     snapshot: serialisePlayForShare(play),
     // Shown under the title in the public viewer, which cannot read teams/.
-    ...(teamName ? { teamName } : {}),
+    ...(cleanTeamName(teamName) ? { teamName: cleanTeamName(teamName) } : {}),
     createdAt: serverTimestamp(),
   });
   return shareToken;
@@ -240,6 +248,6 @@ export async function loadSharedPlay(shareToken: string): Promise<SharedPlay | n
         data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
       updatedAt: new Date(),
     },
-    teamName: typeof data.teamName === "string" && data.teamName.trim() ? data.teamName : null,
+    teamName: cleanTeamName(data.teamName),
   };
 }

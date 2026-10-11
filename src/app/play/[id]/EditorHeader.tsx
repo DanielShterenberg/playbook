@@ -21,7 +21,7 @@ import { useStore } from "@/lib/store";
 import type { Category, CourtType, PlayColors } from "@/lib/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeam } from "@/contexts/TeamContext";
-import { createShareToken } from "@/lib/team";
+import { createShareToken, loadTeam } from "@/lib/team";
 import PresentationOverlay from "@/components/editor/PresentationOverlay";
 import CommentsPanel from "@/components/editor/CommentsPanel";
 import SaveIndicator from "@/components/editor/SaveIndicator";
@@ -154,7 +154,14 @@ export default function EditorHeader({ playId }: EditorHeaderProps) {
     setShareMsg(null);
     try {
       // The viewer shows the team under the title; a personal play has none.
-      const teamName = team && currentPlay.teamId === team.id ? team.name : null;
+      // The team context may not have loaded yet (Share right after a refresh),
+      // and the name is frozen into the link, so fetch it then.
+      const playTeam = !currentPlay.teamId
+        ? null
+        : team?.id === currentPlay.teamId
+          ? team
+          : await loadTeam(currentPlay.teamId).catch(() => null);
+      const teamName = playTeam?.name ?? null;
       const token = await createShareToken(currentPlay, user.uid, teamName);
       const url = `${window.location.origin}/view/${token}`;
       await navigator.clipboard.writeText(url);

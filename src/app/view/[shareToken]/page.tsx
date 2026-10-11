@@ -192,19 +192,25 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   // together, so there is nothing to reconcile — everything else is derived.
   const positionRef = useRef<PlaybackPosition>({ sceneIndex: 0, step: 1, accMs: 0 });
   const [shown, setShown] = useState({ sceneIndex: 0, step: 1 });
-  // The progress bar follows the position on every frame without a re-render:
-  // the current scene's segment reads its width from a CSS variable on the bar.
+  // The progress bar follows the position on every frame without a re-render.
+  // paintProgress is the only writer of the segment widths (React renders the
+  // fills without one), so the bar is always a function of the position — plus
+  // `endedRef`, because a finished play rests at the start of its last step.
   const progressBarRef = useRef<HTMLDivElement>(null);
   const scenesRef = useRef<Play["scenes"]>([]);
-  const paintProgress = useCallback((position: PlaybackPosition, ended = false) => {
-    const scene = scenesRef.current[position.sceneIndex];
-    const progress = ended ? 1 : sceneProgress(scene, position.step, position.accMs);
-    progressBarRef.current?.style.setProperty("--scene-progress", String(progress));
+  const endedRef = useRef(false);
+  const paintProgress = useCallback(() => {
+    const { sceneIndex, step, accMs } = positionRef.current;
+    const current = endedRef.current ? 1 : sceneProgress(scenesRef.current[sceneIndex], step, accMs);
+    progressBarRef.current?.querySelectorAll<HTMLElement>("[data-fill]").forEach((fill, i) => {
+      fill.style.width = `${(i < sceneIndex ? 1 : i === sceneIndex ? current : 0) * 100}%`;
+    });
   }, []);
   const moveTo = useCallback((next: PlaybackPosition, ended = false) => {
     const prev = positionRef.current;
     positionRef.current = next;
-    paintProgress(next, ended);
+    endedRef.current = ended;
+    paintProgress();
     // Most ticks only add time; re-render only when the scene or step changes.
     if (prev.sceneIndex !== next.sceneIndex || prev.step !== next.step) {
       setShown({ sceneIndex: next.sceneIndex, step: next.step });
@@ -230,7 +236,7 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   // The bar mounts with the play and again when the scene count changes; paint it then.
   useEffect(() => {
     scenesRef.current = scenes;
-    paintProgress(positionRef.current);
+    paintProgress();
   }, [scenes, paintProgress]);
   const { sceneIndex, step: currentStep } = shown;
   const scene = scenes[sceneIndex] ?? null;
@@ -244,6 +250,8 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   // Auto-advance while playing: the shared pure playback reducer
   // (src/lib/playback.ts, issue #160) on a rAF clock. No loop in the viewer.
   const tick = useCallback((dtMs: number) => {
+    // A frame can still arrive after playback stopped, before the clock is torn down.
+    if (!isPlayingRef.current) return;
     const result = tickPlayback(positionRef.current, dtMs, { scenes, speed, loop: false });
     // The play ran out: the last segment shows full, not the start of its last step.
     moveTo(result.state, result.ended);
@@ -257,13 +265,16 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   // ---------------------------------------------------------------------------
 
   const togglePlay = useCallback(() => {
+    const position = positionRef.current;
     if (isPlayingRef.current) {
+      // A step always plays from its start, so pausing goes back to it right
+      // away (the bar then shows where Play will resume from).
       setPlaying(false);
+      moveTo({ ...position, accMs: 0 });
       return;
     }
     // Play pressed on the final step restarts the play instead of replaying
-    // only the final hold. Either way the current step starts from zero.
-    const position = positionRef.current;
+    // only the final hold.
     moveTo(isAtEnd(position, scenes) ? startPosition(scenes) : { ...position, accMs: 0 });
     setPlaying(true);
   }, [scenes, moveTo, setPlaying]);
@@ -285,7 +296,12 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   const goToScene = useCallback((index: number) => {
     setPlaying(false);
     const target = Math.min(Math.max(index, 0), scenes.length - 1);
-    if (target < 0 || target === positionRef.current.sceneIndex) return;
+    if (target < 0) return;
+    if (target === positionRef.current.sceneIndex) {
+      // Same scene: stay on the step, but paused means back at its start.
+      moveTo({ ...positionRef.current, accMs: 0 });
+      return;
+    }
     moveTo({ sceneIndex: target, step: firstStepOf(scenes[target]), accMs: 0 });
   }, [scenes, moveTo, setPlaying]);
 
@@ -381,10 +397,10 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   const hasMultipleScenes = scenes.length > 1;
   const sceneCountLabel = `${scenes.length} ${scenes.length === 1 ? "scene" : "scenes"}`;
   const categoryLabel = CATEGORY_LABELS[play.category];
-  // A short note is the scene's name ("Scene 2 of 4 · Flare"); a longer one is
-  // a description and goes under the controls instead.
-  const note = scene?.note.trim() ?? "";
-  const sceneName = note.length <= SCENE_NAME_MAX ? note : "";
+  // A short one-line note is the scene's name ("Scene 2 of 4 · Flare"); a longer
+  // one is a description and goes under the controls instead.
+  const note = (scene?.note ?? "").trim();
+  const sceneName = note.length <= SCENE_NAME_MAX && !note.includes("\n") ? note : "";
 
   return (
     <main className="flex min-h-screen flex-col bg-app text-sm text-ink">
@@ -446,12 +462,8 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
                   className="flex h-11 items-center"
                 >
                   <span className="relative block h-1.5 w-full overflow-hidden rounded-[3px] bg-line">
-                    <span
-                      className="absolute inset-y-0 left-0 rounded-[3px] bg-accent"
-                      style={{
-                        width: i < sceneIndex ? "100%" : i === sceneIndex ? "calc(var(--scene-progress, 0) * 100%)" : "0%",
-                      }}
-                    />
+                    {/* Width is set by paintProgress */}
+                    <span data-fill className="absolute inset-y-0 left-0 w-0 rounded-[3px] bg-accent" />
                   </span>
                 </button>
               ))}
@@ -489,7 +501,7 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
             )}
 
             {scenes.length > 0 && (
-              <span className="max-w-full tabular-nums text-muted">
+              <span className="min-w-0 max-w-full break-words text-center tabular-nums text-muted">
                 Scene {sceneIndex + 1} of {scenes.length}
                 {sceneName && (
                   <>

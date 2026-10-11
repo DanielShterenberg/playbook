@@ -7,7 +7,7 @@ rules_version = '2';
 //   teams/{teamId}           — team document
 //                              members map: { [userId]: { role: "admin"|"editor"|"viewer" } }
 //   plays/{playId}           — flat play collection (teamId="" for solo users)
-//   sharedPlays/{shareToken} — lightweight public share token { playId, createdBy, snapshot }
+//   sharedPlays/{shareToken} — lightweight public share token { playId, createdBy, snapshot, teamName? }
 
 service cloud.firestore {
   match /databases/{database}/documents {
