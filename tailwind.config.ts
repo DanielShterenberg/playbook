@@ -6,6 +6,8 @@ const config: Config = {
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+    // Class strings kept outside the component folders (categories.ts, uiClasses.ts)
+    "./src/lib/**/*.{ts,tsx}",
   ],
   theme: {
     extend: {
@@ -30,6 +32,8 @@ const config: Config = {
         "line-strong": "var(--color-line-strong)",
         danger: "var(--color-danger)",
         success: "var(--color-success)",
+        control: "var(--color-control)",
+        "ball-tag": "var(--color-ball-tag)",
       },
     },
   },

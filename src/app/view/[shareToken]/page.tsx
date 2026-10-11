@@ -25,10 +25,12 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import Logo from "@/components/brand/Logo";
 import ThemeToggle from "@/components/brand/ThemeToggle";
+import Spinner from "@/components/brand/Spinner";
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { loadSharedPlay } from "@/lib/team";
 import { sceneName as sceneNameOf } from "@/lib/types";
-import type { Category, Play } from "@/lib/types";
+import type { Play } from "@/lib/types";
+import { CATEGORY_LABELS } from "@/lib/categories";
 import {
   tickPlayback,
   sortedTimingGroups,
@@ -54,16 +56,6 @@ interface SharedPlayViewPageProps {
 // ---------------------------------------------------------------------------
 // Display helpers
 // ---------------------------------------------------------------------------
-
-const CATEGORY_LABELS: Record<Category, string> = {
-  offense: "Offense",
-  defense: "Defense",
-  inbound: "Inbound",
-  "press-break": "Press Break",
-  "fast-break": "Fast Break",
-  oob: "Out of Bounds",
-  special: "Special",
-};
 
 /** Playback speeds offered, as in the approved mockup. */
 const SPEEDS = [0.5, 1, 2] as const;
@@ -372,9 +364,7 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
       <main className="flex min-h-screen flex-col bg-app text-ink">
         <ViewerHeader />
         <div className="flex flex-1 items-center justify-center gap-2.5 p-6 text-[15px] text-muted" role="status">
-          <svg width={18} height={18} viewBox="0 0 24 24" fill="none" aria-hidden="true" className="animate-spin">
-            <circle cx={12} cy={12} r={10} stroke="currentColor" strokeWidth={3} strokeDasharray="31 31" strokeLinecap="round" />
-          </svg>
+          <Spinner size={18} />
           Loading play…
         </div>
       </main>

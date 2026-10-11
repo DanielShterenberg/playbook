@@ -3,8 +3,7 @@
  * dialogs draw the same buttons. Colours are theme tokens (globals.css) only.
  */
 
-const FOCUS =
-  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text";
+import { FOCUS_RING as FOCUS } from "@/lib/uiClasses";
 
 const DISABLED = "disabled:cursor-not-allowed disabled:opacity-40";
 
@@ -40,4 +39,4 @@ export const MENU_ITEM = `flex min-h-11 w-full items-center gap-3 rounded-md px-
 export const POPOVER = "rounded-lg border border-line bg-surface shadow-lg shadow-black/10 dark:shadow-black/40";
 
 /** Checkbox / radio tint: the fill accent is too light on white, so light uses the darker ring colour. */
-export const ACCENT_CONTROL = "accent-[#C85A0A] dark:accent-[#FF7A1A]";
+export const ACCENT_CONTROL = "accent-control";

@@ -11,6 +11,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { RingSpinner } from "@/components/brand/Spinner";
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -30,22 +31,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         aria-label="Loading"
         aria-busy="true"
       >
-        <svg
-          width={36}
-          height={36}
-          viewBox="0 0 36 36"
-          fill="none"
-          aria-hidden="true"
-          className="animate-spin"
-        >
-          <circle cx={18} cy={18} r={14} stroke="var(--color-line)" strokeWidth={4} />
-          <path
-            d="M18 4 A14 14 0 0 1 32 18"
-            stroke="var(--color-accent)"
-            strokeWidth={4}
-            strokeLinecap="round"
-          />
-        </svg>
+        <RingSpinner size={36} />
       </div>
     );
   }

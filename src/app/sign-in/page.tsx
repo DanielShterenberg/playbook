@@ -19,6 +19,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import Logo from "@/components/brand/Logo";
 import ThemeToggle from "@/components/brand/ThemeToggle";
+import { RingSpinner } from "@/components/brand/Spinner";
 import {
   signInWithEmail,
   signUpWithEmail,
@@ -47,10 +48,7 @@ const BUTTON =
 function SignInLoading() {
   return (
     <main className={PAGE} aria-label="Loading" aria-busy="true">
-      <svg width={36} height={36} viewBox="0 0 36 36" fill="none" aria-hidden="true" className="animate-spin">
-        <circle cx={18} cy={18} r={14} stroke="var(--color-line)" strokeWidth={4} />
-        <path d="M18 4 A14 14 0 0 1 32 18" stroke="var(--color-accent)" strokeWidth={4} strokeLinecap="round" />
-      </svg>
+      <RingSpinner size={36} />
     </main>
   );
 }

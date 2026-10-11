@@ -14,6 +14,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
+import { CATEGORY_FILTERS } from "@/lib/categories";
+import { FOCUS_RING } from "@/lib/uiClasses";
 import NewPlayModal from "@/components/playbook/NewPlayModal";
 import PlayCard from "@/components/playbook/PlayCard";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,21 +29,7 @@ import Logo from "@/components/brand/Logo";
 import ThemeToggle from "@/components/brand/ThemeToggle";
 import { effectivePlayFilter, filterPlays, type PlayFilter } from "@/lib/playFilter";
 
-const CATEGORY_FILTERS: { value: PlayFilter; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "offense", label: "Offense" },
-  { value: "defense", label: "Defense" },
-  { value: "inbound", label: "Inbound" },
-  { value: "press-break", label: "Press Break" },
-  { value: "fast-break", label: "Fast Break" },
-  { value: "oob", label: "OOB" },
-  { value: "special", label: "Special" },
-];
-
 const PERSONAL_FILTER: { value: PlayFilter; label: string } = { value: "personal", label: "Personal" };
-
-const FOCUS_RING =
-  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text";
 
 /** Outlined 44px control — the header's secondary buttons. */
 const OUTLINE_BTN = `flex h-11 flex-none items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-line bg-transparent px-3.5 text-sm font-medium text-ink transition-colors hover:bg-app ${FOCUS_RING}`;

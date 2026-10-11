@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
 import { createDefaultPlay } from "@/lib/store";
 import type { Category, CourtType } from "@/lib/types";
+import { CATEGORY_OPTIONS } from "@/lib/categories";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeam } from "@/contexts/TeamContext";
 import { savePlay } from "@/lib/db";
@@ -42,16 +43,6 @@ import {
 interface NewPlayModalProps {
   onClose: () => void;
 }
-
-const CATEGORY_OPTIONS: { value: Category; label: string }[] = [
-  { value: "offense", label: "Offense" },
-  { value: "defense", label: "Defense" },
-  { value: "inbound", label: "Inbound" },
-  { value: "press-break", label: "Press Break" },
-  { value: "fast-break", label: "Fast Break" },
-  { value: "oob", label: "Out of Bounds" },
-  { value: "special", label: "Special" },
-];
 
 export default function NewPlayModal({ onClose }: NewPlayModalProps) {
   const router = useRouter();
