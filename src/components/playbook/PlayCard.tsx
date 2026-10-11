@@ -22,6 +22,7 @@ import { useStore } from "@/lib/store";
 import type { Play, Role } from "@/lib/types";
 import CourtThumbnail from "@/components/court/CourtThumbnail";
 import { addPlayToTeam, deletePlay, savePlay } from "@/lib/db";
+import { isPersonalPlay } from "@/lib/playFilter";
 
 // ---------------------------------------------------------------------------
 // Thumbnail (the court itself is the shared CourtThumbnail)
@@ -78,7 +79,7 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
 
   // A play is "personal" when: user is in a team, the play has no teamId, and
   // the user has permission to edit (admin or editor).
-  const isPersonal = Boolean(teamId && !play.teamId);
+  const isPersonal = isPersonalPlay(play, teamId);
   const canAddToTeam = isPersonal && (role === "admin" || role === "editor");
 
   const firstScene = play.scenes[0] ?? null;
