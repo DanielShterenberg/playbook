@@ -59,7 +59,6 @@ export default function NewPlayModal({ onClose }: NewPlayModalProps) {
   const { teamId, team } = useTeam();
   const addPlay = useStore((s) => s.addPlay);
   const setCurrentPlay = useStore((s) => s.setCurrentPlay);
-  const setSelectedSceneId = useStore((s) => s.setSelectedSceneId);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -109,7 +108,6 @@ export default function NewPlayModal({ onClose }: NewPlayModalProps) {
 
     addPlay(play);
     setCurrentPlay(play);
-    setSelectedSceneId(play.scenes[0].id);
 
     // Persist to Firestore in the background — don't block navigation
     savePlay(play).catch((err) => console.error("[Firestore] savePlay failed:", err));

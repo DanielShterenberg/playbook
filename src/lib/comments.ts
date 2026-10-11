@@ -145,6 +145,10 @@ export async function deleteComment(commentId: string): Promise<void> {
  * Subscribe to all comments for a play.
  * Returns an unsubscribe function. `onUpdate` is called immediately with
  * the current snapshot and again whenever comments change.
+ *
+ * If the listener is refused or fails (signed out, rules, missing index) it
+ * logs one warning instead of an uncaught error; whatever `onUpdate` last
+ * received stays on screen.
  */
 export function subscribeToComments(
   playId: string,
@@ -155,8 +159,14 @@ export function subscribeToComments(
     where("playId", "==", playId),
     orderBy("createdAt", "asc"),
   );
-  return onSnapshot(q, (snap) => {
-    const comments = snap.docs.map((d) => deserialiseComment(d.id, d.data()));
-    onUpdate(comments);
-  });
+  return onSnapshot(
+    q,
+    (snap) => {
+      const comments = snap.docs.map((d) => deserialiseComment(d.id, d.data()));
+      onUpdate(comments);
+    },
+    (err) => {
+      console.warn(`Comments unavailable for play ${playId}: ${err.code}`);
+    },
+  );
 }

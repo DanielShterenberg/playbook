@@ -21,7 +21,7 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
     <main className="flex h-screen flex-col overflow-hidden bg-app text-sm text-ink supports-[height:100dvh]:h-[100dvh]">
       {/*
        * Centralised keyboard shortcut handler (issue #82).
-       * Manages tool switching, playback, scene nav, Ctrl+S, undo/redo stubs,
+       * Manages tool switching, playback, scene nav, undo/redo,
        * Delete, and the ? shortcuts overlay. Renders the overlay when active.
        */}
       <EditorKeyboardManager />

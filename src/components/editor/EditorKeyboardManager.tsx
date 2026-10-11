@@ -39,11 +39,6 @@ export default function EditorKeyboardManager() {
     setShowHelp(false);
   }, []);
 
-  // Ctrl+S save — stubbed until Firestore auto-save (#68) is implemented
-  const handleSave = useCallback(() => {
-    // No-op for now; will be wired to the Firestore persistence layer in #68
-  }, []);
-
   // Undo / Redo — wired to history store (issue #83)
   const handleUndo = useCallback(() => {
     undo();
@@ -56,7 +51,6 @@ export default function EditorKeyboardManager() {
   useKeyboardShortcuts({
     enabled: !isPresentationMode,
     onToggleHelp: handleToggleHelp,
-    onSave: handleSave,
     onUndo: handleUndo,
     onRedo: handleRedo,
   });

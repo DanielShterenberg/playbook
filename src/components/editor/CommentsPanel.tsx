@@ -11,7 +11,6 @@
  *   - Add top-level comment + inline replies
  *   - Resolve / reopen comments
  *   - Delete own comments
- *   - Per-scene comment dot indicator data exposed via onCountsChange callback
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -254,8 +253,6 @@ export interface CommentsPanelProps {
   playId: string;
   /** Currently selected scene ID (used for "This scene" filter). */
   selectedSceneId: string | null;
-  /** Map of sceneId → total (unresolved) comment count for dot indicators. */
-  onCountsChange?: (counts: Record<string, number>) => void;
   onClose: () => void;
   /** Optional lookup: sceneId → display label ("Scene 1", etc.) */
   sceneLabels?: Record<string, string>;
@@ -264,7 +261,6 @@ export interface CommentsPanelProps {
 export default function CommentsPanel({
   playId,
   selectedSceneId,
-  onCountsChange,
   onClose,
   sceneLabels = {},
 }: CommentsPanelProps) {
@@ -282,18 +278,6 @@ export default function CommentsPanel({
     const unsub = subscribeToComments(playId, setComments);
     return unsub;
   }, [playId]);
-
-  // Notify parent of per-scene unresolved counts
-  useEffect(() => {
-    if (!onCountsChange) return;
-    const counts: Record<string, number> = {};
-    for (const c of comments) {
-      if (c.sceneId && !c.resolved) {
-        counts[c.sceneId] = (counts[c.sceneId] ?? 0) + 1;
-      }
-    }
-    onCountsChange(counts);
-  }, [comments, onCountsChange]);
 
   const filtered = filter === "scene"
     ? comments.filter((c) => c.sceneId === selectedSceneId)

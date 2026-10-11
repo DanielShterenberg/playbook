@@ -13,7 +13,8 @@
  *   Scene navigation : Ctrl+Right / Ctrl+Left (next/prev scene)
  *   Editing          : Ctrl+Z (undo), Ctrl+Shift+Z (redo),
  *                      Delete/Backspace (remove selected),
- *                      Ctrl+S (force save)
+ *                      Ctrl+S (nothing to do — the play auto-saves; only
+ *                      keeps the browser's "Save page" dialog closed)
  *   Help             : ? (show shortcuts overlay)
  *
  * Rules:
@@ -53,8 +54,6 @@ const TOOL_KEY_MAP: Record<string, DrawingTool> = {
 export interface KeyboardShortcutsOptions {
   /** When false the hook is a no-op. Defaults to true. */
   enabled?: boolean;
-  /** Called when Ctrl+S is pressed. Stub until auto-save is wired up. */
-  onSave?: () => void;
   /** Called when ? is pressed — used to toggle the shortcuts overlay. */
   onToggleHelp?: () => void;
   /** Called when Ctrl+Z is pressed — stub until #83 undo/redo is implemented. */
@@ -65,7 +64,6 @@ export interface KeyboardShortcutsOptions {
 
 export function useKeyboardShortcuts({
   enabled = true,
-  onSave,
   onToggleHelp,
   onUndo,
   onRedo,
@@ -82,24 +80,28 @@ export function useKeyboardShortcuts({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      const ctrl = e.ctrlKey || e.metaKey;
+
+      // Ctrl+S never opens the browser's "Save page" dialog in the editor: the
+      // play auto-saves. By physical key (any keyboard layout), in any mode,
+      // and from text fields too.
+      if (ctrl && e.code === "KeyS") {
+        e.preventDefault();
+        return;
+      }
+
       if (!enabled) return;
-      if (isTypingTarget(e.target)) return;
 
       const key = e.key.toLowerCase();
-      const ctrl = e.ctrlKey || e.metaKey;
       const shift = e.shiftKey;
+
+      if (isTypingTarget(e.target)) return;
 
       // -----------------------------------------------------------------------
       // Ctrl / Meta combos — check first to avoid conflicts with single keys
       // -----------------------------------------------------------------------
 
       if (ctrl) {
-        if (key === "s") {
-          e.preventDefault();
-          onSave?.();
-          return;
-        }
-
         if (key === "z" && !shift) {
           e.preventDefault();
           onUndo?.();
@@ -202,7 +204,6 @@ export function useKeyboardShortcuts({
       setLoop,
       removeAnnotation,
       removeScene,
-      onSave,
       onToggleHelp,
       onUndo,
       onRedo,
