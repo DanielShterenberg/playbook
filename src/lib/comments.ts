@@ -146,8 +146,9 @@ export async function deleteComment(commentId: string): Promise<void> {
  * Returns an unsubscribe function. `onUpdate` is called immediately with
  * the current snapshot and again whenever comments change.
  *
- * If the listener is refused or fails (signed out, rules, missing index) the
- * play simply has no comments to show: one warning, no uncaught error.
+ * If the listener is refused or fails (signed out, rules, missing index) it
+ * logs one warning instead of an uncaught error; whatever `onUpdate` last
+ * received stays on screen.
  */
 export function subscribeToComments(
   playId: string,
@@ -166,7 +167,6 @@ export function subscribeToComments(
     },
     (err) => {
       console.warn(`Comments unavailable for play ${playId}: ${err.code}`);
-      onUpdate([]);
     },
   );
 }

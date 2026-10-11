@@ -14,6 +14,7 @@
  *   - Click a scene card to select it.
  *   - [+] button to append a new scene.
  *   - Right-click context menu: Rename, Duplicate, Move Left, Move Right, Delete.
+ *   - Double-click a card (or F2 when it has focus) to rename it.
  *   - A scene's name is its `note`: shown under the thumbnail here and next to
  *     "Scene n of m" in the share viewer.
  *   - Keyboard: Delete/Backspace deletes the selected scene (when not focused on input).
@@ -21,7 +22,7 @@
  *   - First (and only) scene cannot be deleted.
  */
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { useStore, selectEditorScene } from "@/lib/store";
 import type { Scene } from "@/lib/types";
 import type { CourtVariant } from "@/lib/courtLayout";
@@ -42,18 +43,31 @@ const THUMBNAIL_W_COMPACT = 80;
 // Context menu
 // ---------------------------------------------------------------------------
 
-/**
- * Where to put a `width`-wide popover opened at the pointer so it stays on
- * screen: the strip sits at the bottom of the editor, so in the lower half of
- * the window the popover opens upward from the pointer.
- */
-function popoverPosition(x: number, y: number, width: number): React.CSSProperties {
-  const left = Math.max(8, Math.min(x, window.innerWidth - width - 8));
-  return y > window.innerHeight / 2 ? { left, bottom: window.innerHeight - y } : { left, top: y };
-}
+const POPOVER_MARGIN = 8;
 
-const MENU_W = 176;
-const RENAME_W = 240;
+/**
+ * Position for a popover opened at the pointer, measured so it stays on
+ * screen: it opens downward if it fits below the pointer, else upward, and is
+ * clamped to the window either way (the strip sits at the bottom of the
+ * editor, so upward is the usual case). Transparent until measured — not
+ * `visibility: hidden`, which would refuse the rename field's focus.
+ */
+function usePopoverPosition(ref: React.RefObject<HTMLElement>, x: number, y: number): React.CSSProperties {
+  const [style, setStyle] = useState<React.CSSProperties>({ left: x, top: y, opacity: 0 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const { width, height } = el.getBoundingClientRect();
+    const maxLeft = window.innerWidth - width - POPOVER_MARGIN;
+    const maxTop = window.innerHeight - height - POPOVER_MARGIN;
+    const top = y + height <= window.innerHeight - POPOVER_MARGIN ? y : y - height;
+    setStyle({
+      left: Math.max(POPOVER_MARGIN, Math.min(x, maxLeft)),
+      top: Math.max(POPOVER_MARGIN, Math.min(top, maxTop)),
+    });
+  }, [ref, x, y]);
+  return style;
+}
 
 interface ContextMenuProps {
   x: number;
@@ -83,6 +97,7 @@ function ContextMenu({
   const playFlipped = currentPlay?.flipped ?? false;
   const sceneEffectiveFlipped = scene?.flipped != null ? scene.flipped : playFlipped;
   const ref = useRef<HTMLDivElement>(null);
+  const position = usePopoverPosition(ref, x, y);
 
   // Close when clicking outside
   useEffect(() => {
@@ -105,8 +120,8 @@ function ContextMenu({
       ref={ref}
       role="menu"
       aria-label="Scene options"
-      className={`${POPOVER} fixed z-50 py-1`}
-      style={{ ...popoverPosition(x, y, MENU_W), width: MENU_W }}
+      className={`${POPOVER} fixed z-50 min-w-[160px] py-1`}
+      style={position}
     >
       {[
         {
@@ -190,15 +205,17 @@ function RenamePopover({ x, y, sceneId, sceneNumber, initial, onClose }: RenameP
   const [value, setValue] = useState(initial);
   const inputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const position = usePopoverPosition(formRef, x, y);
 
   useEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();
   }, []);
 
+  // Only what the user typed is saved: opening and leaving the field must not
+  // rewrite a note (a single-line input flattens a multi-line one).
   const save = useCallback(() => {
-    const next = value.trim();
-    if (next !== initial.trim()) updateSceneNote(sceneId, next);
+    if (value !== initial) updateSceneNote(sceneId, value.trim());
     onClose();
   }, [value, initial, sceneId, updateSceneNote, onClose]);
 
@@ -215,8 +232,8 @@ function RenamePopover({ x, y, sceneId, sceneNumber, initial, onClose }: RenameP
     <form
       ref={formRef}
       onSubmit={(e) => { e.preventDefault(); save(); }}
-      className={`${POPOVER} fixed z-50 flex flex-col gap-1.5 p-3`}
-      style={{ ...popoverPosition(x, y, RENAME_W), width: RENAME_W }}
+      className={`${POPOVER} fixed z-50 flex w-[240px] flex-col gap-1.5 p-3`}
+      style={position}
     >
       <label htmlFor={`scene-name-${sceneId}`} className="text-xs text-muted">
         Name of scene {sceneNumber}
@@ -259,12 +276,22 @@ interface SceneCardProps {
 function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, variant, flipped, offenseColor, defenseColor, commentCount = 0 }: SceneCardProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [rename, setRename] = useState<{ x: number; y: number } | null>(null);
+  // Plays stored before notes existed can lack the field.
+  const name = scene.note ?? "";
+
+  // Phones are viewer-only: no Rename / Duplicate / Move / Delete there.
+  const canEdit = () => window.matchMedia("(min-width: 768px)").matches;
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    // Phones are viewer-only: a long-press must not open Duplicate / Move / Delete.
-    if (!window.matchMedia("(min-width: 768px)").matches) return;
-    setMenu({ x: e.clientX, y: e.clientY });
+    if (canEdit()) setMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  /** Rename from the card itself (double-click / double-tap, or F2 when focused). */
+  const renameAtCard = (card: HTMLElement) => {
+    if (!canEdit()) return;
+    const rect = card.getBoundingClientRect();
+    setRename({ x: rect.left, y: rect.top });
   };
 
   return (
@@ -273,8 +300,10 @@ function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, vari
         type="button"
         onClick={onClick}
         onContextMenu={handleContextMenu}
-        title={`Scene ${index + 1}${scene.note ? ` — ${scene.note}` : ""}`}
-        aria-label={`Scene ${index + 1}`}
+        onDoubleClick={(e) => renameAtCard(e.currentTarget)}
+        onKeyDown={(e) => { if (e.key === "F2") renameAtCard(e.currentTarget); }}
+        title={`Scene ${index + 1}${name ? ` — ${name}` : ""}`}
+        aria-label={`Scene ${index + 1}${name ? `: ${name}` : ""}`}
         aria-pressed={isActive}
         className={[
           "flex flex-none flex-col items-center overflow-hidden rounded-lg border-2 bg-surface text-xs transition-colors dark:bg-app md:gap-0.5 md:p-1",
@@ -304,9 +333,10 @@ function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, vari
             </span>
           )}
         </div>
-        <span className="hidden max-w-full truncate px-0.5 leading-[14px] md:block">
+        {/* w-0 + min-w-full: the caption takes the thumbnail's width and never widens the card */}
+        <span className="hidden w-0 min-w-full truncate px-0.5 text-center leading-[14px] md:block">
           {index + 1}
-          {scene.note ? ` · ${scene.note.slice(0, 12)}${scene.note.length > 12 ? "…" : ""}` : ""}
+          {name ? ` · ${name}` : ""}
         </span>
       </button>
 
@@ -328,7 +358,7 @@ function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, vari
           y={rename.y}
           sceneId={scene.id}
           sceneNumber={index + 1}
-          initial={scene.note}
+          initial={scene.note ?? ""}
           onClose={() => setRename(null)}
         />
       )}
@@ -396,7 +426,7 @@ export default function SceneStrip() {
       {/* Label */}
       <div className="hidden flex-none items-center gap-1 md:flex">
         <span className={SECTION_LABEL}>Scenes</span>
-        <InfoTooltip tip="Each scene is a frame of your play. Click to edit it, right-click to rename, duplicate or reorder." />
+        <InfoTooltip tip="Each scene is a frame of your play. Click to edit it, double-click to name it, right-click to duplicate or reorder." />
       </div>
 
       {/* Scene cards */}

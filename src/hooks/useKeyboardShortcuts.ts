@@ -53,7 +53,7 @@ const TOOL_KEY_MAP: Record<string, DrawingTool> = {
 export interface KeyboardShortcutsOptions {
   /** When false the hook is a no-op. Defaults to true. */
   enabled?: boolean;
-  /** Called when Ctrl+S is pressed (the browser's Save dialog is always suppressed). */
+  /** Called when Ctrl+S is pressed outside a text field (the browser's Save dialog is suppressed either way). */
   onSave?: () => void;
   /** Called when ? is pressed — used to toggle the shortcuts overlay. */
   onToggleHelp?: () => void;
@@ -83,23 +83,25 @@ export function useKeyboardShortcuts({
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!enabled) return;
-      if (isTypingTarget(e.target)) return;
 
       const key = e.key.toLowerCase();
       const ctrl = e.ctrlKey || e.metaKey;
       const shift = e.shiftKey;
+
+      // Ctrl+S never opens the browser's "Save page" dialog, even from a field.
+      if (ctrl && key === "s") {
+        e.preventDefault();
+        if (!isTypingTarget(e.target)) onSave?.();
+        return;
+      }
+
+      if (isTypingTarget(e.target)) return;
 
       // -----------------------------------------------------------------------
       // Ctrl / Meta combos — check first to avoid conflicts with single keys
       // -----------------------------------------------------------------------
 
       if (ctrl) {
-        if (key === "s") {
-          e.preventDefault();
-          onSave?.();
-          return;
-        }
-
         if (key === "z" && !shift) {
           e.preventDefault();
           onUndo?.();
