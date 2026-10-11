@@ -85,8 +85,8 @@ export interface CourtLayoutOptions {
  * Compute the pixel layout for a given total canvas width.
  *
  * This mirrors the calculation in Court.tsx's draw() callback exactly
- * (including its full-court branch). The editor and all export paths (GIF,
- * video, PNG, PDF) must call this function so that pixel dimensions are always
+ * (including its full-court branch). The editor and all export paths (MP4,
+ * PNG, PDF) must call this function so that pixel dimensions are always
  * consistent with each other.
  *
  * `variant` defaults to "half"; for a half court every pre-existing field has
@@ -155,7 +155,7 @@ export function hasCourtArea(layout: CourtLayout): boolean {
  * Convert normalised court coordinates [0-1] to canvas pixel coordinates.
  *
  * This is THE norm→pixel formula for every renderer (editor overlay, share
- * viewer, presentation, GIF/MP4/PNG/PDF exports). It is numerically identical
+ * viewer, presentation, MP4/PNG/PDF exports). It is numerically identical
  * to the legacy local normToPx in CourtWithPlayers.tsx and to Court.tsx's
  * courtToCanvas.
  *

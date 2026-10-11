@@ -6,9 +6,9 @@
  * Implements issue #79: PNG export of single scene.
  *
  * A PNG is one frame of the export pipeline: it is drawn by the same frame
- * painter as GIF / MP4 (renderSceneToCtx in frameRenderer.ts) with every
+ * painter as MP4 / PDF (renderSceneToCtx in frameRenderer.ts) with every
  * annotation of the scene visible, so a PNG of a scene is the same picture as
- * a GIF frame of that scene at the same width — only the pixel density
+ * a video frame of that scene at the same width — only the pixel density
  * differs. Court geometry, norm→pixel mapping and token sizes all come from
  * the shared modules (courtLayout / courtRendering / tokenSizing) through that
  * painter; nothing is duplicated here.
