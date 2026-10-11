@@ -20,7 +20,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
 import type { Play, Role } from "@/lib/types";
-import { CATEGORY_BADGE } from "@/lib/categories";
+import { CATEGORY_BADGE, CATEGORY_SHORT_LABELS } from "@/lib/categories";
 import CourtThumbnail from "@/components/court/CourtThumbnail";
 import { addPlayToTeam, deletePlay, savePlay } from "@/lib/db";
 import { isPersonalPlay } from "@/lib/playFilter";
@@ -70,7 +70,9 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
 
   const firstScene = play.scenes[0] ?? null;
   const sceneCount = play.scenes.length;
+  // A stored play can carry a category this build does not know: neutral badge, raw name.
   const categoryBadge = CATEGORY_BADGE[play.category] ?? CATEGORY_BADGE.oob;
+  const categoryLabel = CATEGORY_SHORT_LABELS[play.category] ?? play.category;
 
   // The confirmation disarms by itself: on touch there is no blur or
   // mouse-leave to reset it, and an armed card must not wait for a stray tap.
@@ -172,7 +174,7 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
 
           <div className="mt-auto flex items-center gap-2 pt-1 text-[13px] text-muted">
             {/* Category badge */}
-            <span className={`${BADGE} capitalize ${categoryBadge}`}>{play.category.replace("-", " ")}</span>
+            <span className={`${BADGE} capitalize ${categoryBadge}`}>{categoryLabel}</span>
             {/* Scene count */}
             <span>
               {sceneCount} {sceneCount === 1 ? "scene" : "scenes"}

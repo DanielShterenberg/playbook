@@ -34,7 +34,7 @@ import Logo, { LogoMark } from "@/components/brand/Logo";
 import ThemeToggle from "@/components/brand/ThemeToggle";
 import { DEFAULT_OFFENSE_COLOR, DEFAULT_DEFENSE_COLOR } from "@/lib/tokenSizing";
 import { customTeamColor } from "@/lib/courtPalette";
-import { CATEGORY_OPTIONS } from "@/lib/categories";
+import { CATEGORY_LABELS, CATEGORY_OPTIONS } from "@/lib/categories";
 
 interface EditorHeaderProps {
   playId: string;
@@ -236,7 +236,7 @@ export default function EditorHeader({ playId }: EditorHeaderProps) {
 
   const flipped = currentPlay?.flipped ?? false;
   const shareLabel = shareMsg ?? (isSharing ? "Sharing…" : "Share");
-  const categoryLabel = CATEGORY_OPTIONS.find((o) => o.value === currentPlay?.category)?.label;
+  const categoryLabel = currentPlay ? CATEGORY_LABELS[currentPlay.category] : undefined;
   const metaLabel = currentPlay
     ? `${currentPlay.courtType === "full" ? "Full-court" : "Half-court"}${categoryLabel ? ` ${categoryLabel.toLowerCase()}` : ""}`
     : null;

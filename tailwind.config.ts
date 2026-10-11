@@ -6,8 +6,9 @@ const config: Config = {
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
-    // Class strings kept outside the component folders (categories.ts, uiClasses.ts)
-    "./src/lib/**/*.{ts,tsx}",
+    // The two lib modules that hold class names (not all of src/lib: other
+    // strings there would be mistaken for classes)
+    "./src/lib/{categories,uiClasses}.ts",
   ],
   theme: {
     extend: {

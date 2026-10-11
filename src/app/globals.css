@@ -47,7 +47,7 @@
   --color-line-strong: #3A4453;
   --color-danger: #F87171;
   --color-success: #34D399;
-  --color-control: #FF7A1A;
+  --color-control: var(--color-accent);
   --color-ball-tag: #F2B33D;
 }
 

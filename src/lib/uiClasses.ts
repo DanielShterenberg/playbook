@@ -1,8 +1,8 @@
 /**
  * Class strings shared by every screen's chrome (editor, playbook, dialogs).
  *
- * This file holds complete Tailwind class names; `src/lib` is in the
- * `content` globs of tailwind.config.ts for that reason.
+ * This file holds complete Tailwind class names, so it is listed in the
+ * `content` globs of tailwind.config.ts.
  */
 
 /** Keyboard focus ring of buttons and links. */
