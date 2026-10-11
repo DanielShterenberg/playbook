@@ -36,16 +36,6 @@ export interface TeamDoc {
   inviteCode: string;
 }
 
-export interface ShareToken {
-  shareToken: string;
-  playId: string;
-  createdBy: string;
-  snapshot: Play;
-  /** Team the play belonged to when shared; absent for personal plays and older links. */
-  teamName?: string;
-  createdAt: Date;
-}
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -214,12 +204,13 @@ export async function createShareToken(
   teamName?: string | null,
 ): Promise<string> {
   const shareToken = randomShareToken();
+  const name = cleanTeamName(teamName);
   await setDoc(doc(db, "sharedPlays", shareToken), {
     playId: play.id,
     createdBy,
     snapshot: serialisePlayForShare(play),
     // Shown under the title in the public viewer, which cannot read teams/.
-    ...(cleanTeamName(teamName) ? { teamName: cleanTeamName(teamName) } : {}),
+    ...(name ? { teamName: name } : {}),
     createdAt: serverTimestamp(),
   });
   return shareToken;

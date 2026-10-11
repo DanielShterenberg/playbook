@@ -209,10 +209,12 @@ export function sceneProgress(
   let total = 0;
   let before = 0;
   let current = DEFAULT_STEP_DURATION_MS;
+  let found = false;
   for (const g of groups) {
     const d = stepDurationMs(g);
     if (g.step < step) before += d;
-    if (g.step === step) current = d;
+    // First match, like tickPlayback, should a scene carry duplicate step numbers.
+    if (g.step === step && !found) { current = d; found = true; }
     total += d;
   }
   // A scene with no steps is held for one default step (see tickPlayback).

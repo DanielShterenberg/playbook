@@ -27,6 +27,7 @@ import Logo from "@/components/brand/Logo";
 import ThemeToggle from "@/components/brand/ThemeToggle";
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { loadSharedPlay } from "@/lib/team";
+import { sceneName as sceneNameOf } from "@/lib/types";
 import type { Category, Play } from "@/lib/types";
 import {
   tickPlayback,
@@ -38,6 +39,7 @@ import {
   isAtStart,
   isAtEnd,
   sceneProgress,
+  stepDurationMs,
   normalizePlayForPlayback,
 } from "@/lib/playback";
 import type { PlaybackPosition } from "@/lib/playback";
@@ -65,9 +67,6 @@ const CATEGORY_LABELS: Record<Category, string> = {
 
 /** Playback speeds offered, as in the approved mockup. */
 const SPEEDS = [0.5, 1, 2] as const;
-
-/** Notes up to this length are shown as the scene's name next to "Scene n of m". */
-const SCENE_NAME_MAX = 28;
 
 const ROUND_BUTTON =
   "flex h-11 w-11 flex-none items-center justify-center rounded-full border border-line bg-surface text-ink transition-colors hover:bg-app disabled:cursor-default disabled:opacity-40 disabled:hover:bg-surface";
@@ -194,22 +193,20 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   const [shown, setShown] = useState({ sceneIndex: 0, step: 1 });
   // The progress bar follows the position on every frame without a re-render.
   // paintProgress is the only writer of the segment widths (React renders the
-  // fills without one), so the bar is always a function of the position — plus
-  // `endedRef`, because a finished play rests at the start of its last step.
+  // fills without one), and the bar is a pure function of the position: scenes
+  // before the current one are full, the current one is filled by time.
   const progressBarRef = useRef<HTMLDivElement>(null);
   const scenesRef = useRef<Play["scenes"]>([]);
-  const endedRef = useRef(false);
   const paintProgress = useCallback(() => {
     const { sceneIndex, step, accMs } = positionRef.current;
-    const current = endedRef.current ? 1 : sceneProgress(scenesRef.current[sceneIndex], step, accMs);
+    const current = sceneProgress(scenesRef.current[sceneIndex], step, accMs);
     progressBarRef.current?.querySelectorAll<HTMLElement>("[data-fill]").forEach((fill, i) => {
       fill.style.width = `${(i < sceneIndex ? 1 : i === sceneIndex ? current : 0) * 100}%`;
     });
   }, []);
-  const moveTo = useCallback((next: PlaybackPosition, ended = false) => {
+  const moveTo = useCallback((next: PlaybackPosition) => {
     const prev = positionRef.current;
     positionRef.current = next;
-    endedRef.current = ended;
     paintProgress();
     // Most ticks only add time; re-render only when the scene or step changes.
     if (prev.sceneIndex !== next.sceneIndex || prev.step !== next.step) {
@@ -253,9 +250,16 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
     // A frame can still arrive after playback stopped, before the clock is torn down.
     if (!isPlayingRef.current) return;
     const result = tickPlayback(positionRef.current, dtMs, { scenes, speed, loop: false });
-    // The play ran out: the last segment shows full, not the start of its last step.
-    moveTo(result.state, result.ended);
-    if (result.ended) setPlaying(false);
+    if (!result.ended) {
+      moveTo(result.state);
+      return;
+    }
+    // The play ran out: rest at the END of the last step (the reducer hands
+    // back its start), so the last segment stays full until the viewer moves.
+    setPlaying(false);
+    const { sceneIndex, step } = result.state;
+    const last = sortedTimingGroups(scenes[sceneIndex]).find((g) => g.step === step);
+    moveTo({ ...result.state, accMs: stepDurationMs(last) });
   }, [scenes, speed, moveTo, setPlaying]);
 
   usePlaybackClock(isPlaying, tick);
@@ -264,20 +268,28 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   // Controls (shared by buttons and keyboard)
   // ---------------------------------------------------------------------------
 
+  /**
+   * Stop playback. A step always plays from its start, so interrupting one
+   * goes back to it right away — the bar then shows where Play resumes from.
+   * Already paused (e.g. resting at the end of the play): nothing moves.
+   */
+  const pause = useCallback(() => {
+    if (!isPlayingRef.current) return;
+    setPlaying(false);
+    moveTo({ ...positionRef.current, accMs: 0 });
+  }, [moveTo, setPlaying]);
+
   const togglePlay = useCallback(() => {
     const position = positionRef.current;
     if (isPlayingRef.current) {
-      // A step always plays from its start, so pausing goes back to it right
-      // away (the bar then shows where Play will resume from).
-      setPlaying(false);
-      moveTo({ ...position, accMs: 0 });
+      pause();
       return;
     }
     // Play pressed on the final step restarts the play instead of replaying
     // only the final hold.
     moveTo(isAtEnd(position, scenes) ? startPosition(scenes) : { ...position, accMs: 0 });
     setPlaying(true);
-  }, [scenes, moveTo, setPlaying]);
+  }, [scenes, moveTo, setPlaying, pause]);
 
   /**
    * Pause and move one step back / forward within the current scene. The
@@ -285,25 +297,20 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
    * disabled state is derived from (`prevStep` / `nextStep` below).
    */
   const stepBy = useCallback((delta: 1 | -1) => {
-    setPlaying(false);
+    pause();
     const position = positionRef.current;
     const scene = scenes[position.sceneIndex];
     const target = delta > 0 ? nextStepAfter(scene, position.step) : prevStepBefore(scene, position.step);
     if (target !== undefined) moveTo({ sceneIndex: position.sceneIndex, step: target, accMs: 0 });
-  }, [scenes, moveTo, setPlaying]);
+  }, [scenes, moveTo, pause]);
 
-  /** Pause and go to the first step of a scene (no-op move if already on that scene). */
+  /** Pause and go to the first step of a scene (no move if already on that scene). */
   const goToScene = useCallback((index: number) => {
-    setPlaying(false);
+    pause();
     const target = Math.min(Math.max(index, 0), scenes.length - 1);
-    if (target < 0) return;
-    if (target === positionRef.current.sceneIndex) {
-      // Same scene: stay on the step, but paused means back at its start.
-      moveTo({ ...positionRef.current, accMs: 0 });
-      return;
-    }
+    if (target < 0 || target === positionRef.current.sceneIndex) return;
     moveTo({ sceneIndex: target, step: firstStepOf(scenes[target]), accMs: 0 });
-  }, [scenes, moveTo, setPlaying]);
+  }, [scenes, moveTo, pause]);
 
   const sceneBy = useCallback(
     (delta: 1 | -1) => goToScene(positionRef.current.sceneIndex + delta),
@@ -311,9 +318,9 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   );
 
   const goToBeginning = useCallback(() => {
-    setPlaying(false);
+    pause();
     moveTo(startPosition(scenes));
-  }, [scenes, moveTo, setPlaying]);
+  }, [scenes, moveTo, pause]);
 
   // Keyboard shortcuts. The window listener is registered once; it reaches the
   // current handlers through a ref so play/pause does not re-register it.
@@ -400,7 +407,7 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   // A short one-line note is the scene's name ("Scene 2 of 4 · Flare"); a longer
   // one is a description and goes under the controls instead.
   const note = (scene?.note ?? "").trim();
-  const sceneName = note.length <= SCENE_NAME_MAX && !note.includes("\n") ? note : "";
+  const sceneName = sceneNameOf(scene);
 
   return (
     <main className="flex min-h-screen flex-col bg-app text-sm text-ink">
@@ -457,7 +464,7 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
                   key={s.id}
                   type="button"
                   onClick={() => goToScene(i)}
-                  aria-label={`Scene ${i + 1}${s.note ? ` — ${s.note}` : ""}`}
+                  aria-label={`Scene ${i + 1}${sceneNameOf(s) ? ` — ${sceneNameOf(s)}` : ""}`}
                   aria-current={i === sceneIndex ? "step" : undefined}
                   className="flex h-11 items-center"
                 >

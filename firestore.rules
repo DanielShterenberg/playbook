@@ -133,8 +133,12 @@ service cloud.firestore {
     match /sharedPlays/{shareToken} {
       // Anyone (even unauthenticated) can read a share token
       allow read: if true;
-      // Only authenticated users can create share tokens
-      allow create: if isSignedIn();
+      // Only authenticated users can create share tokens. teamName is shown
+      // publicly under the play title: optional, short text only.
+      allow create: if isSignedIn() && (
+        !('teamName' in request.resource.data) ||
+        (request.resource.data.teamName is string && request.resource.data.teamName.size() <= 80)
+      );
       // Only the token creator can delete it
       allow delete: if isSignedIn() && resource.data.createdBy == request.auth.uid;
     }

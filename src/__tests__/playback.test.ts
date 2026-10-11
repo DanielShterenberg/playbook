@@ -27,6 +27,7 @@ import {
   sceneProgress,
 } from "@/lib/playback";
 import type { PlaybackPosition, PlaybackScene } from "@/lib/playback";
+import { SCENE_NAME_MAX, sceneName } from "@/lib/types";
 
 const scene = (...groups: [step: number, duration: number][]): PlaybackScene => ({
   timingGroups: groups.map(([step, duration]) => ({ step, duration })),
@@ -445,5 +446,29 @@ describe("sceneProgress", () => {
   it("is 0 for a missing scene; a scene with no steps is held for one default step", () => {
     expect(sceneProgress(undefined, 1, 500)).toBe(0);
     expect(sceneProgress(scene(), 1, DEFAULT_STEP_DURATION_MS / 2)).toBeCloseTo(0.5);
+  });
+});
+
+describe("sceneProgress — duplicate step numbers", () => {
+  it("uses the first matching group's duration, like tickPlayback", () => {
+    const s = scene([1, 1000], [1, 3000], [2, 1000]);
+    // Step 1 is played for 1000 ms; at its end the bar is at 1000 of 5000.
+    expect(sceneProgress(s, 1, 99999)).toBeCloseTo(0.2);
+  });
+});
+
+describe("sceneName", () => {
+  it("is the trimmed note when it is short and one line", () => {
+    expect(sceneName({ note: "  Flare " })).toBe("Flare");
+    expect(sceneName({ note: "x".repeat(SCENE_NAME_MAX) })).toHaveLength(SCENE_NAME_MAX);
+  });
+
+  it("is empty for a description, a multi-line note, or no note at all", () => {
+    expect(sceneName({ note: "x".repeat(SCENE_NAME_MAX + 1) })).toBe("");
+    expect(sceneName({ note: "Flare\nthen slip" })).toBe("");
+    expect(sceneName({ note: "   " })).toBe("");
+    expect(sceneName({})).toBe("");
+    expect(sceneName({ note: null })).toBe("");
+    expect(sceneName(null)).toBe("");
   });
 });

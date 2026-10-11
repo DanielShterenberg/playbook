@@ -56,6 +56,19 @@ export interface TimingGroup {
   annotations: Annotation[];
 }
 
+/**
+ * Longest scene note that counts as the scene's name. A one-line note up to
+ * this length is shown as "Scene 2 of 4 · Flare"; anything longer is a
+ * description. The editor's Rename field stops here.
+ */
+export const SCENE_NAME_MAX = 28;
+
+/** The scene's name (a short one-line note), or "" when it has none. */
+export function sceneName(scene: { note?: string | null } | null | undefined): string {
+  const note = (scene?.note ?? "").trim();
+  return note.length <= SCENE_NAME_MAX && !note.includes("\n") ? note : "";
+}
+
 export interface Scene {
   id: string;
   order: number;
