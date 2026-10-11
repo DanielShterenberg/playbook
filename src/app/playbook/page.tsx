@@ -38,6 +38,11 @@ const CATEGORY_FILTERS: { value: Category | "all"; label: string }[] = [
   { value: "special", label: "Special" },
 ];
 
+/** A category, everything, or the member's own plays that are not in the team playbook. */
+type PlayFilter = Category | "all" | "personal";
+
+const PERSONAL_FILTER: { value: PlayFilter; label: string } = { value: "personal", label: "Personal" };
+
 const FOCUS_RING =
   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text";
 
@@ -66,7 +71,7 @@ export default function PlaybookPage() {
   const [showModal, setShowModal] = useState(false);
   const [showCreateTeam, setShowCreateTeam] = useState(false);
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
+  const [categoryFilter, setCategoryFilter] = useState<PlayFilter>("all");
   const [, setLoadingPlays] = useState(false);
 
   // Auth guard — redirect to sign-in if not authenticated
@@ -136,9 +141,14 @@ export default function PlaybookPage() {
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
     .filter((p) => {
       const matchesSearch = !search || p.title.toLowerCase().includes(search.toLowerCase());
-      const matchesCategory = categoryFilter === "all" || p.category === categoryFilter;
+      const matchesCategory =
+        categoryFilter === "all" ||
+        (categoryFilter === "personal" ? Boolean(teamId) && !p.teamId : p.category === categoryFilter);
       return matchesSearch && matchesCategory;
     });
+
+  // "Personal" (plays not yet added to the team) only means something in a team.
+  const filters = teamId ? [...CATEGORY_FILTERS, PERSONAL_FILTER] : CATEGORY_FILTERS;
 
   function clearFilters() {
     setSearch("");
@@ -301,7 +311,7 @@ export default function PlaybookPage() {
           <>
             {/* Category filter chips */}
             <div role="group" aria-label="Filter by category" className="flex flex-wrap gap-2">
-              {CATEGORY_FILTERS.map(({ value, label }) => (
+              {filters.map(({ value, label }) => (
                 <button
                   key={value}
                   type="button"
