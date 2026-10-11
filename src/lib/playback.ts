@@ -193,6 +193,34 @@ export function normalizePlayForPlayback<
 // ---------------------------------------------------------------------------
 
 /**
+ * How far through its scene a position is, by time: 0 at the start of the
+ * first step, approaching 1 as the last step runs out. Steps count by their
+ * duration (stepDurationMs), so a long step fills the bar more slowly.
+ * 0 when there is no scene.
+ */
+export function sceneProgress(
+  scene: PlaybackScene | null | undefined,
+  step: number,
+  accMs: number,
+): number {
+  if (!scene) return 0;
+  const groups = sortedTimingGroups(scene);
+  let total = 0;
+  let before = 0;
+  let current = DEFAULT_STEP_DURATION_MS;
+  for (const g of groups) {
+    const d = stepDurationMs(g);
+    if (g.step < step) before += d;
+    if (g.step === step) current = d;
+    total += d;
+  }
+  // A scene with no steps is held for one default step (see tickPlayback).
+  if (total <= 0) total = current;
+  const elapsed = before + Math.min(Math.max(accMs, 0), current);
+  return Math.min(elapsed / total, 1);
+}
+
+/**
  * Advance playback by `dtMs` of wall-clock time.
  *
  * Reports `ended` (never spins) when there is nothing to play: no scenes, or

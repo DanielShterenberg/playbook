@@ -200,31 +200,46 @@ export async function loadUserTeamInfo(
  * read-only view works even without the viewer having Firestore access to
  * the original play document.
  */
-export async function createShareToken(play: Play, createdBy: string): Promise<string> {
+export async function createShareToken(
+  play: Play,
+  createdBy: string,
+  teamName?: string | null,
+): Promise<string> {
   const shareToken = randomShareToken();
   await setDoc(doc(db, "sharedPlays", shareToken), {
     playId: play.id,
     createdBy,
     snapshot: serialisePlayForShare(play),
+    // Shown under the title in the public viewer, which cannot read teams/.
+    ...(teamName ? { teamName } : {}),
     createdAt: serverTimestamp(),
   });
   return shareToken;
+}
+
+export interface SharedPlay {
+  play: Play;
+  /** Name of the team the play belonged to when shared; null for personal plays and older links. */
+  teamName: string | null;
 }
 
 /**
  * Load a shared play snapshot by its token.
  * Returns null if the token does not exist.
  */
-export async function loadSharedPlay(shareToken: string): Promise<Play | null> {
+export async function loadSharedPlay(shareToken: string): Promise<SharedPlay | null> {
   const snap = await getDoc(doc(db, "sharedPlays", shareToken));
   if (!snap.exists()) return null;
   const data = snap.data();
   // The snapshot is stored as a plain object; deserialise dates
   const snapshot = data.snapshot as unknown as Play;
   return {
-    ...snapshot,
-    createdAt:
-      data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
-    updatedAt: new Date(),
+    play: {
+      ...snapshot,
+      createdAt:
+        data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
+      updatedAt: new Date(),
+    },
+    teamName: typeof data.teamName === "string" && data.teamName.trim() ? data.teamName : null,
   };
 }

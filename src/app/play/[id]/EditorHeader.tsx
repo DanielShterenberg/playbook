@@ -20,6 +20,7 @@ import Link from "next/link";
 import { useStore } from "@/lib/store";
 import type { Category, CourtType, PlayColors } from "@/lib/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTeam } from "@/contexts/TeamContext";
 import { createShareToken } from "@/lib/team";
 import PresentationOverlay from "@/components/editor/PresentationOverlay";
 import CommentsPanel from "@/components/editor/CommentsPanel";
@@ -108,6 +109,7 @@ function CountBadge({ count, className = "" }: { count: number; className?: stri
 
 export default function EditorHeader({ playId }: EditorHeaderProps) {
   const { user } = useAuth();
+  const { team } = useTeam();
   const currentPlay = useStore((s) => s.currentPlay);
   const updatePlayInList = useStore((s) => s.updatePlayInList);
   const updatePlayMeta = useStore((s) => s.updatePlayMeta);
@@ -151,7 +153,9 @@ export default function EditorHeader({ playId }: EditorHeaderProps) {
     setIsSharing(true);
     setShareMsg(null);
     try {
-      const token = await createShareToken(currentPlay, user.uid);
+      // The viewer shows the team under the title; a personal play has none.
+      const teamName = team && currentPlay.teamId === team.id ? team.name : null;
+      const token = await createShareToken(currentPlay, user.uid, teamName);
       const url = `${window.location.origin}/view/${token}`;
       await navigator.clipboard.writeText(url);
       setShareMsg("Link copied!");

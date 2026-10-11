@@ -37,6 +37,7 @@ import {
   startPosition,
   isAtStart,
   isAtEnd,
+  sceneProgress,
   normalizePlayForPlayback,
 } from "@/lib/playback";
 import type { PlaybackPosition } from "@/lib/playback";
@@ -61,6 +62,12 @@ const CATEGORY_LABELS: Record<Category, string> = {
   oob: "Out of Bounds",
   special: "Special",
 };
+
+/** Playback speeds offered, as in the approved mockup. */
+const SPEEDS = [0.5, 1, 2] as const;
+
+/** Notes up to this length are shown as the scene's name next to "Scene n of m". */
+const SCENE_NAME_MAX = 28;
 
 const ROUND_BUTTON =
   "flex h-11 w-11 flex-none items-center justify-center rounded-full border border-line bg-surface text-ink transition-colors hover:bg-app disabled:cursor-default disabled:opacity-40 disabled:hover:bg-surface";
@@ -165,6 +172,7 @@ function ViewerHeader() {
 export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) {
   const { shareToken } = params;
   const [play, setPlay] = useState<Play | null>(null);
+  const [teamName, setTeamName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -176,7 +184,7 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
     isPlayingRef.current = playing;
     setIsPlaying(playing);
   }, []);
-  const [speed, setSpeed] = useState<0.5 | 1 | 1.5 | 2>(1);
+  const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1);
 
   // The one playback position (scene, step, time spent in the step). It lives
   // in a ref because the time changes on every animation frame; `shown` is the
@@ -184,29 +192,46 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   // together, so there is nothing to reconcile — everything else is derived.
   const positionRef = useRef<PlaybackPosition>({ sceneIndex: 0, step: 1, accMs: 0 });
   const [shown, setShown] = useState({ sceneIndex: 0, step: 1 });
-  const moveTo = useCallback((next: PlaybackPosition) => {
+  // The progress bar follows the position on every frame without a re-render:
+  // the current scene's segment reads its width from a CSS variable on the bar.
+  const progressBarRef = useRef<HTMLDivElement>(null);
+  const scenesRef = useRef<Play["scenes"]>([]);
+  const paintProgress = useCallback((position: PlaybackPosition, ended = false) => {
+    const scene = scenesRef.current[position.sceneIndex];
+    const progress = ended ? 1 : sceneProgress(scene, position.step, position.accMs);
+    progressBarRef.current?.style.setProperty("--scene-progress", String(progress));
+  }, []);
+  const moveTo = useCallback((next: PlaybackPosition, ended = false) => {
     const prev = positionRef.current;
     positionRef.current = next;
+    paintProgress(next, ended);
     // Most ticks only add time; re-render only when the scene or step changes.
     if (prev.sceneIndex !== next.sceneIndex || prev.step !== next.step) {
       setShown({ sceneIndex: next.sceneIndex, step: next.step });
     }
-  }, []);
+  }, [paintProgress]);
 
   useEffect(() => {
     loadSharedPlay(shareToken)
-      .then((p) => {
+      .then((shared) => {
         // Same normalisation as the editor store applies on load: scenes in
         // `order` order, timing steps renumbered 1..n (legacy snapshots can
         // carry gaps or duplicate step numbers).
-        if (p) setPlay(normalizePlayForPlayback(p));
-        else setNotFound(true);
+        if (shared) {
+          setPlay(normalizePlayForPlayback(shared.play));
+          setTeamName(shared.teamName);
+        } else setNotFound(true);
       })
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
   }, [shareToken]);
 
   const scenes = useMemo(() => play?.scenes ?? [], [play]);
+  // The bar mounts with the play and again when the scene count changes; paint it then.
+  useEffect(() => {
+    scenesRef.current = scenes;
+    paintProgress(positionRef.current);
+  }, [scenes, paintProgress]);
   const { sceneIndex, step: currentStep } = shown;
   const scene = scenes[sceneIndex] ?? null;
   const steps = sortedTimingGroups(scene);
@@ -220,7 +245,8 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   // (src/lib/playback.ts, issue #160) on a rAF clock. No loop in the viewer.
   const tick = useCallback((dtMs: number) => {
     const result = tickPlayback(positionRef.current, dtMs, { scenes, speed, loop: false });
-    moveTo(result.state);
+    // The play ran out: the last segment shows full, not the start of its last step.
+    moveTo(result.state, result.ended);
     if (result.ended) setPlaying(false);
   }, [scenes, speed, moveTo, setPlaying]);
 
@@ -355,10 +381,10 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   const hasMultipleScenes = scenes.length > 1;
   const sceneCountLabel = `${scenes.length} ${scenes.length === 1 ? "scene" : "scenes"}`;
   const categoryLabel = CATEGORY_LABELS[play.category];
-  // Share of the current scene that has been reached, by step (the playback
-  // position only re-renders when the step changes, not on every frame).
-  // Empty at the first step, full at the last; a single-step scene is full once it is current.
-  const sceneProgress = steps.length > 1 ? stepIndex / (steps.length - 1) : 1;
+  // A short note is the scene's name ("Scene 2 of 4 · Flare"); a longer one is
+  // a description and goes under the controls instead.
+  const note = scene?.note.trim() ?? "";
+  const sceneName = note.length <= SCENE_NAME_MAX ? note : "";
 
   return (
     <main className="flex min-h-screen flex-col bg-app text-sm text-ink">
@@ -372,6 +398,12 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
           </h1>
           <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-muted">
             <span>
+              {teamName && (
+                <>
+                  <span dir="auto">{teamName}</span>
+                  {" · "}
+                </>
+              )}
               {categoryLabel ? `${categoryLabel} · ` : ""}{sceneCountLabel}
             </span>
             <span className="whitespace-nowrap rounded-full bg-chip px-2.5 py-0.5 font-display text-xs font-semibold uppercase tracking-[0.06em] text-ink">
@@ -397,9 +429,10 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
 
         {/* Control card */}
         <div className="flex w-full max-w-[620px] flex-col gap-3.5 rounded-xl border border-line bg-surface p-4">
-          {/* Progress: one segment per scene, filled up to the current step */}
+          {/* Progress: one segment per scene; the current one fills as its steps play */}
           {hasMultipleScenes && (
             <div
+              ref={progressBarRef}
               className="-my-[19px] grid gap-1.5"
               style={{ gridTemplateColumns: `repeat(${scenes.length}, minmax(0, 1fr))` }}
             >
@@ -415,7 +448,9 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
                   <span className="relative block h-1.5 w-full overflow-hidden rounded-[3px] bg-line">
                     <span
                       className="absolute inset-y-0 left-0 rounded-[3px] bg-accent"
-                      style={{ width: `${(i < sceneIndex ? 1 : i === sceneIndex ? sceneProgress : 0) * 100}%` }}
+                      style={{
+                        width: i < sceneIndex ? "100%" : i === sceneIndex ? "calc(var(--scene-progress, 0) * 100%)" : "0%",
+                      }}
                     />
                   </span>
                 </button>
@@ -454,14 +489,20 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
             )}
 
             {scenes.length > 0 && (
-              <span className="tabular-nums text-muted">
+              <span className="max-w-full tabular-nums text-muted">
                 Scene {sceneIndex + 1} of {scenes.length}
+                {sceneName && (
+                  <>
+                    {" · "}
+                    <span dir="auto">{sceneName}</span>
+                  </>
+                )}
               </span>
             )}
 
             {/* Speed control */}
             <div role="group" aria-label="Playback speed" className="flex overflow-hidden rounded-lg border border-line">
-              {([0.5, 1, 1.5, 2] as const).map((s) => (
+              {SPEEDS.map((s) => (
                 <button
                   key={s}
                   type="button"
@@ -494,10 +535,10 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
           )}
         </div>
 
-        {/* Scene note */}
-        {scene?.note && (
+        {/* Scene description (a note too long to be the scene's name) */}
+        {note && !sceneName && (
           <p dir="auto" className="m-0 max-w-[620px] whitespace-pre-line break-words text-center leading-normal text-muted">
-            {scene.note}
+            {note}
           </p>
         )}
 
