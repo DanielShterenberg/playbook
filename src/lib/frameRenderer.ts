@@ -48,7 +48,7 @@ import { LIGHT_COURT_PALETTE, contrastText, customTeamColor, type CourtPalette }
 /** Brief pause between scenes (ms). */
 export const SCENE_HOLD_MS = 400;
 
-/** Longer pause at the very end of the animation before it loops (ms). */
+/** Longer hold on the last frame at the end of the video (ms). */
 export const FINAL_HOLD_MS = 1200;
 
 /** Resolution preset of an animated export. */

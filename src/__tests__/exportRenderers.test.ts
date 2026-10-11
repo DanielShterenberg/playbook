@@ -944,11 +944,9 @@ describe("pdfPanels", () => {
 });
 
 describe("export step timing follows on-screen playback", () => {
-  it("exporters take step durations from the playback helper, not the raw field", () => {
-    for (const rel of ["src/lib/exportVideo.ts"]) {
-      const src = readFileSync(path.join(process.cwd(), rel), "utf8");
-      expect(src, rel).toMatch(/stepDurationMs\(/);
-      expect(src, rel).not.toMatch(/\b(group|g)\.duration\b/);
-    }
+  it("the video exporter takes step durations from the playback helper, not the raw field", () => {
+    const src = readFileSync(path.join(process.cwd(), "src/lib/exportVideo.ts"), "utf8");
+    expect(src).toMatch(/stepDurationMs\(/);
+    expect(src).not.toMatch(/\b(group|g)\.duration\b/);
   });
 });

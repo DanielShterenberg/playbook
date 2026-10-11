@@ -78,7 +78,7 @@ basketball-playbook/
 │   │   ├── page.tsx            # Landing / auth
 │   │   ├── playbook/           # Playbook grid view
 │   │   ├── play/[id]/          # Play editor
-│   │   └── team/               # Team settings
+│   │   └── view/[shareToken]/  # Public read-only viewer
 │   ├── components/
 │   │   ├── court/              # Court canvas, rendering
 │   │   ├── editor/             # Tools panel, scene strip
@@ -90,8 +90,9 @@ basketball-playbook/
 │   │   ├── firebase.ts         # Firebase config & helpers
 │   │   ├── store.ts            # Zustand store
 │   │   ├── types.ts            # TypeScript interfaces
-│   │   ├── animation.ts        # Interpolation & playback engine
-│   │   └── export.ts           # GIF/video/PDF export
+│   │   ├── playback.ts         # Playback engine (one reducer)
+│   │   ├── frameRenderer.ts    # The one painter for PNG / MP4 / PDF frames
+│   │   └── export*.ts          # PNG / video / PDF exporters
 │   └── hooks/                  # Custom React hooks
 ├── public/                     # Static assets
 └── ...config files
