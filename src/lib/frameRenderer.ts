@@ -14,14 +14,15 @@
  *
  * ANNOTATIONS — the editor is the reference
  * -----------------------------------------
- * AnnotationLayer.tsx draws every annotation in fixed CSS px (2.5 px lines,
- * 12 px arrowheads, …) in an SVG layer that sits ON TOP of the player and ball
+ * AnnotationLayer.tsx draws every annotation at reference sizes (2.5 px lines,
+ * 12 px arrowheads, … on a 600 px court) in an SVG layer that sits ON TOP of the player and ball
  * tokens, in stored order. drawAnnotation below is a transcription of its
  * RenderedAnnotation, type by type: same colours, widths, dash patterns,
  * opacity, zigzag, bar, tick and arrowhead geometry, and the same rules for
  * curves (one quadratic control point) and multi-leg waypoints (move / cut /
  * dribble only). All its pixel sizes are multiplied by annotationScale() so
- * they keep their size relative to the tokens at any export resolution.
+ * they keep their size relative to the tokens at any export resolution; the
+ * editor scales its SVG group by the same factor.
  * Editor-only aids — step badges, the selection ring and drag handles — are
  * not part of the picture and are not drawn.
  */
@@ -216,13 +217,12 @@ const ANNOTATION_COLOR: Record<Annotation["type"], string> = {
  * Scale factor for every annotation size (stroke widths, dash patterns,
  * arrowheads, zigzag, bars and ticks).
  *
- * The editor draws annotations in fixed CSS px while its tokens grow with the
- * court, so "the editor's size relative to the court" depends on how wide the
- * editor happens to be. The exports pin it to the tokens' design size: the
- * court at which a player token has its base radius (PLAYER_RADIUS = 18 px,
- * i.e. an inner court width of 600 px). There an annotation is exactly the
- * editor's px; elsewhere it scales with the inner court width, like the
- * tokens, so a 12 px arrowhead is always 2/3 of a token radius.
+ * Sizes are written for the tokens' design size: the court at which a player
+ * token has its base radius (PLAYER_RADIUS = 18 px, i.e. an inner court width
+ * of 600 px). Elsewhere they scale with the inner court width, like the
+ * tokens, so a 12 px arrowhead is always 2/3 of a token radius. The exporter
+ * multiplies each size by this factor; the editor (AnnotationLayer) scales
+ * the SVG group its lines are drawn in by it.
  *
  * @param innerCourtWidth  CourtLayout.innerW — NOT the total canvas width.
  */

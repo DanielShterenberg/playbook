@@ -697,12 +697,22 @@ describe("exporter sources", () => {
 // ---------------------------------------------------------------------------
 // Annotations are the editor's (AnnotationLayer.tsx is the reference)
 //
-// The editor draws annotations in fixed CSS px; the painter draws them at the
-// same sizes × annotationScale(innerW). At innerW = 600 (total width 636) the
-// scale is 1, so the painter's numbers must be the editor's numbers.
+// The editor writes annotation sizes for a 600px court and scales its SVG group
+// by annotationScale(innerW); the painter multiplies the same sizes by the
+// same factor. At innerW = 600 (total width 636) the scale is 1, so the
+// painter's numbers must be the editor's numbers.
 // ---------------------------------------------------------------------------
 
 describe("annotations match the editor (AnnotationLayer.tsx)", () => {
+  it("the editor scales its lines by the painter's annotationScale", () => {
+    const layer = readFileSync(path.resolve(process.cwd(), "src/components/annotations/AnnotationLayer.tsx"), "utf8");
+    expect(layer).toMatch(/import \{ annotationScale \} from "@\/lib\/frameRenderer"/);
+    expect(layer).toMatch(/const lineScale = Math\.max\(annotationScale\(paWidth\)/);
+    // Committed lines and the in-progress preview are both drawn in the scaled group.
+    expect(layer.match(/<g transform=\{`scale\(\$\{lineScale\}\)`\}>/g)).toHaveLength(2);
+    expect(layer).toMatch(/width=\{paWidth \/ lineScale\}/);
+  });
+
   const layout = computeCourtLayout(636, "half");
   const editorSrc = readFileSync(path.resolve(process.cwd(), "src/components/annotations/AnnotationLayer.tsx"), "utf8");
   const rendered = editorSrc.slice(editorSrc.indexOf("function RenderedAnnotation("), editorSrc.indexOf("// In-progress (preview) annotation"));

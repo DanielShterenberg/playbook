@@ -30,6 +30,8 @@ import type { DrawingTool } from "@/lib/store";
 import type { Annotation, Point, Scene } from "@/lib/types";
 import { TOOL_CURSOR } from "@/components/editor/DrawingToolsPanel";
 import { useHistoryStore } from "@/lib/history";
+import { annotationScale } from "@/lib/frameRenderer";
+import { PLAYER_RADIUS, PLAYER_RADIUS_MIN } from "@/lib/tokenSizing";
 
 // ---------------------------------------------------------------------------
 // Multi-leg path helpers
@@ -162,6 +164,8 @@ function defaultControlPoint(from: Point, to: Point): Point {
 }
 
 interface RenderedAnnotationProps {
+  /** Scale of the group this is drawn in (see lineScale); editor aids are divided by it. */
+  scale?: number;
   ann: Annotation;
   selected: boolean;
   onSelect: (id: string) => void;
@@ -180,7 +184,7 @@ interface RenderedAnnotationProps {
   flipped?: boolean;
 }
 
-function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, width, height, offsetX = 0, offsetY = 0, flipped = false }: RenderedAnnotationProps) {
+function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, width, height, offsetX = 0, offsetY = 0, flipped = false, scale = 1 }: RenderedAnnotationProps) {
   const { type } = ann;
   // Annotations are stored in normalised [0-1] coords. Convert to CSS pixels for rendering.
   // width/height here are the play area (inner court) dimensions; offsetX/offsetY position
@@ -205,6 +209,11 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
 
   const hitStyle: React.CSSProperties = { cursor: "pointer", pointerEvents: "stroke" };
 
+  // Editor aids keep their on-screen size: the tap target around a line, the
+  // step badge and the selection ring are not part of the picture, so they
+  // are sized in screen px and divided by the group's scale.
+  const ui = (px: number) => px / scale;
+
   // Step badge — small circle at the midpoint of the path
   const mid = hasWaypoints && allPxPoints.length >= 2
     ? allPxPoints[Math.floor(allPxPoints.length / 2)]
@@ -213,13 +222,13 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
   const midY = mid.y;
   const stepBadge = showStepBadge && step !== undefined ? (
     <g pointerEvents="none">
-      <circle cx={midX} cy={midY} r={9} fill="#3B82F6" opacity={0.9} />
+      <circle cx={midX} cy={midY} r={ui(9)} fill="#3B82F6" opacity={0.9} />
       <text
         x={midX}
         y={midY}
         textAnchor="middle"
         dominantBaseline="central"
-        fontSize={9}
+        fontSize={ui(9)}
         fontWeight="bold"
         fontFamily="system-ui, sans-serif"
         fill="#fff"
@@ -248,15 +257,15 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
 
   const selectRing = selected ? (
     <rect
-      x={minX - 6}
-      y={minY - 6}
-      width={maxX - minX + 12}
-      height={maxY - minY + 12}
-      rx={4}
+      x={minX - ui(6)}
+      y={minY - ui(6)}
+      width={maxX - minX + ui(12)}
+      height={maxY - minY + ui(12)}
+      rx={ui(4)}
       fill="none"
       stroke="#3B82F6"
-      strokeWidth={1.5}
-      strokeDasharray="4 2"
+      strokeWidth={ui(1.5)}
+      strokeDasharray={`${ui(4)} ${ui(2)}`}
       pointerEvents="none"
     />
   ) : null;
@@ -272,7 +281,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
       <g onClick={handleClick} style={hitStyle} data-annotation-id={ann.id}>
         {selectRing}
         {/* Invisible wide hit-area */}
-        <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
+        <path d={d} stroke="transparent" strokeWidth={ui(14)} fill="none" />
         <path
           d={d}
           stroke="#1E3A5F"
@@ -296,7 +305,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
       return (
         <g onClick={handleClick} style={hitStyle} data-annotation-id={ann.id}>
           {selectRing}
-          <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
+          <path d={d} stroke="transparent" strokeWidth={ui(14)} fill="none" />
           <path
             d={d}
             stroke="#1E3A5F"
@@ -317,7 +326,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
       return (
         <g onClick={handleClick} style={hitStyle} data-annotation-id={ann.id}>
           {selectRing}
-          <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
+          <path d={d} stroke="transparent" strokeWidth={ui(14)} fill="none" />
           <path
             d={d}
             stroke="#1E3A5F"
@@ -353,7 +362,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
     return (
       <g onClick={handleClick} style={hitStyle} data-annotation-id={ann.id}>
         {selectRing}
-        <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
+        <path d={d} stroke="transparent" strokeWidth={ui(14)} fill="none" />
         <path
           d={d}
           stroke="#1E3A5F"
@@ -374,7 +383,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
     return (
       <g onClick={handleClick} style={hitStyle} data-annotation-id={ann.id}>
         {selectRing}
-        <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
+        <path d={d} stroke="transparent" strokeWidth={ui(14)} fill="none" />
         <path
           d={d}
           stroke="#059669"
@@ -399,7 +408,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
     return (
       <g onClick={handleClick} style={hitStyle} data-annotation-id={ann.id}>
         {selectRing}
-        <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="transparent" strokeWidth={14} />
+        <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="transparent" strokeWidth={ui(14)} />
         <line
           x1={from.x} y1={from.y} x2={to.x} y2={to.y}
           stroke="#7C3AED" strokeWidth={2.5} strokeLinecap="round"
@@ -420,7 +429,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
     return (
       <g onClick={handleClick} style={hitStyle} data-annotation-id={ann.id}>
         {selectRing}
-        <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
+        <path d={d} stroke="transparent" strokeWidth={ui(14)} fill="none" />
         <path
           d={d}
           stroke="#DC2626"
@@ -444,7 +453,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
     return (
       <g onClick={handleClick} style={hitStyle} data-annotation-id={ann.id}>
         {selectRing}
-        <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
+        <path d={d} stroke="transparent" strokeWidth={ui(14)} fill="none" />
         <path
           d={d}
           stroke="#D97706"
@@ -485,7 +494,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
       <g onClick={handleClick} style={hitStyle} data-annotation-id={ann.id}>
         {selectRing}
         {/* Invisible wide hit-area */}
-        <path d={d} stroke="transparent" strokeWidth={14} fill="none" />
+        <path d={d} stroke="transparent" strokeWidth={ui(14)} fill="none" />
         {/* Dashed body line */}
         <path
           d={d}
@@ -1189,6 +1198,10 @@ export default function AnnotationLayer({
 
   const cursor = (cpDragging || toDragging) ? "grabbing" : TOOL_CURSOR[selectedTool];
 
+  // Lines scale with the court (1 at the reference width), and stop shrinking
+  // where the tokens do (their radius has a floor on narrow courts).
+  const lineScale = Math.max(annotationScale(paWidth), PLAYER_RADIUS_MIN / PLAYER_RADIUS);
+
   // Find the selected annotation for control-point handle rendering
   const selectedAnnotation = selectedAnnotationId
     ? annotations.find((a) => a.id === selectedAnnotationId) ?? null
@@ -1247,22 +1260,32 @@ export default function AnnotationLayer({
       onPointerCancel={readOnly ? undefined : handlePointerCancel}
       onClick={readOnly ? undefined : handleSVGClick}
     >
-      {/* Existing annotations */}
-      {annotations.map((ann) => (
-        <RenderedAnnotation
-          key={ann.id}
-          ann={ann}
-          selected={selectedAnnotationId === ann.id}
-          onSelect={handleAnnotationSelect}
-          step={annotationStepMap.get(ann.id)}
-          showStepBadge={showStepBadges}
-          width={paWidth}
-          height={paHeight}
-          offsetX={offsetX}
-          offsetY={offsetY}
-          flipped={flipped}
-        />
-      ))}
+      {/*
+       * Existing annotations, drawn in a reference space and scaled to the
+       * court: every size in RenderedAnnotation (strokes, dashes, arrowheads,
+       * zigzag, badges) is written for the reference court width, and the
+       * group scale makes them grow and shrink with the court exactly as the
+       * tokens and the exported frames do (frameRenderer multiplies the same
+       * sizes by the same annotationScale).
+       */}
+      <g transform={`scale(${lineScale})`}>
+        {annotations.map((ann) => (
+          <RenderedAnnotation
+            key={ann.id}
+            ann={ann}
+            selected={selectedAnnotationId === ann.id}
+            onSelect={handleAnnotationSelect}
+            step={annotationStepMap.get(ann.id)}
+            showStepBadge={showStepBadges}
+            width={paWidth / lineScale}
+            height={paHeight / lineScale}
+            offsetX={offsetX / lineScale}
+            offsetY={offsetY / lineScale}
+            flipped={flipped}
+            scale={lineScale}
+          />
+        ))}
+      </g>
 
       {/* Control-point drag handle for selected annotation */}
       {showCpHandle && cpHandlePx && selectedAnnotation && (
@@ -1357,11 +1380,13 @@ export default function AnnotationLayer({
 
       {/* In-progress preview */}
       {drawing && (
-        <PreviewAnnotation
-          tool={selectedTool}
-          from={drawing.from}
-          to={drawing.to}
-        />
+        <g transform={`scale(${lineScale})`}>
+          <PreviewAnnotation
+            tool={selectedTool}
+            from={{ x: drawing.from.x / lineScale, y: drawing.from.y / lineScale }}
+            to={{ x: drawing.to.x / lineScale, y: drawing.to.y / lineScale }}
+          />
+        </g>
       )}
     </svg>
   );
