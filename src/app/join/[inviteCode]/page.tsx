@@ -19,17 +19,19 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTeam } from "@/contexts/TeamContext";
 import { joinTeamByInviteCode } from "@/lib/team";
 import Logo from "@/components/brand/Logo";
+import ThemeToggle from "@/components/brand/ThemeToggle";
 
 interface JoinTeamPageProps {
   params: { inviteCode: string };
 }
 
-const PAGE = "flex min-h-screen flex-col items-center justify-center bg-app px-4 py-6 text-ink";
+const PAGE = "relative flex min-h-screen flex-col items-center justify-center bg-app px-4 py-6 text-ink";
 
 /** Themed full-page status line with a spinner (auth resolving / joining). */
 function JoinStatus({ label }: { label: string }) {
   return (
     <main className={PAGE}>
+      <ThemeToggle className="absolute right-4 top-4" />
       <div role="status" className="flex items-center gap-2.5 text-[15px] text-muted">
         <svg width={18} height={18} viewBox="0 0 24 24" fill="none" aria-hidden="true" className="animate-spin">
           <circle
@@ -86,6 +88,7 @@ export default function JoinTeamPage({ params }: JoinTeamPageProps) {
   if (status === "error") {
     return (
       <main className={PAGE}>
+        <ThemeToggle className="absolute right-4 top-4" />
         <div className="w-full max-w-[400px] rounded-xl border border-line bg-surface px-5 py-9 text-center sm:px-8">
           <Logo size={44} stacked />
           <div className="mx-auto mb-4 mt-7 flex h-12 w-12 items-center justify-center rounded-full bg-chip text-danger">

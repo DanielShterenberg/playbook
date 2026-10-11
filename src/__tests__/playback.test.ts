@@ -24,8 +24,10 @@ import {
   normalizeTimingSteps,
   normalizePlayForPlayback,
   tickPlayback,
+  sceneProgress,
 } from "@/lib/playback";
 import type { PlaybackPosition, PlaybackScene } from "@/lib/playback";
+import { SCENE_NAME_MAX, sceneName } from "@/lib/types";
 
 const scene = (...groups: [step: number, duration: number][]): PlaybackScene => ({
   timingGroups: groups.map(([step, duration]) => ({ step, duration })),
@@ -421,5 +423,52 @@ describe("tickPlayback — full run", () => {
       "0:1", "0:2", "1:1", "1:2", "1:3",
       "0:1",
     ]);
+  });
+});
+
+describe("sceneProgress", () => {
+  it("is time-based: a long step takes more of the bar than a short one", () => {
+    const s = scene([1, 1000], [2, 3000]);
+    expect(sceneProgress(s, 1, 0)).toBe(0);
+    expect(sceneProgress(s, 1, 500)).toBeCloseTo(0.125);
+    expect(sceneProgress(s, 2, 0)).toBeCloseTo(0.25);
+    expect(sceneProgress(s, 2, 1500)).toBeCloseTo(0.625);
+    expect(sceneProgress(s, 2, 3000)).toBe(1);
+  });
+
+  it("uses the default duration for steps without one and clamps stray time", () => {
+    const s = scene([1, 0], [2, 0]);
+    expect(sceneProgress(s, 1, DEFAULT_STEP_DURATION_MS / 2)).toBeCloseTo(0.25);
+    expect(sceneProgress(s, 1, 99999)).toBeCloseTo(0.5);
+    expect(sceneProgress(s, 2, -5)).toBeCloseTo(0.5);
+  });
+
+  it("is 0 for a missing scene; a scene with no steps is held for one default step", () => {
+    expect(sceneProgress(undefined, 1, 500)).toBe(0);
+    expect(sceneProgress(scene(), 1, DEFAULT_STEP_DURATION_MS / 2)).toBeCloseTo(0.5);
+  });
+});
+
+describe("sceneProgress — duplicate step numbers", () => {
+  it("uses the first matching group's duration, like tickPlayback", () => {
+    const s = scene([1, 1000], [1, 3000], [2, 1000]);
+    // Step 1 is played for 1000 ms; at its end the bar is at 1000 of 5000.
+    expect(sceneProgress(s, 1, 99999)).toBeCloseTo(0.2);
+  });
+});
+
+describe("sceneName", () => {
+  it("is the trimmed note when it is short and one line", () => {
+    expect(sceneName({ note: "  Flare " })).toBe("Flare");
+    expect(sceneName({ note: "x".repeat(SCENE_NAME_MAX) })).toHaveLength(SCENE_NAME_MAX);
+  });
+
+  it("is empty for a description, a multi-line note, or no note at all", () => {
+    expect(sceneName({ note: "x".repeat(SCENE_NAME_MAX + 1) })).toBe("");
+    expect(sceneName({ note: "Flare\nthen slip" })).toBe("");
+    expect(sceneName({ note: "   " })).toBe("");
+    expect(sceneName({})).toBe("");
+    expect(sceneName({ note: null })).toBe("");
+    expect(sceneName(null)).toBe("");
   });
 });

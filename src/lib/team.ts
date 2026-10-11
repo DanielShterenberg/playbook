@@ -6,7 +6,7 @@
  * Data model:
  *   teams/{teamId}           — { name, createdBy, createdAt, members: { [uid]: { role } }, inviteCode }
  *   users/{userId}           — { teamId, role } cached fields updated on join/create
- *   sharedPlays/{shareToken} — { playId, createdBy, snapshot: Play }
+ *   sharedPlays/{shareToken} — { playId, createdBy, snapshot: Play, teamName? }
  */
 
 import {
@@ -34,14 +34,6 @@ export interface TeamDoc {
   createdAt: Date;
   members: Record<string, { role: Role }>;
   inviteCode: string;
-}
-
-export interface ShareToken {
-  shareToken: string;
-  playId: string;
-  createdBy: string;
-  snapshot: Play;
-  createdAt: Date;
 }
 
 // ---------------------------------------------------------------------------
@@ -195,36 +187,58 @@ export async function loadUserTeamInfo(
 // Share tokens (#78)
 // ---------------------------------------------------------------------------
 
+/** A team name as stored on / read from a share link: trimmed, bounded text, or null. */
+function cleanTeamName(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  return value.trim().slice(0, 80) || null;
+}
+
 /**
  * Create a share token for a play. Stores a snapshot of the play so the
  * read-only view works even without the viewer having Firestore access to
  * the original play document.
  */
-export async function createShareToken(play: Play, createdBy: string): Promise<string> {
+export async function createShareToken(
+  play: Play,
+  createdBy: string,
+  teamName?: string | null,
+): Promise<string> {
   const shareToken = randomShareToken();
+  const name = cleanTeamName(teamName);
   await setDoc(doc(db, "sharedPlays", shareToken), {
     playId: play.id,
     createdBy,
     snapshot: serialisePlayForShare(play),
+    // Shown under the title in the public viewer, which cannot read teams/.
+    ...(name ? { teamName: name } : {}),
     createdAt: serverTimestamp(),
   });
   return shareToken;
+}
+
+export interface SharedPlay {
+  play: Play;
+  /** Name of the team the play belonged to when shared; null for personal plays and older links. */
+  teamName: string | null;
 }
 
 /**
  * Load a shared play snapshot by its token.
  * Returns null if the token does not exist.
  */
-export async function loadSharedPlay(shareToken: string): Promise<Play | null> {
+export async function loadSharedPlay(shareToken: string): Promise<SharedPlay | null> {
   const snap = await getDoc(doc(db, "sharedPlays", shareToken));
   if (!snap.exists()) return null;
   const data = snap.data();
   // The snapshot is stored as a plain object; deserialise dates
   const snapshot = data.snapshot as unknown as Play;
   return {
-    ...snapshot,
-    createdAt:
-      data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
-    updatedAt: new Date(),
+    play: {
+      ...snapshot,
+      createdAt:
+        data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(),
+      updatedAt: new Date(),
+    },
+    teamName: cleanTeamName(data.teamName),
   };
 }
