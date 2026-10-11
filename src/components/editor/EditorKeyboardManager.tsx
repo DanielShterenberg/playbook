@@ -39,10 +39,9 @@ export default function EditorKeyboardManager() {
     setShowHelp(false);
   }, []);
 
-  // Ctrl+S save — stubbed until Firestore auto-save (#68) is implemented
-  const handleSave = useCallback(() => {
-    // No-op for now; will be wired to the Firestore persistence layer in #68
-  }, []);
+  // Ctrl+S: the play auto-saves (useAutoSave), so there is nothing to do —
+  // the shortcut only keeps the browser's "Save page" dialog from opening.
+  const handleSave = useCallback(() => {}, []);
 
   // Undo / Redo — wired to history store (issue #83)
   const handleUndo = useCallback(() => {

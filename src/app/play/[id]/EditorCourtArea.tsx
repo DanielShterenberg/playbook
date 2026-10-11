@@ -90,26 +90,17 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
 
     // Read state directly to avoid adding currentPlay to deps (which would
     // restart the effect every time we call setCurrentPlay inside it).
-    const { currentPlay, getPlayById, setCurrentPlay, addPlay, setSelectedSceneId } =
-      useStore.getState();
+    // setCurrentPlay selects the play's first scene (in `order` order) itself.
+    const { currentPlay, getPlayById, setCurrentPlay, addPlay } = useStore.getState();
 
     // Already have the right play loaded.
-    if (currentPlay && (!playId || currentPlay.id === playId)) {
-      // Ensure selectedSceneId is set — NewPlayModal sets currentPlay but historically
-      // did not always set selectedSceneId, leaving it null and breaking all scene ops.
-      const { selectedSceneId, setSelectedSceneId } = useStore.getState();
-      if (!selectedSceneId && currentPlay.scenes.length > 0) {
-        setSelectedSceneId(currentPlay.scenes[0].id);
-      }
-      return;
-    }
+    if (currentPlay && (!playId || currentPlay.id === playId)) return;
 
     // Try to find the play in the plays list (user navigated via URL).
     if (playId) {
       const found = getPlayById(playId);
       if (found) {
         setCurrentPlay(found);
-        setSelectedSceneId(found.scenes[0].id);
         return;
       }
 
@@ -118,10 +109,9 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
       loadPlay(playId)
         .then((remote) => {
           if (remote) {
-            const { addPlay, setCurrentPlay, setSelectedSceneId } = useStore.getState();
+            const { addPlay, setCurrentPlay } = useStore.getState();
             addPlay(remote);
             setCurrentPlay(remote);
-            setSelectedSceneId(remote.scenes[0]?.id ?? null);
           } else {
             setNotFound(true);
           }
@@ -135,7 +125,6 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
     const play = createDefaultPlay();
     addPlay(play);
     setCurrentPlay(play);
-    setSelectedSceneId(play.scenes[0].id);
   }, [playId, authLoading]);
 
   if (loadingFromDb) {

@@ -53,7 +53,7 @@ const TOOL_KEY_MAP: Record<string, DrawingTool> = {
 export interface KeyboardShortcutsOptions {
   /** When false the hook is a no-op. Defaults to true. */
   enabled?: boolean;
-  /** Called when Ctrl+S is pressed. Stub until auto-save is wired up. */
+  /** Called when Ctrl+S is pressed (the browser's Save dialog is always suppressed). */
   onSave?: () => void;
   /** Called when ? is pressed — used to toggle the shortcuts overlay. */
   onToggleHelp?: () => void;

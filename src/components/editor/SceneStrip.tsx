@@ -13,7 +13,9 @@
  *     the ball, in the scene's orientation (shared CourtThumbnail).
  *   - Click a scene card to select it.
  *   - [+] button to append a new scene.
- *   - Right-click context menu: Duplicate, Move Left, Move Right, Delete.
+ *   - Right-click context menu: Rename, Duplicate, Move Left, Move Right, Delete.
+ *   - A scene's name is its `note`: shown under the thumbnail here and next to
+ *     "Scene n of m" in the share viewer.
  *   - Keyboard: Delete/Backspace deletes the selected scene (when not focused on input).
  *   - Active scene is highlighted with an accent border.
  *   - First (and only) scene cannot be deleted.
@@ -26,7 +28,7 @@ import type { CourtVariant } from "@/lib/courtLayout";
 import CourtThumbnail from "@/components/court/CourtThumbnail";
 import InfoTooltip from "./InfoTooltip";
 import { POPOVER, SECTION_LABEL } from "./chrome";
-import { subscribeToComments } from "@/lib/comments";
+import { useOpenCommentCounts } from "@/hooks/useOpenCommentCounts";
 
 // ---------------------------------------------------------------------------
 // Mini court thumbnail (the court itself is the shared CourtThumbnail)
@@ -40,12 +42,26 @@ const THUMBNAIL_W_COMPACT = 80;
 // Context menu
 // ---------------------------------------------------------------------------
 
+/**
+ * Where to put a `width`-wide popover opened at the pointer so it stays on
+ * screen: the strip sits at the bottom of the editor, so in the lower half of
+ * the window the popover opens upward from the pointer.
+ */
+function popoverPosition(x: number, y: number, width: number): React.CSSProperties {
+  const left = Math.max(8, Math.min(x, window.innerWidth - width - 8));
+  return y > window.innerHeight / 2 ? { left, bottom: window.innerHeight - y } : { left, top: y };
+}
+
+const MENU_W = 176;
+const RENAME_W = 240;
+
 interface ContextMenuProps {
   x: number;
   y: number;
   sceneId: string;
   sceneIndex: number;
   totalScenes: number;
+  onRename: () => void;
   onClose: () => void;
 }
 
@@ -55,6 +71,7 @@ function ContextMenu({
   sceneId,
   sceneIndex,
   totalScenes,
+  onRename,
   onClose,
 }: ContextMenuProps) {
   const duplicateScene = useStore((s) => s.duplicateScene);
@@ -88,10 +105,15 @@ function ContextMenu({
       ref={ref}
       role="menu"
       aria-label="Scene options"
-      className={`${POPOVER} fixed z-50 min-w-[160px] py-1`}
-      style={{ top: y, left: x }}
+      className={`${POPOVER} fixed z-50 py-1`}
+      style={{ ...popoverPosition(x, y, MENU_W), width: MENU_W }}
     >
       {[
+        {
+          label: "Rename",
+          disabled: false,
+          action: () => handle(onRename),
+        },
         {
           label: "Duplicate",
           disabled: false,
@@ -147,6 +169,74 @@ function ContextMenu({
 }
 
 // ---------------------------------------------------------------------------
+// Rename popover
+// ---------------------------------------------------------------------------
+
+/** Longest scene name. Short enough to sit next to "Scene n of m" in the share viewer. */
+const SCENE_NAME_MAX = 28;
+
+interface RenamePopoverProps {
+  x: number;
+  y: number;
+  sceneId: string;
+  sceneNumber: number;
+  initial: string;
+  onClose: () => void;
+}
+
+/** Small form at the pointer for naming a scene. Enter or clicking away saves, Esc cancels. */
+function RenamePopover({ x, y, sceneId, sceneNumber, initial, onClose }: RenamePopoverProps) {
+  const updateSceneNote = useStore((s) => s.updateSceneNote);
+  const [value, setValue] = useState(initial);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  const save = useCallback(() => {
+    const next = value.trim();
+    if (next !== initial.trim()) updateSceneNote(sceneId, next);
+    onClose();
+  }, [value, initial, sceneId, updateSceneNote, onClose]);
+
+  // Clicking away saves, like leaving a field
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (formRef.current && !formRef.current.contains(e.target as Node)) save();
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [save]);
+
+  return (
+    <form
+      ref={formRef}
+      onSubmit={(e) => { e.preventDefault(); save(); }}
+      className={`${POPOVER} fixed z-50 flex flex-col gap-1.5 p-3`}
+      style={{ ...popoverPosition(x, y, RENAME_W), width: RENAME_W }}
+    >
+      <label htmlFor={`scene-name-${sceneId}`} className="text-xs text-muted">
+        Name of scene {sceneNumber}
+      </label>
+      <input
+        id={`scene-name-${sceneId}`}
+        ref={inputRef}
+        dir="auto"
+        value={value}
+        maxLength={SCENE_NAME_MAX}
+        placeholder="e.g. Flare"
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+        className="h-9 rounded-md border border-line bg-app px-2.5 text-[13px] text-ink outline-none focus:border-accent-text"
+      />
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Scene card
 // ---------------------------------------------------------------------------
 
@@ -168,6 +258,7 @@ interface SceneCardProps {
 
 function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, variant, flipped, offenseColor, defenseColor, commentCount = 0 }: SceneCardProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [rename, setRename] = useState<{ x: number; y: number } | null>(null);
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -226,7 +317,19 @@ function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, vari
           sceneId={scene.id}
           sceneIndex={index}
           totalScenes={totalScenes}
+          onRename={() => setRename(menu)}
           onClose={() => setMenu(null)}
+        />
+      )}
+
+      {rename && (
+        <RenamePopover
+          x={rename.x}
+          y={rename.y}
+          sceneId={scene.id}
+          sceneNumber={index + 1}
+          initial={scene.note}
+          onClose={() => setRename(null)}
         />
       )}
     </>
@@ -264,21 +367,8 @@ export default function SceneStrip() {
   const scene = useStore(selectEditorScene);
   const playColors = useStore((s) => s.currentPlay?.colors);
 
-  // Subscribe to comments to show dot indicators on scene cards
-  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
-  useEffect(() => {
-    const playId = currentPlay?.id;
-    if (!playId) return;
-    return subscribeToComments(playId, (comments) => {
-      const counts: Record<string, number> = {};
-      for (const c of comments) {
-        if (c.sceneId && !c.resolved) {
-          counts[c.sceneId] = (counts[c.sceneId] ?? 0) + 1;
-        }
-      }
-      setCommentCounts(counts);
-    });
-  }, [currentPlay?.id]);
+  // Open comments per scene, for the dot indicators on scene cards
+  const commentCounts = useOpenCommentCounts(currentPlay?.id);
 
   /**
    * Issue #81 — at tablet widths use compact (smaller) scene thumbnails
@@ -306,7 +396,7 @@ export default function SceneStrip() {
       {/* Label */}
       <div className="hidden flex-none items-center gap-1 md:flex">
         <span className={SECTION_LABEL}>Scenes</span>
-        <InfoTooltip tip="Each scene is a frame of your play. Click to edit it, right-click to duplicate or reorder." />
+        <InfoTooltip tip="Each scene is a frame of your play. Click to edit it, right-click to rename, duplicate or reorder." />
       </div>
 
       {/* Scene cards */}

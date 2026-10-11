@@ -24,6 +24,7 @@ import { useTeam } from "@/contexts/TeamContext";
 import { createShareToken, loadTeam } from "@/lib/team";
 import PresentationOverlay from "@/components/editor/PresentationOverlay";
 import CommentsPanel from "@/components/editor/CommentsPanel";
+import { useOpenCommentCounts } from "@/hooks/useOpenCommentCounts";
 import SaveIndicator from "@/components/editor/SaveIndicator";
 import UndoRedoButtons from "@/components/editor/UndoRedoButtons";
 import ExportMenu from "@/components/editor/ExportMenu";
@@ -133,7 +134,7 @@ export default function EditorHeader({ playId }: EditorHeaderProps) {
 
   const selectedSceneId = useStore((s) => s.selectedSceneId);
   const [showComments, setShowComments] = useState(false);
-  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
+  const commentCounts = useOpenCommentCounts(currentPlay?.id);
 
   const sceneLabels = useMemo<Record<string, string>>(() => {
     if (!currentPlay) return {};
@@ -361,10 +362,6 @@ export default function EditorHeader({ playId }: EditorHeaderProps) {
 
           <ShortcutsButton className="hidden lg:flex" />
 
-          <button type="button" className={`${TEXT_BTN} hidden md:flex`} title="Save (Ctrl+S)">
-            Save
-          </button>
-
           {/* Share button (#78) */}
           <button
             type="button"
@@ -498,7 +495,6 @@ export default function EditorHeader({ playId }: EditorHeaderProps) {
         <CommentsPanel
           playId={currentPlay.id}
           selectedSceneId={selectedSceneId}
-          onCountsChange={setCommentCounts}
           onClose={() => setShowComments(false)}
           sceneLabels={sceneLabels}
         />
