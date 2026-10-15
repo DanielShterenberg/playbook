@@ -24,6 +24,7 @@ import {
   deleteComment,
 } from "@/lib/comments";
 import type { Comment } from "@/lib/types";
+import { FIELD_ERROR } from "@/components/playbook/modalStyles";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -109,6 +110,8 @@ function CommentItem({ comment, currentUserId, sceneLabel }: CommentItemProps) {
   const [replyText, setReplyText] = useState("");
   const [submittingReply, setSubmittingReply] = useState(false);
   const [toggling, setToggling] = useState(false);
+  // A failed reply / resolve / delete, shown under this comment until the next attempt.
+  const [error, setError] = useState<string | null>(null);
   const replyRef = useRef<HTMLTextAreaElement>(null);
   const { user } = useAuth();
 
@@ -117,8 +120,9 @@ function CommentItem({ comment, currentUserId, sceneLabel }: CommentItemProps) {
   }, [showReply]);
 
   const handleReply = async () => {
-    if (!replyText.trim() || !user) return;
+    if (!replyText.trim() || !user || submittingReply) return;
     setSubmittingReply(true);
+    setError(null);
     try {
       await addReply(
         comment.id,
@@ -128,6 +132,8 @@ function CommentItem({ comment, currentUserId, sceneLabel }: CommentItemProps) {
       );
       setReplyText("");
       setShowReply(false);
+    } catch {
+      setError("Couldn't post your reply. Try again.");
     } finally {
       setSubmittingReply(false);
     }
@@ -136,12 +142,15 @@ function CommentItem({ comment, currentUserId, sceneLabel }: CommentItemProps) {
   const handleToggleResolve = async () => {
     if (toggling || !currentUserId) return;
     setToggling(true);
+    setError(null);
     try {
       if (comment.resolved) {
         await unresolveComment(comment.id);
       } else {
         await resolveComment(comment.id, currentUserId);
       }
+    } catch {
+      setError("Couldn't update the comment. Try again.");
     } finally {
       setToggling(false);
     }
@@ -149,7 +158,12 @@ function CommentItem({ comment, currentUserId, sceneLabel }: CommentItemProps) {
 
   const handleDelete = async () => {
     if (!window.confirm("Delete this comment?")) return;
-    await deleteComment(comment.id);
+    setError(null);
+    try {
+      await deleteComment(comment.id);
+    } catch {
+      setError("Couldn't delete the comment. Try again.");
+    }
   };
 
   return (
@@ -241,6 +255,11 @@ function CommentItem({ comment, currentUserId, sceneLabel }: CommentItemProps) {
           </div>
         </div>
       )}
+      {error && (
+        <p role="alert" className={FIELD_ERROR}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -269,15 +288,26 @@ export default function CommentsPanel({
   const [filter, setFilter] = useState<"scene" | "all">("scene");
   const [newText, setNewText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // The listener was refused (stays until the panel resubscribes) / the last post failed.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [postError, setPostError] = useState<string | null>(null);
+  const uid = user?.uid ?? null;
   const listRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Real-time subscription
+  // Real-time subscription, once signed in (the rules refuse anonymous reads;
+  // a refused listener is dead, so it restarts when the user changes).
   useEffect(() => {
-    if (!playId) return;
-    const unsub = subscribeToComments(playId, setComments);
-    return unsub;
-  }, [playId]);
+    if (!playId || !uid) return;
+    setLoadError(null);
+    return subscribeToComments(playId, setComments, (err) =>
+      setLoadError(
+        err.code === "permission-denied"
+          ? "You don't have access to this play's comments."
+          : "Comments couldn't be loaded. Try reloading the page.",
+      ),
+    );
+  }, [playId, uid]);
 
   const filtered = filter === "scene"
     ? comments.filter((c) => c.sceneId === selectedSceneId)
@@ -286,6 +316,7 @@ export default function CommentsPanel({
   const handleAdd = useCallback(async () => {
     if (!newText.trim() || !user || submitting) return;
     setSubmitting(true);
+    setPostError(null);
     try {
       await addComment(
         playId,
@@ -300,6 +331,9 @@ export default function CommentsPanel({
       setTimeout(() => {
         listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
       }, 100);
+    } catch {
+      // Keep the text so nothing typed is lost.
+      setPostError("Couldn't post your comment. Try again.");
     } finally {
       setSubmitting(false);
     }
@@ -381,7 +415,7 @@ export default function CommentsPanel({
                     comment={c}
                     currentUserId={user?.uid ?? null}
                     sceneLabel={filter === "all" && c.sceneId ? (sceneLabels[c.sceneId] ?? null) : null}
-                  />
+                      />
                 ))}
               </>
             )}
@@ -408,6 +442,11 @@ export default function CommentsPanel({
           disabled={!user}
           className={TEXTAREA}
         />
+        {(loadError || postError) && (
+          <p role="alert" className={FIELD_ERROR}>
+            {loadError ?? postError}
+          </p>
+        )}
         <div className="mt-1.5 flex items-center justify-between">
           <span className="text-[11px] text-muted">Ctrl+Enter to send</span>
           <button

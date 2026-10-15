@@ -147,12 +147,14 @@ export async function deleteComment(commentId: string): Promise<void> {
  * the current snapshot and again whenever comments change.
  *
  * If the listener is refused or fails (signed out, rules, missing index) it
- * logs one warning instead of an uncaught error; whatever `onUpdate` last
- * received stays on screen.
+ * logs one warning instead of an uncaught error and calls `onError`; the
+ * listener is then dead (subscribe again to retry) and whatever `onUpdate`
+ * last received stays on screen.
  */
 export function subscribeToComments(
   playId: string,
   onUpdate: (comments: Comment[]) => void,
+  onError?: (err: { code: string }) => void,
 ): Unsubscribe {
   const q = query(
     collection(db, "comments"),
@@ -167,6 +169,7 @@ export function subscribeToComments(
     },
     (err) => {
       console.warn(`Comments unavailable for play ${playId}: ${err.code}`);
+      onError?.(err);
     },
   );
 }
