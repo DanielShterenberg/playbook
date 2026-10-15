@@ -240,6 +240,22 @@ function bezierPoint(from: Pt, to: Pt, t: number, cp?: Pt): Pt {
   };
 }
 
+/**
+ * Unit direction a line arrives at `to` with: from the control point, or from
+ * `from` when there is none or it sits on `to` (where a quadratic's end
+ * tangent becomes the chord). Shared by the editor (AnnotationLayer) and this
+ * painter for arrowheads and the screen bar.
+ */
+export function endTangent(from: Pt, to: Pt, cp?: Pt): { ux: number; uy: number } {
+  for (const tail of cp ? [cp, from] : [from]) {
+    const dx = to.x - tail.x;
+    const dy = to.y - tail.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len >= 1) return { ux: dx / len, uy: dy / len };
+  }
+  return { ux: 1, uy: 0 };
+}
+
 /** Stroke from → to, through the control point when there is one. */
 function strokeBezier(ctx: CanvasRenderingContext2D, from: Pt, to: Pt, cp?: Pt): void {
   ctx.beginPath();
@@ -311,8 +327,10 @@ function drawAnnotation(
 
   // Arrowhead: last leg when multi-leg, control-point tangent when curved,
   // from → to otherwise.
-  const head = () =>
-    fillArrowHead(ctx, to, hasWaypoints ? allPts[allPts.length - 2] : cp ?? from, 12 * s);
+  const head = () => {
+    const { ux, uy } = hasWaypoints ? endTangent(allPts[allPts.length - 2], to) : endTangent(from, to, cp);
+    fillArrowHead(ctx, to, { x: to.x - ux * 10, y: to.y - uy * 10 }, 12 * s);
+  };
   const dash = (...px: number[]) => ctx.setLineDash(px.map((v) => v * s));
 
   ctx.strokeStyle = color;
@@ -367,14 +385,11 @@ function drawAnnotation(
   }
 
   if (type === "screen") {
-    // Straight line with a perpendicular bar at the end; no arrowhead.
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    const ux = len > 0 ? dx / len : 1;
-    const uy = len > 0 ? dy / len : 0;
+    // Line (straight or curved) with a bar across the end, square to the
+    // end tangent (control point → to); no arrowhead.
+    const { ux, uy } = endTangent(from, to, cp);
     const perp = { x: -uy * 10 * s, y: ux * 10 * s };
-    strokeSegment(ctx, from, to);
+    strokeBezier(ctx, from, to, cp);
     ctx.lineWidth = 3 * s;
     strokeSegment(ctx, { x: to.x + perp.x, y: to.y + perp.y }, { x: to.x - perp.x, y: to.y - perp.y });
     return;
