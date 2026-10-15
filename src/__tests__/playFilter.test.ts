@@ -57,3 +57,30 @@ describe("filterPlays", () => {
     expect(titles({ search: "zone", filter: "offense", teamId: "t1" })).toEqual([]);
   });
 });
+
+describe("archived plays", () => {
+  const ARCHIVE = [
+    ...PLAYS,
+    { ...play("Old Flex", "offense", "t1", 4), archived: true },
+    { ...play("Old Press", "defense", "", 5), archived: true },
+  ];
+  const titles = (opts: Parameters<typeof filterPlays>[1]) => filterPlays(ARCHIVE, opts).map((p) => p.title);
+
+  it("are hidden under every chip but Archived, and from search", () => {
+    expect(titles({ search: "", filter: "all", teamId: "t1" })).toEqual(["2-3 Zone", "Five Out", "Horns Flare"]);
+    expect(titles({ search: "", filter: "offense", teamId: "t1" })).toEqual(["Five Out", "Horns Flare"]);
+    expect(titles({ search: "", filter: "personal", teamId: "t1" })).toEqual(["Five Out"]);
+    expect(titles({ search: "old", filter: "all", teamId: "t1" })).toEqual([]);
+  });
+
+  it("are the only plays under Archived, searchable there", () => {
+    expect(titles({ search: "", filter: "archived", teamId: "t1" })).toEqual(["Old Press", "Old Flex"]);
+    expect(titles({ search: "flex", filter: "archived", teamId: "t1" })).toEqual(["Old Flex"]);
+  });
+
+  it("Archived falls back to everything once nothing is archived", () => {
+    expect(effectivePlayFilter("archived", "t1", 0)).toBe("all");
+    expect(effectivePlayFilter("archived", "t1", 2)).toBe("archived");
+    expect(filterPlays(PLAYS, { search: "", filter: "archived", teamId: "t1" })).toHaveLength(3);
+  });
+});

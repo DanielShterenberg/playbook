@@ -120,3 +120,8 @@ export async function loadPlaysForUser(userId: string): Promise<Play[]> {
 export async function addPlayToTeam(playId: string, teamId: string): Promise<void> {
   await updateDoc(doc(db, "plays", playId), { teamId });
 }
+
+/** Archive or restore a play. Only the flag is written; the play is untouched. */
+export async function setPlayArchived(playId: string, archived: boolean): Promise<void> {
+  await updateDoc(doc(db, "plays", playId), { archived });
+}
