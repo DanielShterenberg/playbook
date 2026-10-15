@@ -6,8 +6,8 @@
  * Implements issue #82: Keyboard shortcuts.
  *
  * Shortcuts registered here:
- *   Tool switching   : V (select), M (move), D (dribble), P (pass),
- *                      S (screen), C (cut), G (guard)
+ *   Tool switching   : each tool's letter from TOOLS (DrawingToolsPanel) —
+ *                      V M D P S C G H — plus Escape for Select
  *   Playback         : Space (play/pause), Left/Right (step scenes),
  *                      L (loop toggle)
  *   Scene navigation : Ctrl+Right / Ctrl+Left (next/prev scene)
@@ -29,6 +29,7 @@
 import { useEffect, useCallback } from "react";
 import { useStore } from "@/lib/store";
 import type { DrawingTool } from "@/lib/store";
+import { TOOLS } from "@/components/editor/DrawingToolsPanel";
 
 /** Returns true when keyboard focus is inside a text-editing element. */
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -39,16 +40,10 @@ function isTypingTarget(target: EventTarget | null): boolean {
   return false;
 }
 
+/** Tool keys: each tool's shortcut as the rail shows it, plus Escape for Select. */
 const TOOL_KEY_MAP: Record<string, DrawingTool> = {
-  v: "select",
   escape: "select",
-  m: "movement",
-  d: "dribble",
-  p: "pass",
-  s: "screen",
-  c: "cut",
-  g: "guard",
-  h: "handoff",
+  ...Object.fromEntries(TOOLS.map(({ id, shortcut }) => [shortcut.toLowerCase(), id])),
 };
 
 export interface KeyboardShortcutsOptions {

@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * DrawingToolsPanel — left-side icon rail for selecting drawing tools.
+ * DrawingToolsPanel — left-side rail for selecting drawing tools: icon, name
+ * and keyboard shortcut per tool (collapsible to an icon strip).
  *
  * Implements issue #56: Drawing tools panel UI.
  * Implements issue #81: Responsive layout — collapsible rail (md+).
@@ -14,11 +15,10 @@
  *   Screen         (keyboard: S) — perpendicular line
  *   Cut            (keyboard: C) — dashed arrow line
  *   Guard          (keyboard: G) — defender→offensive player assignment (amber dashed)
- *   Eraser         (keyboard: E) — remove annotations
+ *   Hand-off       (keyboard: H) — dribble hand-off
  *
- * Note: keyboard shortcut registration has been centralised in
- * useKeyboardShortcuts (issue #82). This component no longer attaches its
- * own keydown listener — it is kept here for documentation purposes only.
+ * TOOLS is the one list: the keys that work (useKeyboardShortcuts) and the
+ * phone tool bar (MobileToolBar) are built from it.
  */
 
 import { useState } from "react";
@@ -228,7 +228,7 @@ export default function DrawingToolsPanel() {
 
   return (
     <nav
-      className={`${RAIL} gap-1 overflow-y-auto py-4 transition-all duration-200 ${collapsed ? "w-11" : "w-[148px] px-2"}`}
+      className={`${RAIL} gap-1 overflow-y-auto py-4 ${collapsed ? "w-11" : "w-[148px] px-2"}`}
       aria-label="Drawing tools"
     >
       {/* Tool buttons — hidden when collapsed */}
@@ -240,9 +240,8 @@ export default function DrawingToolsPanel() {
               key={id}
               type="button"
               onClick={() => setSelectedTool(id)}
-              title={`${label} (shortcut ${shortcut})`}
               aria-pressed={active}
-              aria-keyshortcuts={shortcut}
+              aria-keyshortcuts={id === "select" ? `${shortcut} Escape` : shortcut}
               className={[
                 `flex h-11 w-full flex-none items-center gap-2.5 rounded-[10px] pl-2.5 pr-2 text-left transition-colors ${FOCUS}`,
                 active ? "bg-accent text-accent-ink" : "text-ink hover:bg-chip",
@@ -261,10 +260,12 @@ export default function DrawingToolsPanel() {
 
       {/* When collapsed: show only the active tool icon as a hint */}
       {collapsed &&
-        TOOLS.filter(({ id }) => id === selectedTool).map(({ id, label, Icon }) => (
+        TOOLS.filter(({ id }) => id === selectedTool).map(({ id, label, shortcut, Icon }) => (
           <div
             key={id}
-            title={label}
+            role="img"
+            aria-label={`Current tool: ${label}`}
+            title={`${label} (${shortcut})`}
             className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-accent text-accent-ink"
           >
             <Icon />
