@@ -970,6 +970,15 @@ describe("pdfPanels", () => {
       ["c", 2, "Scene 3 · Step 2"],
     ]);
   });
+  it("a scene's notes print once: on its first panel", () => {
+    const items = pdfPanels(play([scene("a", 1, [1, 2, 3]), scene("b", 2, [])]), true);
+    expect(items.map((i: PdfPanel) => [i.label, i.showNotes])).toEqual([
+      ["Scene 1 · Step 1", true],
+      ["Scene 1 · Step 2", false],
+      ["Scene 1 · Step 3", false],
+      ["Scene 2", true],
+    ]);
+  });
 });
 
 describe("export step timing follows on-screen playback", () => {

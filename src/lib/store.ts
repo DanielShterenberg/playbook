@@ -750,7 +750,15 @@ export const useStore = create<AppStore>()(
       if (snapshot) useHistoryStore.getState().pushSnapshot(snapshot);
       set((s) => {
         if (!s.currentPlay) return s;
-        return { currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => ({ ...sc, note })) };
+        return {
+          currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => ({
+            ...sc,
+            // A long note from before notes had their own field is the scene's
+            // notes: naming the scene moves it there instead of losing it.
+            ...(!sc.description?.trim() && sceneDescription(sc) ? { description: sceneDescription(sc) } : null),
+            note,
+          })),
+        };
       });
     },
 

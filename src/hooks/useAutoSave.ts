@@ -9,6 +9,9 @@
  * (player position drag end, annotation added, scene note edited, etc.)
  * this hook debounces a Firestore write.
  *
+ * Leaving the editor with a save still waiting writes it at once instead of
+ * dropping it.
+ *
  * Save states:
  *   "idle"    — no pending save
  *   "pending" — debounce timer running (local change not yet written)
@@ -20,6 +23,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "@/lib/store";
 import { savePlay } from "@/lib/db";
+import type { Play } from "@/lib/types";
 import { useAuth } from "@/contexts/AuthContext";
 
 export type SaveStatus = "idle" | "pending" | "saving" | "saved" | "error";
@@ -30,6 +34,8 @@ export function useAutoSave(): SaveStatus {
   const { user } = useAuth();
   const [status, setStatus] = useState<SaveStatus>("idle");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The play the waiting timer will save (null: nothing waiting).
+  const pendingRef = useRef<Play | null>(null);
   // Track the last play ID so we reset state on play switch
   const lastPlayIdRef = useRef<string | null>(null);
 
@@ -45,6 +51,7 @@ export function useAutoSave(): SaveStatus {
           lastPlayIdRef.current = currentPlay.id;
           setStatus("idle");
           if (timerRef.current) clearTimeout(timerRef.current);
+          pendingRef.current = null;
           return;
         }
 
@@ -53,7 +60,9 @@ export function useAutoSave(): SaveStatus {
         setStatus("pending");
 
         const snapshot = { ...currentPlay };
+        pendingRef.current = snapshot;
         timerRef.current = setTimeout(async () => {
+          pendingRef.current = null;
           setStatus("saving");
           try {
             await savePlay(snapshot);
@@ -68,6 +77,9 @@ export function useAutoSave(): SaveStatus {
     return () => {
       unsub();
       if (timerRef.current) clearTimeout(timerRef.current);
+      // Unmounting (leaving the editor): write what was waiting.
+      if (pendingRef.current) void savePlay(pendingRef.current).catch(() => {});
+      pendingRef.current = null;
     };
   }, [user]);
 

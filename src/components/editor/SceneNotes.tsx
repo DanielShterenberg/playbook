@@ -4,17 +4,19 @@
  * SceneNotes — the selected scene's notes, under the playback controls.
  *
  * Notes explain a scene in words: the options from this spot, the reads, what
- * to look for. They are shown as text; editors click it (or "Add notes") to
- * edit in place. Typing is committed to the store when it pauses and when the
- * box loses focus, so a paragraph is a few undo steps, not one per letter.
- * Team viewers see the notes and cannot edit them.
+ * to look for. They are shown as text (three lines, "Show all" for more);
+ * editors click it (or "Add notes") to edit in place, which pauses playback.
+ * Typing is committed to the store when it pauses and when the box loses
+ * focus, so a paragraph is a few undo steps, not one per letter. Team viewers
+ * see the notes and cannot edit them.
  *
  * The share viewer, presentation mode and the PDF show the same text
  * (sceneDescription in types.ts).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useStore } from "@/lib/store";
+import { selectEditorScene, useStore } from "@/lib/store";
+import { savePlay } from "@/lib/db";
 import { useTeam } from "@/contexts/TeamContext";
 import { SCENE_DESCRIPTION_MAX, sceneDescription } from "@/lib/types";
 import { FOCUS_RING } from "@/lib/uiClasses";
@@ -23,8 +25,9 @@ import { FOCUS_RING } from "@/lib/uiClasses";
 const COMMIT_DELAY_MS = 1200;
 
 export default function SceneNotes() {
-  const scene = useStore((s) => s.currentPlay?.scenes.find((sc) => sc.id === s.selectedSceneId) ?? null);
+  const scene = useStore(selectEditorScene);
   const updateSceneDescription = useStore((s) => s.updateSceneDescription);
+  const pausePlayback = useStore((s) => s.pausePlayback);
   const { role } = useTeam();
   const canEdit = role !== "viewer";
 
@@ -32,6 +35,7 @@ export default function SceneNotes() {
   const sceneId = scene?.id ?? null;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(stored);
+  const [expanded, setExpanded] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // The scene being edited and the text typed so far, for commits that run
   // after the selection moved on (blur, scene change, unmount).
@@ -65,8 +69,22 @@ export default function SceneNotes() {
     if (editRef.current && editRef.current.sceneId !== sceneId) finish();
   }, [sceneId, finish]);
 
-  // Leaving the editor mid-edit keeps what was typed.
-  useEffect(() => () => commit(), [commit]);
+  // Leaving the editor mid-edit keeps what was typed. Autosave may already
+  // have stopped listening, so the play is written directly.
+  useEffect(
+    () => () => {
+      const edit = editRef.current;
+      if (!edit) return;
+      const before = useStore.getState().currentPlay;
+      commit();
+      const after = useStore.getState().currentPlay;
+      if (after && after !== before) void savePlay(after).catch(() => {});
+    },
+    [commit],
+  );
+
+  // Another scene starts collapsed.
+  useEffect(() => setExpanded(false), [sceneId]);
 
   useEffect(() => {
     if (editing) textareaRef.current?.focus();
@@ -76,6 +94,8 @@ export default function SceneNotes() {
 
   function startEditing() {
     if (!canEdit || !sceneId) return;
+    // Playback would move the selection to the next scene mid-sentence.
+    pausePlayback();
     editRef.current = { sceneId, text: stored };
     setDraft(stored);
     setEditing(true);
@@ -111,8 +131,13 @@ export default function SceneNotes() {
   }
 
   if (stored) {
+    // Longer than the three lines shown: offer the rest.
+    const long = stored.split("\n").length > 3 || stored.length > 240;
     const text = (
-      <p dir="auto" className="m-0 line-clamp-3 whitespace-pre-line break-words text-start text-sm leading-normal text-ink [unicode-bidi:plaintext]">
+      <p
+        dir="auto"
+        className={`m-0 whitespace-pre-line break-words text-start text-sm leading-normal text-ink [unicode-bidi:plaintext] ${expanded ? "" : "line-clamp-3"}`}
+      >
         {stored}
       </p>
     );
@@ -131,6 +156,16 @@ export default function SceneNotes() {
           </button>
         ) : (
           text
+        )}
+        {long && (
+          <button
+            type="button"
+            onClick={() => setExpanded((e) => !e)}
+            aria-expanded={expanded}
+            className={`w-fit rounded text-[13px] font-medium text-accent-text hover:underline ${FOCUS_RING}`}
+          >
+            {expanded ? "Show less" : "Show all"}
+          </button>
         )}
       </div>
     );

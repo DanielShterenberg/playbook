@@ -112,6 +112,8 @@ interface PdfTextOptions {
   align?: "left" | "right";
   /** Widest the text may be, in mm; longer text is cut with an ellipsis. */
   maxWidth: number;
+  /** Base direction of raster text; by default the text decides. */
+  rtl?: boolean;
 }
 
 /**
@@ -125,7 +127,7 @@ interface PdfTextOptions {
 function drawPdfText(pdf: jsPDF, raw: string, x: number, y: number, opts: PdfTextOptions): void {
   const single = raw.replace(/\s+/g, " ").trim();
   if (!single) return;
-  const { size, color, align = "left", maxWidth } = opts;
+  const { size, color, align = "left", maxWidth, rtl } = opts;
   if (maxWidth <= 0) return;
 
   const vector = (text: string) => {
@@ -142,7 +144,7 @@ function drawPdfText(pdf: jsPDF, raw: string, x: number, y: number, opts: PdfTex
     return;
   }
 
-  const image = rasterTextImage(single, size * MM_PER_PT * TEXT_PX_PER_MM, color, maxWidth * TEXT_PX_PER_MM);
+  const image = rasterTextImage(single, size * MM_PER_PT * TEXT_PX_PER_MM, color, maxWidth * TEXT_PX_PER_MM, rtl);
   if (!image) {
     // No canvas to draw on: imperfect text beats a missing title.
     vector(latin);
@@ -214,7 +216,7 @@ function drawPdfParagraph(
   const step = opts.size * MM_PER_PT * PARAGRAPH_LEADING;
   lines.forEach(({ text, rtl }, i) => {
     if (!text.trim()) return;
-    drawPdfText(pdf, text, rtl ? x + opts.maxWidth : x, y + i * step, { ...opts, align: rtl ? "right" : "left" });
+    drawPdfText(pdf, text, rtl ? x + opts.maxWidth : x, y + i * step, { ...opts, align: rtl ? "right" : "left", rtl });
   });
 }
 
@@ -229,6 +231,8 @@ export interface PdfPanel {
   maxStep: number;
   /** "Scene 2" or "Scene 2 · Step 1". */
   label: string;
+  /** Print the scene's notes under this panel: on the scene's first panel only. */
+  showNotes: boolean;
 }
 
 /**
@@ -243,10 +247,10 @@ export function pdfPanels(play: Play, exportSteps: boolean): PdfPanel[] {
   scenes.forEach((scene, sceneIdx) => {
     const sortedSteps = [...scene.timingGroups].sort((a, b) => a.step - b.step).map((g) => g.step);
     const steps = exportSteps && sortedSteps.length > 0 ? sortedSteps : [Infinity];
-    for (const maxStep of steps) {
+    steps.forEach((maxStep, i) => {
       const stepLabel = maxStep !== Infinity ? ` · Step ${maxStep}` : "";
-      items.push({ scene, maxStep, label: `Scene ${sceneIdx + 1}${stepLabel}` });
-    }
+      items.push({ scene, maxStep, label: `Scene ${sceneIdx + 1}${stepLabel}`, showNotes: i === 0 });
+    });
   });
   return items;
 }
@@ -327,7 +331,7 @@ export async function exportPlayToPdf(play: Play, options: ExportPdfOptions = {}
     const pageItems = items.slice(pageIdx * itemsPerPage, (pageIdx + 1) * itemsPerPage);
 
     for (let i = 0; i < pageItems.length; i++) {
-      const { scene, maxStep, label } = pageItems[i];
+      const { scene, maxStep, label, showNotes } = pageItems[i];
       const col = i % cols;
       const row = Math.floor(i / cols);
 
@@ -373,7 +377,7 @@ export async function exportPlayToPdf(play: Play, options: ExportPdfOptions = {}
       // The scene's notes go under the court and take the room they need
       // (up to the layout's line budget); the court shrinks to fit above them.
       const notes = LAYOUT_NOTES[layout];
-      const noteLines = pdfParagraphLines(pdf, sceneDescription(scene), notes.size, cellW, notes.maxLines);
+      const noteLines = showNotes ? pdfParagraphLines(pdf, sceneDescription(scene), notes.size, cellW, notes.maxLines) : [];
       const lineH = notes.size * MM_PER_PT * PARAGRAPH_LEADING;
       const notesH = noteLines.length > 0 ? NOTES_GAP + noteLines.length * lineH : 0;
       const courtAreaH = imgAreaH - notesH;

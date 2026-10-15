@@ -459,6 +459,14 @@ describe("scene notes (updateSceneDescription)", () => {
     expect(useHistoryStore.getState().past.length).toBe(past);
   });
 
+  it("naming a scene keeps a long legacy note as its notes", () => {
+    const long = "A note written before notes had their own field, far too long to be a name";
+    get().updateSceneNote("a", long);
+    get().updateSceneNote("a", "Flare");
+    expect(sceneA().note).toBe("Flare");
+    expect(sceneDescription(sceneA())).toBe(long);
+  });
+
   it("keeps the scene's name; a long legacy note moves into the notes", () => {
     get().updateSceneNote("a", "Flare");
     get().updateSceneDescription("a", "notes");

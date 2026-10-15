@@ -24,7 +24,7 @@
 
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { useStore, selectEditorScene } from "@/lib/store";
-import { SCENE_NAME_MAX } from "@/lib/types";
+import { SCENE_NAME_MAX, sceneName } from "@/lib/types";
 import type { Scene } from "@/lib/types";
 import type { CourtVariant } from "@/lib/courtLayout";
 import CourtThumbnail from "@/components/court/CourtThumbnail";
@@ -290,8 +290,8 @@ function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, vari
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [rename, setRename] = useState<{ x: number; y: number } | null>(null);
   const cardRef = useRef<HTMLButtonElement>(null);
-  // Plays stored before notes existed can lack the field.
-  const name = scene.note ?? "";
+  // The scene's name (a long note from before is its notes, not its name).
+  const name = sceneName(scene);
 
   // Team viewers cannot edit (#76).
   const { role } = useTeam();
@@ -375,7 +375,7 @@ function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, vari
           y={rename.y}
           sceneId={scene.id}
           sceneNumber={index + 1}
-          initial={scene.note ?? ""}
+          initial={name}
           onClose={() => setRename(null)}
         />
       )}
