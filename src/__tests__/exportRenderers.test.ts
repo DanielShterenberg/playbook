@@ -706,7 +706,7 @@ describe("exporter sources", () => {
 describe("annotations match the editor (AnnotationLayer.tsx)", () => {
   it("the editor scales its lines by the painter's annotationScale", () => {
     const layer = readFileSync(path.resolve(process.cwd(), "src/components/annotations/AnnotationLayer.tsx"), "utf8");
-    expect(layer).toMatch(/import \{ annotationScale \} from "@\/lib\/frameRenderer"/);
+    expect(layer).toMatch(/import \{[^}]*\bannotationScale\b[^}]*\} from "@\/lib\/frameRenderer"/);
     expect(layer).toMatch(/const lineScale = Math\.max\(annotationScale\(paWidth\)/);
     // Committed lines and the in-progress preview are both drawn in the scaled group.
     expect(layer.match(/<g transform=\{`scale\(\$\{lineScale\}\)`\}>/g)).toHaveLength(2);
@@ -848,7 +848,9 @@ describe("annotations match the editor (AnnotationLayer.tsx)", () => {
       const a = ann("s", "screen", cp ? { controlPoints: [cp] } : {});
       const f = px(a.from), t = px(a.to), tail = cp ? px(cp) : f;
       const ops = frameOps(a);
-      expect(ops.some((e) => e[0] === "quadraticCurveTo")).toBe(!!cp);
+      const curve = ops.find((e) => e[0] === "quadraticCurveTo");
+      if (cp) expect(curve).toEqual(["quadraticCurveTo", tail.x, tail.y, t.x, t.y]);
+      else expect(curve).toBeUndefined();
       expect(ops.some((e) => e[0] === "closePath")).toBe(false);
       const d = Math.hypot(t.x - tail.x, t.y - tail.y);
       const ux = (t.x - tail.x) / d, uy = (t.y - tail.y) / d;
@@ -857,6 +859,21 @@ describe("annotations match the editor (AnnotationLayer.tsx)", () => {
       expect(near(bar[0][1] as number, t.x - uy * 10) && near(bar[0][2] as number, t.y + ux * 10)).toBe(true);
       expect(near(bar[1][1] as number, t.x + uy * 10) && near(bar[1][2] as number, t.y - ux * 10)).toBe(true);
     }
+  });
+
+  it("screen bar: a control point on the end falls back to the chord, as a quadratic's tangent does", () => {
+    const a0 = ann("s", "screen");
+    const a = ann("s", "screen", { controlPoints: [a0.to] });
+    const bar = (x: Annotation) => frameOps(x).filter((e) => e[0] === "moveTo" || e[0] === "lineTo").slice(-2);
+    expect(bar(a)).toEqual(bar(a0));
+  });
+
+  it("the editor draws arrowheads and the screen bar with the painter's endTangent", () => {
+    expect(editorSrc).toMatch(/import \{[^}]*\bendTangent\b[^}]*\} from "@\/lib\/frameRenderer"/);
+    expect(editorSrc).not.toMatch(/function bezierEndTangent/);
+    const screen = rendered.slice(rendered.indexOf('if (type === "screen")'), rendered.indexOf('if (type === "cut")'));
+    expect(screen).toMatch(/endTangent\(from, to, cp\)/);
+    expect(screen).toMatch(/bezierPath\(from, to, cp\)/);
   });
 
   it("hand-off ticks are the editor's: at t = 0.85 and 0.72, 9 px each side, perpendicular to the path", () => {

@@ -30,7 +30,7 @@ import type { DrawingTool } from "@/lib/store";
 import type { Annotation, Point, Scene } from "@/lib/types";
 import { TOOL_CURSOR } from "@/components/editor/DrawingToolsPanel";
 import { useHistoryStore } from "@/lib/history";
-import { annotationScale } from "@/lib/frameRenderer";
+import { annotationScale, endTangent } from "@/lib/frameRenderer";
 import { PLAYER_RADIUS, PLAYER_RADIUS_MIN } from "@/lib/tokenSizing";
 
 // ---------------------------------------------------------------------------
@@ -127,25 +127,10 @@ function bezierPoint(from: Point, to: Point, t: number, cp?: Point): Point {
 }
 
 /**
- * Compute the tangent direction at the end of a quadratic bezier (t=1).
- * Returns a vector from the point just before the end toward the end —
- * used to orient the arrowhead correctly on curved lines.
- */
-function bezierEndTangent(from: Point, to: Point, cp?: Point): { ux: number; uy: number } {
-  // Tangent at t=1: direction from cp to to (or from to to for straight lines)
-  const tail = cp ?? from;
-  const dx = to.x - tail.x;
-  const dy = to.y - tail.y;
-  const len = Math.sqrt(dx * dx + dy * dy);
-  if (len < 0.001) return { ux: 1, uy: 0 };
-  return { ux: dx / len, uy: dy / len };
-}
-
-/**
  * Arrowhead polygon string using bezier tangent direction at the endpoint.
  */
 function arrowHeadBezier(to: Point, from: Point, cp: Point | undefined, size: number = 12): string {
-  const { ux, uy } = bezierEndTangent(from, to, cp);
+  const { ux, uy } = endTangent(from, to, cp);
   // Perpendicular
   const px = -uy;
   const py = ux;
@@ -247,9 +232,14 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
     ? arrowHeadBezier(to, from, cp)
     : arrowHead(to.x, to.y, from.x, from.y);
 
-  // Selection ring bounding box over all path points
-  const allXs = hasWaypoints ? allPxPoints.map((p) => p.x) : [from.x, to.x];
-  const allYs = hasWaypoints ? allPxPoints.map((p) => p.y) : [from.y, to.y];
+  // Selection ring bounding box over all path points (sampled along a curve)
+  const ringPts = hasWaypoints
+    ? allPxPoints
+    : cp
+    ? Array.from({ length: 11 }, (_, i) => bezierPoint(from, to, i / 10, cp))
+    : [from, to];
+  const allXs = ringPts.map((p) => p.x);
+  const allYs = ringPts.map((p) => p.y);
   const minX = Math.min(...allXs);
   const minY = Math.min(...allYs);
   const maxX = Math.max(...allXs);
@@ -400,7 +390,7 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
   if (type === "screen") {
     // The screener's path (straight or curved) with a bar across its end,
     // square to the direction the screener arrives from.
-    const { ux, uy } = bezierEndTangent(from, to, cp);
+    const { ux, uy } = endTangent(from, to, cp);
     const perp = { x: -uy * 10, y: ux * 10 };
     const d = bezierPath(from, to, cp);
     return (
