@@ -65,6 +65,46 @@ export function fitText(text: string, max: number, width: (t: string) => number,
   return cut();
 }
 
+/**
+ * `text` broken into lines no wider than `max`: its own line breaks are kept
+ * (blank lines too), words wrap at spaces, and a word wider than a line is
+ * split between characters.
+ */
+export function wrapText(text: string, max: number, width: (t: string) => number): string[] {
+  const lines: string[] = [];
+  for (const paragraph of text.replace(/\r\n?/g, "\n").split("\n")) {
+    let line = "";
+    for (const word of paragraph.split(/[ \t]+/).filter(Boolean)) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (width(candidate) <= max) {
+        line = candidate;
+        continue;
+      }
+      if (line) lines.push(line);
+      line = "";
+      // A word longer than a line goes over several: the longest piece that
+      // fits (at least one character), found by binary search.
+      let rest = graphemes(word);
+      while (rest.length > 0) {
+        let lo = 1;
+        let hi = rest.length;
+        while (lo < hi) {
+          const mid = Math.ceil((lo + hi) / 2);
+          if (width(rest.slice(0, mid).join("")) <= max) lo = mid;
+          else hi = mid - 1;
+        }
+        const n = lo;
+        const piece = rest.slice(0, n).join("");
+        rest = rest.slice(n);
+        if (rest.length > 0) lines.push(piece);
+        else line = piece;
+      }
+    }
+    lines.push(line);
+  }
+  return lines;
+}
+
 export interface TextImage {
   /** PNG data URL, transparent background. */
   dataUrl: string;
@@ -77,7 +117,9 @@ export interface TextImage {
 
 /**
  * One line of text drawn by the browser, which shapes right-to-left and
- * complex scripts correctly, cut with an ellipsis at `maxWidthPx`.
+ * complex scripts correctly, cut with an ellipsis at `maxWidthPx`. `rtl`
+ * sets the base direction (a wrapped line of a Hebrew paragraph that starts
+ * with a Latin word is still right-to-left); by default the text decides.
  * Browser only. Null when a canvas is unavailable.
  */
 export function rasterTextImage(
@@ -85,6 +127,7 @@ export function rasterTextImage(
   fontPx: number,
   color: readonly [number, number, number],
   maxWidthPx: number,
+  rtl?: boolean,
 ): TextImage | null {
   const font = `${fontPx}px Helvetica, Arial, sans-serif`;
   const canvas = document.createElement("canvas");
@@ -104,7 +147,7 @@ export function rasterTextImage(
   ctx.textBaseline = "alphabetic";
   // Base direction from the text itself, as dir="auto" does on screen: it
   // decides the order of mixed Hebrew / Latin runs and which end "…" is on.
-  ctx.direction = startsRightToLeft(fitted) ? "rtl" : "ltr";
+  ctx.direction = (rtl ?? startsRightToLeft(fitted)) ? "rtl" : "ltr";
   ctx.textAlign = "left";
   ctx.fillText(fitted, 1, baseline);
   return { dataUrl: canvas.toDataURL("image/png"), width: canvas.width, height: canvas.height, baseline };

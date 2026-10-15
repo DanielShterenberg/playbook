@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { asciiPunctuation, exportFileBase, fitText, needsRasterText, startsRightToLeft } from "@/lib/export";
+import { asciiPunctuation, exportFileBase, fitText, needsRasterText, startsRightToLeft, wrapText } from "@/lib/export";
 
 describe("exportFileBase", () => {
   it("keeps letters and digits, dashes the spaces, drops the rest", () => {
@@ -87,5 +87,23 @@ describe("fitText", () => {
 
   it("always keeps at least one character", () => {
     expect(fitText("Horns", 0, width)).toBe("H…");
+  });
+});
+
+describe("wrapText (scene notes in the PDF)", () => {
+  const w = (t: string) => t.length; // one unit per character
+
+  it("wraps at spaces and keeps the text's own line breaks, blank lines included", () => {
+    expect(wrapText("one two three four", 9, w)).toEqual(["one two", "three", "four"]);
+    expect(wrapText("a\n\nb c", 9, w)).toEqual(["a", "", "b c"]);
+    expect(wrapText("a\r\nb", 9, w)).toEqual(["a", "b"]);
+  });
+
+  it("splits a word wider than a line between characters", () => {
+    expect(wrapText("abcdefghij xy", 4, w)).toEqual(["abcd", "efgh", "ij", "xy"]);
+  });
+
+  it("wraps Hebrew the same way (by its own width)", () => {
+    expect(wrapText("אם הוא חוסם אז מסירה", 10, w)).toEqual(["אם הוא", "חוסם אז", "מסירה"]);
   });
 });

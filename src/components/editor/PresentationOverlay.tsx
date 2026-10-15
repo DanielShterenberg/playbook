@@ -35,6 +35,7 @@ import {
 import CourtWithPlayers from "@/components/players/CourtWithPlayers";
 import type { CourtVariant } from "@/components/court/Court";
 import { SEGMENT, SEGMENTED } from "./chrome";
+import { sceneDescription, sceneName } from "@/lib/types";
 
 /** Round control button; `size` classes are added per button. */
 const ROUND =
@@ -283,6 +284,9 @@ export default function PresentationOverlay() {
   const atStart = isAtStart(position, scenes);
   const atEnd   = isAtEnd(position, scenes);
 
+  const name = sceneName(scene);
+  const notes = sceneDescription(scene);
+
   return (
     <div
       role="dialog"
@@ -300,9 +304,14 @@ export default function PresentationOverlay() {
         <p className="font-display text-[clamp(18px,2.4vw,28px)] font-semibold leading-tight tracking-[0.02em] text-ink">
           {currentPlay.title}
         </p>
-        {scene?.note && (
-          <p className="mt-1 text-[clamp(12px,1.6vw,18px)] text-muted">
-            {scene.note}
+        {name && (
+          <p dir="auto" className="mt-1 text-[clamp(12px,1.6vw,18px)] text-muted">
+            {name}
+          </p>
+        )}
+        {notes && (
+          <p dir="auto" className="-mx-3 mt-2 line-clamp-6 max-w-[520px] rounded-lg bg-[color-mix(in_srgb,var(--color-app)_88%,transparent)] px-3 py-2 whitespace-pre-line break-words text-start text-[clamp(12px,1.4vw,16px)] leading-normal text-ink [unicode-bidi:plaintext]">
+            {notes}
           </p>
         )}
       </div>
@@ -358,9 +367,9 @@ export default function PresentationOverlay() {
                   setPlaybackPosition(i);
                   showControls();
                 }}
-                aria-label={`Scene ${i + 1}${s.note ? ` — ${s.note}` : ""}`}
+                aria-label={[`Scene ${i + 1}`, sceneName(s)].filter(Boolean).join(" — ")}
                 aria-pressed={isActive}
-                title={`Scene ${i + 1}${s.note ? ` — ${s.note}` : ""}`}
+                title={[`Scene ${i + 1}`, sceneName(s)].filter(Boolean).join(" — ")}
                 className="group flex h-6 flex-none items-center"
               >
                 <span

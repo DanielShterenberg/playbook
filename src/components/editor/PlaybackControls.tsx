@@ -25,6 +25,7 @@ import { useStore, selectEditorScene, selectSceneCount } from "@/lib/store";
 import type { PlaybackSpeed } from "@/lib/store";
 import { sortedTimingGroups } from "@/lib/playback";
 import { ROUND_BTN, SEGMENT, SEGMENTED } from "./chrome";
+import { sceneName } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
 // Speed options
@@ -187,7 +188,7 @@ export default function PlaybackControls() {
               }}
               aria-label={`Scene ${i + 1}`}
               aria-pressed={isActive}
-              title={`Scene ${i + 1}${s.note ? ` — ${s.note}` : ""}`}
+              title={[`Scene ${i + 1}`, sceneName(s)].filter(Boolean).join(" — ")}
               className="group flex h-11 min-w-[6px] flex-1 items-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent-text"
             >
               <span

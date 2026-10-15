@@ -4,7 +4,7 @@
  * Implements issue #80: PDF export — one page per scene.
  *
  * Each page contains:
- *   - A header row: scene number + note (left), play title (right)
+ *   - A header row: scene number + name (left), play title (right)
  *   - The court with all players, ball, and annotations drawn on an
  *     offscreen canvas and embedded as a JPEG image.
  *
@@ -25,9 +25,18 @@
 import { computeCourtLayout } from "@/lib/courtLayout";
 import type { CourtVariant } from "@/lib/courtLayout";
 import type { Play, Scene } from "@/lib/types";
+import { sceneDescription, sceneName } from "@/lib/types";
 import { renderSceneToCtx } from "./frameRenderer";
 import type { FrameStyle } from "./frameRenderer";
-import { asciiPunctuation, exportFileBase, fitText, needsRasterText, rasterTextImage } from "./export";
+import {
+  asciiPunctuation,
+  exportFileBase,
+  fitText,
+  needsRasterText,
+  rasterTextImage,
+  startsRightToLeft,
+  wrapText,
+} from "./export";
 import type { jsPDF } from "jspdf";
 
 // ---------------------------------------------------------------------------
@@ -103,6 +112,8 @@ interface PdfTextOptions {
   align?: "left" | "right";
   /** Widest the text may be, in mm; longer text is cut with an ellipsis. */
   maxWidth: number;
+  /** Base direction of raster text; by default the text decides. */
+  rtl?: boolean;
 }
 
 /**
@@ -116,7 +127,7 @@ interface PdfTextOptions {
 function drawPdfText(pdf: jsPDF, raw: string, x: number, y: number, opts: PdfTextOptions): void {
   const single = raw.replace(/\s+/g, " ").trim();
   if (!single) return;
-  const { size, color, align = "left", maxWidth } = opts;
+  const { size, color, align = "left", maxWidth, rtl } = opts;
   if (maxWidth <= 0) return;
 
   const vector = (text: string) => {
@@ -133,7 +144,7 @@ function drawPdfText(pdf: jsPDF, raw: string, x: number, y: number, opts: PdfTex
     return;
   }
 
-  const image = rasterTextImage(single, size * MM_PER_PT * TEXT_PX_PER_MM, color, maxWidth * TEXT_PX_PER_MM);
+  const image = rasterTextImage(single, size * MM_PER_PT * TEXT_PX_PER_MM, color, maxWidth * TEXT_PX_PER_MM, rtl);
   if (!image) {
     // No canvas to draw on: imperfect text beats a missing title.
     vector(latin);
@@ -142,6 +153,71 @@ function drawPdfText(pdf: jsPDF, raw: string, x: number, y: number, opts: PdfTex
   const wMm = image.width / TEXT_PX_PER_MM;
   const left = align === "right" ? x - wMm : x;
   pdf.addImage(image.dataUrl, "PNG", left, y - image.baseline / TEXT_PX_PER_MM, wMm, image.height / TEXT_PX_PER_MM);
+}
+
+/** Line height of a paragraph, as a multiple of its font size. */
+const PARAGRAPH_LEADING = 1.35;
+
+/** One line of a paragraph and the direction of the paragraph it comes from. */
+interface ParagraphLine {
+  text: string;
+  rtl: boolean;
+}
+
+/**
+ * The lines user text (scene notes) takes at `size` pt in `maxWidth` mm, at
+ * most `maxLines`, the last one cut with an ellipsis when text is left over.
+ * Each paragraph (line of the text) keeps its own direction, as it reads on
+ * screen. Latin is measured as helvetica, other scripts as the canvas font
+ * rasterTextImage draws them in.
+ */
+function pdfParagraphLines(pdf: jsPDF, raw: string, size: number, maxWidth: number, maxLines: number): ParagraphLine[] {
+  const text = raw.trim();
+  if (!text || maxWidth <= 0 || maxLines <= 0) return [];
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(size);
+  const ctx = typeof document !== "undefined" ? document.createElement("canvas").getContext("2d") : null;
+  if (ctx) ctx.font = `${size * MM_PER_PT * TEXT_PX_PER_MM}px Helvetica, Arial, sans-serif`;
+
+  // Vector lines are measured as helvetica, raster lines as the canvas draws them.
+  const widthFor = (t: string) =>
+    !needsRasterText(t) || !ctx ? (u: string) => pdf.getTextWidth(u) : (u: string) => ctx.measureText(u).width / TEXT_PX_PER_MM;
+
+  const lines: ParagraphLine[] = [];
+  for (const paragraph of text.replace(/\r\n?/g, "\n").split("\n")) {
+    const latin = asciiPunctuation(paragraph);
+    const source = needsRasterText(latin) ? paragraph : latin;
+    const rtl = startsRightToLeft(paragraph);
+    for (const line of wrapText(source, maxWidth, widthFor(source))) lines.push({ text: line, rtl });
+  }
+  while (lines.length > 0 && !lines[lines.length - 1].text.trim()) lines.pop();
+  if (lines.length <= maxLines) return lines;
+
+  // Text is left over: the last kept line ends with an ellipsis.
+  const kept = lines.slice(0, maxLines);
+  const last = kept[maxLines - 1];
+  const ellipsis = needsRasterText(last.text) ? "…" : "...";
+  kept[maxLines - 1] = { ...last, text: fitText(last.text + ellipsis, maxWidth, widthFor(last.text), ellipsis) };
+  return kept;
+}
+
+/**
+ * Draw paragraph lines (from pdfParagraphLines) with the first baseline at
+ * y mm, one line every size × PARAGRAPH_LEADING. Right-to-left lines are
+ * aligned to the right edge (x + maxWidth).
+ */
+function drawPdfParagraph(
+  pdf: jsPDF,
+  lines: readonly ParagraphLine[],
+  x: number,
+  y: number,
+  opts: { size: number; color: [number, number, number]; maxWidth: number },
+): void {
+  const step = opts.size * MM_PER_PT * PARAGRAPH_LEADING;
+  lines.forEach(({ text, rtl }, i) => {
+    if (!text.trim()) return;
+    drawPdfText(pdf, text, rtl ? x + opts.maxWidth : x, y + i * step, { ...opts, align: rtl ? "right" : "left", rtl });
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -155,6 +231,8 @@ export interface PdfPanel {
   maxStep: number;
   /** "Scene 2" or "Scene 2 · Step 1". */
   label: string;
+  /** Print the scene's notes under this panel: on the scene's first panel only. */
+  showNotes: boolean;
 }
 
 /**
@@ -169,10 +247,10 @@ export function pdfPanels(play: Play, exportSteps: boolean): PdfPanel[] {
   scenes.forEach((scene, sceneIdx) => {
     const sortedSteps = [...scene.timingGroups].sort((a, b) => a.step - b.step).map((g) => g.step);
     const steps = exportSteps && sortedSteps.length > 0 ? sortedSteps : [Infinity];
-    for (const maxStep of steps) {
+    steps.forEach((maxStep, i) => {
       const stepLabel = maxStep !== Infinity ? ` · Step ${maxStep}` : "";
-      items.push({ scene, maxStep, label: `Scene ${sceneIdx + 1}${stepLabel}` });
-    }
+      items.push({ scene, maxStep, label: `Scene ${sceneIdx + 1}${stepLabel}`, showNotes: i === 0 });
+    });
   });
   return items;
 }
@@ -185,6 +263,14 @@ export interface ExportPdfOptions extends FrameStyle {
   /** Grid layout: columns × rows per page. Default "1x1". */
   layout?: PdfLayout;
 }
+
+/** Scene notes under each court: font size (pt) and most lines, per layout. */
+const LAYOUT_NOTES: Record<PdfLayout, { size: number; maxLines: number }> = {
+  "1x1": { size: 10, maxLines: 14 },
+  "2x1": { size: 8, maxLines: 16 },
+  "2x2": { size: 7, maxLines: 6 },
+  "3x2": { size: 6, maxLines: 6 },
+};
 
 const LAYOUT_GRID: Record<PdfLayout, { cols: number; rows: number }> = {
   "1x1": { cols: 1, rows: 1 },
@@ -211,6 +297,7 @@ export async function exportPlayToPdf(play: Play, options: ExportPdfOptions = {}
   const PAGE_HEADER_H = cols === 1 && rows === 1 ? 14 : 10; // play title bar
   const CELL_LABEL_H = cols === 1 && rows === 1 ? 0 : 7;    // per-cell label (not needed for 1×1)
   const CELL_GAP = 4;    // gap between cells (mm)
+  const NOTES_GAP = 3;   // space between a court and its notes (mm)
 
   const usableW = PAGE_W - 2 * MARGIN;
   const usableH = PAGE_H - 2 * MARGIN - PAGE_HEADER_H;
@@ -244,7 +331,7 @@ export async function exportPlayToPdf(play: Play, options: ExportPdfOptions = {}
     const pageItems = items.slice(pageIdx * itemsPerPage, (pageIdx + 1) * itemsPerPage);
 
     for (let i = 0; i < pageItems.length; i++) {
-      const { scene, maxStep, label } = pageItems[i];
+      const { scene, maxStep, label, showNotes } = pageItems[i];
       const col = i % cols;
       const row = Math.floor(i / cols);
 
@@ -257,9 +344,9 @@ export async function exportPlayToPdf(play: Play, options: ExportPdfOptions = {}
         pdf.setFontSize(7);
         pdf.setTextColor(31, 41, 55);
         pdf.text(label, cellX, cellY + 5);
-        if (scene.note) {
+        if (sceneName(scene)) {
           const labelW = pdf.getTextWidth(label);
-          drawPdfText(pdf, scene.note, cellX + labelW + 2, cellY + 5, {
+          drawPdfText(pdf, sceneName(scene), cellX + labelW + 2, cellY + 5, {
             size: 6,
             color: [107, 114, 128],
             maxWidth: cellW - labelW - 2,
@@ -271,10 +358,10 @@ export async function exportPlayToPdf(play: Play, options: ExportPdfOptions = {}
         pdf.setFontSize(11);
         pdf.setTextColor(31, 41, 55);
         pdf.text(label, MARGIN, MARGIN + 8);
-        if (scene.note) {
+        if (sceneName(scene)) {
           const labelW = pdf.getTextWidth(label);
-          // The play title is right-aligned on the same line; the note gets the left half.
-          drawPdfText(pdf, scene.note, MARGIN + labelW + 3, MARGIN + 8, {
+          // The play title is right-aligned on the same line; the name gets the left half.
+          drawPdfText(pdf, sceneName(scene), MARGIN + labelW + 3, MARGIN + 8, {
             size: 9,
             color: [107, 114, 128],
             maxWidth: usableW / 2 - labelW - 3,
@@ -287,21 +374,38 @@ export async function exportPlayToPdf(play: Play, options: ExportPdfOptions = {}
       const canvas = renderScene(scene, play.courtType, sceneFlipped, maxStep, style);
       const imgData = canvas.toDataURL("image/jpeg", 0.92);
 
+      // The scene's notes go under the court and take the room they need
+      // (up to the layout's line budget); the court shrinks to fit above them.
+      const notes = LAYOUT_NOTES[layout];
+      const noteLines = showNotes ? pdfParagraphLines(pdf, sceneDescription(scene), notes.size, cellW, notes.maxLines) : [];
+      const lineH = notes.size * MM_PER_PT * PARAGRAPH_LEADING;
+      const notesH = noteLines.length > 0 ? NOTES_GAP + noteLines.length * lineH : 0;
+      const courtAreaH = imgAreaH - notesH;
+
       // Scale court image to fit cell image area, preserving aspect ratio
       const imgAspect = canvas.width / canvas.height;
       const imgAreaY = cellY + CELL_LABEL_H;
       let imgW: number, imgH: number;
-      if (imgAspect >= cellW / imgAreaH) {
+      if (imgAspect >= cellW / courtAreaH) {
         imgW = cellW;
         imgH = cellW / imgAspect;
       } else {
-        imgH = imgAreaH;
-        imgW = imgAreaH * imgAspect;
+        imgH = courtAreaH;
+        imgW = courtAreaH * imgAspect;
       }
       const imgX = cellX + (cellW - imgW) / 2;
-      const imgY = imgAreaY + (imgAreaH - imgH) / 2;
+      // With notes the court and the notes are one block, centred in the cell.
+      const imgY = imgAreaY + (imgAreaH - imgH - notesH) / 2;
 
       pdf.addImage(imgData, "JPEG", imgX, imgY, imgW, imgH);
+
+      if (noteLines.length > 0) {
+        drawPdfParagraph(pdf, noteLines, cellX, imgY + imgH + NOTES_GAP + notes.size * MM_PER_PT, {
+          size: notes.size,
+          color: [55, 65, 81],
+          maxWidth: cellW,
+        });
+      }
     }
   }
 
