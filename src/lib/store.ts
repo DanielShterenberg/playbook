@@ -63,6 +63,8 @@ export interface AppStore {
   getPlayById: (playId: string) => Play | undefined;
   /** Update the teamId of a play in the local store after it is added to a team. */
   updatePlayTeamId: (playId: string, teamId: string) => void;
+  /** Mirror an archive / restore already written to Firestore (grid list and open play). */
+  updatePlayArchived: (playId: string, archived: boolean) => void;
 
   // ------- Play data -------
   currentPlay: Play | null;
@@ -393,6 +395,8 @@ export const useStore = create<AppStore>()(
           ...cloned,
           id: crypto.randomUUID(),
           title: `${original.title} (Copy)`,
+          // A copy starts in rotation whatever the original's state.
+          archived: false,
           createdAt: now,
           updatedAt: now,
           scenes: cloned.scenes.map((sc) => ({
@@ -419,6 +423,12 @@ export const useStore = create<AppStore>()(
         plays: state.plays.map((p) =>
           p.id === playId ? { ...p, teamId } : p,
         ),
+      })),
+
+    updatePlayArchived: (playId, archived) =>
+      set((state) => ({
+        plays: state.plays.map((p) => (p.id === playId ? { ...p, archived } : p)),
+        currentPlay: state.currentPlay?.id === playId ? { ...state.currentPlay, archived } : state.currentPlay,
       })),
 
     // =======================================================================

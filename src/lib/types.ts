@@ -131,6 +131,8 @@ export interface Play {
   colors?: PlayColors;
   /** When true, basket is at the top (north) instead of the default south. */
   flipped?: boolean;
+  /** Out of the rotation: hidden from the grid except under the "Archived" filter. */
+  archived?: boolean;
 }
 
 export interface User {

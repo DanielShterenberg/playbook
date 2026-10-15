@@ -30,6 +30,7 @@ import ThemeToggle from "@/components/brand/ThemeToggle";
 import { effectivePlayFilter, filterPlays, type PlayFilter } from "@/lib/playFilter";
 
 const PERSONAL_FILTER: { value: PlayFilter; label: string } = { value: "personal", label: "Personal" };
+const ARCHIVED_FILTER: { value: PlayFilter; label: string } = { value: "archived", label: "Archived" };
 
 /** Outlined 44px control — the header's secondary buttons. */
 const OUTLINE_BTN = `flex h-11 flex-none items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-line bg-transparent px-3.5 text-sm font-medium text-ink transition-colors hover:bg-app ${FOCUS_RING}`;
@@ -114,6 +115,13 @@ export default function PlaybookPage() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [showUserMenu]);
 
+  // Once the archive is empty the Archived chip goes away; drop a selection of
+  // it so archiving a play later does not jump the grid into the archive.
+  const anyArchived = plays.some((p) => p.archived);
+  useEffect(() => {
+    if (!anyArchived) setPlayFilter((f) => (f === "archived" ? "all" : f));
+  }, [anyArchived]);
+
   async function handleSignOut() {
     await signOut();
     router.replace("/sign-in");
@@ -123,9 +131,19 @@ export default function PlaybookPage() {
 
   // "Personal" (plays not yet added to the team) only means something in a
   // team: the chip shows with the team header, and a stale selection is ignored.
+  // "Archived" shows while something is archived; archived plays are hidden
+  // under every other chip.
   const inTeam = Boolean(team && teamId);
-  const playFilter = effectivePlayFilter(selectedFilter, inTeam ? teamId : null);
-  const filters = inTeam ? [...CATEGORY_FILTERS, PERSONAL_FILTER] : CATEGORY_FILTERS;
+  const archivedCount = plays.filter((p) => p.archived).length;
+  const playFilter = effectivePlayFilter(selectedFilter, inTeam ? teamId : null, archivedCount);
+  const filters = [
+    ...CATEGORY_FILTERS,
+    ...(inTeam ? [PERSONAL_FILTER] : []),
+    ...(archivedCount > 0 ? [ARCHIVED_FILTER] : []),
+  ];
+  // The count the stats bar compares against: the archive, or everything in rotation.
+  const totalPlays = playFilter === "archived" ? archivedCount : plays.length - archivedCount;
+  const playsWord = `${playFilter === "archived" ? "archived " : ""}${totalPlays === 1 ? "play" : "plays"}`;
 
   const hasFilters = Boolean(search) || playFilter !== "all";
   const filteredPlays = filterPlays(plays, { search, filter: playFilter, teamId: inTeam ? teamId : null });
@@ -311,9 +329,9 @@ export default function PlaybookPage() {
             {/* Stats bar */}
             <div className="-my-2 flex min-h-11 items-center justify-between gap-3">
               <p className="m-0 text-[13px] text-muted">
-                {filteredPlays.length === plays.length
-                  ? `${plays.length} ${plays.length === 1 ? "play" : "plays"}`
-                  : `${filteredPlays.length} of ${plays.length} plays`}
+                {filteredPlays.length === totalPlays
+                  ? `${totalPlays} ${playsWord}`
+                  : `${filteredPlays.length} of ${totalPlays} ${playsWord}`}
               </p>
               {hasFilters && (
                 <button type="button" onClick={clearFilters} className={LINK_BTN}>
@@ -322,7 +340,8 @@ export default function PlaybookPage() {
               )}
             </div>
 
-            {filteredPlays.length === 0 ? (
+            {/* Nothing in rotation and no filter (everything archived): the grid, i.e. the New play tile. */}
+            {filteredPlays.length === 0 && hasFilters ? (
               <div className="flex min-h-[200px] flex-col items-center justify-center gap-1 text-center">
                 <p className="m-0 text-[15px] font-medium text-muted">No plays match your filters</p>
                 <button type="button" onClick={clearFilters} className={LINK_BTN}>

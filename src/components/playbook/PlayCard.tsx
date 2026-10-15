@@ -19,10 +19,11 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
+import { useAuth } from "@/contexts/AuthContext";
 import type { Play, Role } from "@/lib/types";
 import { CATEGORY_BADGE, CATEGORY_SHORT_LABELS } from "@/lib/categories";
 import CourtThumbnail from "@/components/court/CourtThumbnail";
-import { addPlayToTeam, deletePlay, savePlay } from "@/lib/db";
+import { addPlayToTeam, deletePlay, savePlay, setPlayArchived } from "@/lib/db";
 import { isPersonalPlay } from "@/lib/playFilter";
 
 // ---------------------------------------------------------------------------
@@ -60,13 +61,19 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
   const removePlay = useStore((s) => s.removePlay);
   const duplicatePlay = useStore((s) => s.duplicatePlay);
   const updatePlayTeamId = useStore((s) => s.updatePlayTeamId);
+  const updatePlayArchived = useStore((s) => s.updatePlayArchived);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [addingToTeam, setAddingToTeam] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [archiveFailed, setArchiveFailed] = useState(false);
+  const { user } = useAuth();
 
   // A play is "personal" when: user is in a team, the play has no teamId, and
   // the user has permission to edit (admin or editor).
   const isPersonal = isPersonalPlay(play, teamId);
-  const canAddToTeam = isPersonal && (role === "admin" || role === "editor");
+  const canAddToTeam = isPersonal && !play.archived && (role === "admin" || role === "editor");
+  // Team viewers cannot change team plays they did not create (the Firestore rules refuse it).
+  const canArchive = !(role === "viewer" && play.teamId && play.createdBy !== user?.uid);
 
   const firstScene = play.scenes[0] ?? null;
   const sceneCount = play.scenes.length;
@@ -111,6 +118,22 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
       // Silently fail — the play remains personal; user can retry
     } finally {
       setAddingToTeam(false);
+    }
+  }
+
+  async function handleArchive() {
+    if (archiving) return;
+    const archived = !play.archived;
+    setArchiving(true);
+    setArchiveFailed(false);
+    try {
+      await setPlayArchived(play.id, archived);
+      updatePlayArchived(play.id, archived);
+    } catch {
+      // Nothing changed: the button says so and offers a retry.
+      setArchiveFailed(true);
+    } finally {
+      setArchiving(false);
     }
   }
 
@@ -175,6 +198,7 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
           <div className="mt-auto flex items-center gap-2 pt-1 text-[13px] text-muted">
             {/* Category badge */}
             <span className={`${BADGE} capitalize ${categoryBadge}`}>{categoryLabel}</span>
+            {play.archived && <span className={`${BADGE} bg-chip text-muted`}>Archived</span>}
             {/* Scene count */}
             <span>
               {sceneCount} {sceneCount === 1 ? "scene" : "scenes"}
@@ -197,22 +221,44 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
             {addingToTeam ? "Adding…" : "+ Team"}
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => {
-            duplicatePlay(play.id);
-            // Persist the newly created copy to Firestore.
-            // The copy is always appended last in the plays list.
-            const { plays } = useStore.getState();
-            const copy = plays[plays.length - 1];
-            if (copy && copy.id !== play.id) savePlay(copy).catch(() => {});
-          }}
-          aria-label="Duplicate play"
-          title="Duplicate play"
-          className={`${ACTION_BTN} border-transparent text-muted hover:bg-app hover:text-ink`}
-        >
-          Copy
-        </button>
+        {canArchive && (
+          <button
+            type="button"
+            onClick={() => { void handleArchive(); }}
+            aria-label={play.archived ? "Restore play" : "Archive play"}
+            title={
+              archiveFailed
+                ? "That didn't work. Click to try again"
+                : play.archived
+                  ? "Bring back into the playbook"
+                  : "Move out of the playbook; find it under Archived"
+            }
+            disabled={archiving}
+            className={`${ACTION_BTN} border-transparent hover:bg-app disabled:cursor-default disabled:opacity-60 ${
+              archiveFailed ? "text-danger" : "text-muted hover:text-ink"
+            }`}
+          >
+            {archiveFailed ? "Retry" : play.archived ? "Restore" : "Archive"}
+          </button>
+        )}
+        {!play.archived && (
+          <button
+            type="button"
+            onClick={() => {
+              duplicatePlay(play.id);
+              // Persist the newly created copy to Firestore.
+              // The copy is always appended last in the plays list.
+              const { plays } = useStore.getState();
+              const copy = plays[plays.length - 1];
+              if (copy && copy.id !== play.id) savePlay(copy).catch(() => {});
+            }}
+            aria-label="Duplicate play"
+            title="Duplicate play"
+            className={`${ACTION_BTN} border-transparent text-muted hover:bg-app hover:text-ink`}
+          >
+            Copy
+          </button>
+        )}
         <button
           type="button"
           onClick={handleDelete}
