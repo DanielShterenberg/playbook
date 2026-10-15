@@ -70,7 +70,7 @@ export default function CreateTeamModal({ onClose }: CreateTeamModalProps) {
     setLoading(true);
     setError("");
     try {
-      await createTeam(trimmed, user.uid);
+      await createTeam(trimmed, user);
       refresh();
       onClose();
     } catch {

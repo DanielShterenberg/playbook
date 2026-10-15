@@ -78,6 +78,8 @@ basketball-playbook/
 │   │   ├── page.tsx            # Landing / auth
 │   │   ├── playbook/           # Playbook grid view
 │   │   ├── play/[id]/          # Play editor
+│   │   ├── team/               # Team: members, invite link, join requests
+│   │   ├── join/[inviteCode]/  # Invite link → join request
 │   │   └── view/[shareToken]/  # Public read-only viewer
 │   ├── components/
 │   │   ├── court/              # Court canvas, rendering
