@@ -228,7 +228,7 @@ export default function DrawingToolsPanel() {
 
   return (
     <nav
-      className={`${RAIL} gap-1.5 overflow-y-auto py-4 transition-all duration-200 ${collapsed ? "w-11" : "px-2.5"}`}
+      className={`${RAIL} gap-1 overflow-y-auto py-4 transition-all duration-200 ${collapsed ? "w-11" : "w-[148px] px-2"}`}
       aria-label="Drawing tools"
     >
       {/* Tool buttons — hidden when collapsed */}
@@ -240,15 +240,21 @@ export default function DrawingToolsPanel() {
               key={id}
               type="button"
               onClick={() => setSelectedTool(id)}
-              title={`${label} (${shortcut})`}
-              aria-label={label}
+              title={`${label} (shortcut ${shortcut})`}
               aria-pressed={active}
+              aria-keyshortcuts={shortcut}
               className={[
-                `flex h-12 w-12 flex-none items-center justify-center rounded-[10px] transition-colors ${FOCUS}`,
+                `flex h-11 w-full flex-none items-center gap-2.5 rounded-[10px] pl-2.5 pr-2 text-left transition-colors ${FOCUS}`,
                 active ? "bg-accent text-accent-ink" : "text-ink hover:bg-chip",
               ].join(" ")}
             >
-              <Icon />
+              <span className="flex w-6 flex-none justify-center">
+                <Icon />
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{label}</span>
+              <span className={`flex-none font-mono text-[11px] ${active ? "opacity-70" : "text-muted"}`} aria-hidden="true">
+                {shortcut}
+              </span>
             </button>
           );
         })}
