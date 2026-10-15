@@ -45,3 +45,6 @@ next-env.d.ts
 
 # Babysitter artifacts
 .a5c/
+
+# Firebase CLI
+*-debug.log
