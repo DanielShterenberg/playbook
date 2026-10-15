@@ -10,6 +10,7 @@ import MobileToolBar from "@/components/editor/MobileToolBar";
 import EditorHeader from "./EditorHeader";
 import PlaybackEngine from "./PlaybackEngine";
 import EditorCoachMark from "@/components/editor/EditorCoachMark";
+import SceneNotes from "@/components/editor/SceneNotes";
 
 interface PlayEditorPageProps {
   params: { id: string };
@@ -57,6 +58,9 @@ export default function PlayEditorPage({ params }: PlayEditorPageProps) {
 
           {/* Playback controls — always visible (condensed on mobile) */}
           <PlaybackControls />
+
+          {/* The selected scene's notes (text explaining the scene) */}
+          <SceneNotes />
         </section>
 
         {/*

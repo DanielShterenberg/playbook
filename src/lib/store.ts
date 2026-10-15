@@ -15,6 +15,7 @@ import type {
   PlayerState,
   BallState,
 } from "./types";
+import { SCENE_DESCRIPTION_MAX, sceneDescription, sceneName } from "./types";
 import { useHistoryStore } from "./history";
 import {
   firstStepOf,
@@ -90,6 +91,8 @@ export interface AppStore {
   duplicateScene: (sceneId: string) => void;
   reorderScene: (sceneId: string, newOrder: number) => void;
   updateSceneNote: (sceneId: string, note: string) => void;
+  /** Set a scene's notes (one undo step); a no-op when nothing changed. */
+  updateSceneDescription: (sceneId: string, description: string) => void;
   updatePlayerState: (sceneId: string, side: "offense" | "defense", player: PlayerState) => void;
   updateBallState: (sceneId: string, ball: BallState) => void;
 
@@ -748,6 +751,26 @@ export const useStore = create<AppStore>()(
       set((s) => {
         if (!s.currentPlay) return s;
         return { currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => ({ ...sc, note })) };
+      });
+    },
+
+    updateSceneDescription: (sceneId, description) => {
+      const state = get();
+      const scene = state.currentPlay?.scenes.find((sc) => sc.id === sceneId);
+      const next = description.slice(0, SCENE_DESCRIPTION_MAX);
+      if (!scene || next.trim() === sceneDescription(scene)) return;
+      const snapshot = captureSnapshot(state);
+      if (snapshot) useHistoryStore.getState().pushSnapshot(snapshot);
+      set((s) => {
+        if (!s.currentPlay) return s;
+        return {
+          currentPlay: withUpdatedScene(s.currentPlay, sceneId, (sc) => ({
+            ...sc,
+            description: next,
+            // A long note was these notes; it moves here instead of staying as a non-name.
+            note: sceneName(sc) ? sc.note : "",
+          })),
+        };
       });
     },
 

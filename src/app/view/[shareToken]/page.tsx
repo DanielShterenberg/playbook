@@ -28,7 +28,7 @@ import ThemeToggle from "@/components/brand/ThemeToggle";
 import Spinner from "@/components/brand/Spinner";
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { loadSharedPlay } from "@/lib/team";
-import { sceneName as sceneNameOf } from "@/lib/types";
+import { sceneDescription, sceneName as sceneNameOf } from "@/lib/types";
 import type { Play } from "@/lib/types";
 import { CATEGORY_LABELS } from "@/lib/categories";
 import {
@@ -394,9 +394,9 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
   const hasMultipleScenes = scenes.length > 1;
   const sceneCountLabel = `${scenes.length} ${scenes.length === 1 ? "scene" : "scenes"}`;
   const categoryLabel = CATEGORY_LABELS[play.category];
-  // A short one-line note is the scene's name ("Scene 2 of 4 · Flare"); a longer
-  // one is a description and goes under the controls instead.
-  const note = (scene?.note ?? "").trim();
+  // A short one-line note is the scene's name ("Scene 2 of 4 · Flare"); the
+  // scene's notes go under the controls.
+  const notes = sceneDescription(scene);
   const sceneName = sceneNameOf(scene);
 
   return (
@@ -544,10 +544,10 @@ export default function SharedPlayViewPage({ params }: SharedPlayViewPageProps) 
           )}
         </div>
 
-        {/* Scene description (a note too long to be the scene's name) */}
-        {note && !sceneName && (
-          <p dir="auto" className="m-0 max-w-[620px] whitespace-pre-line break-words text-center leading-normal text-muted">
-            {note}
+        {/* Scene notes */}
+        {notes && (
+          <p dir="auto" className="m-0 w-full max-w-[620px] whitespace-pre-line break-words text-start leading-normal text-ink [unicode-bidi:plaintext]">
+            {notes}
           </p>
         )}
 

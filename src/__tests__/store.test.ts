@@ -11,6 +11,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { useStore, createDefaultPlay } from "@/lib/store";
 import { useHistoryStore } from "@/lib/history";
 import type { Play, Scene, TimingGroup } from "@/lib/types";
+import { sceneDescription } from "@/lib/types";
 
 function makeScene(id: string, order: number, steps: [step: number, duration: number][]): Scene {
   const base = createDefaultPlay().scenes[0];
@@ -434,5 +435,41 @@ describe("setTimingStepDuration", () => {
     get().setTimingStepDuration("b", 2, 700);
     expect(useHistoryStore.getState().canUndo).toBe(false);
     expect(durations()).toEqual([500, 700, 800]);
+  });
+});
+
+describe("scene notes (updateSceneDescription)", () => {
+  beforeEach(() => {
+    get().setCurrentPlay(twoScenes());
+  });
+  const sceneA = () => get().currentPlay!.scenes.find((sc) => sc.id === "a")!;
+
+  it("sets the notes as one undo step, and undo brings the old notes back", () => {
+    get().updateSceneDescription("a", "If X denies, 1 hits 5 on the roll");
+    expect(sceneA().description).toBe("If X denies, 1 hits 5 on the roll");
+    expect(sceneDescription(sceneA())).toBe("If X denies, 1 hits 5 on the roll");
+    get().undo();
+    expect(sceneDescription(sceneA())).toBe("");
+  });
+
+  it("is a no-op (no undo step) when nothing changed", () => {
+    get().updateSceneDescription("a", "x");
+    const past = useHistoryStore.getState().past.length;
+    get().updateSceneDescription("a", "x  ");
+    expect(useHistoryStore.getState().past.length).toBe(past);
+  });
+
+  it("keeps the scene's name; a long legacy note moves into the notes", () => {
+    get().updateSceneNote("a", "Flare");
+    get().updateSceneDescription("a", "notes");
+    expect(sceneA().note).toBe("Flare");
+
+    const long = "A note written before notes had their own field, far too long to be a name";
+    get().updateSceneNote("b", long);
+    const sceneB = () => get().currentPlay!.scenes.find((sc) => sc.id === "b")!;
+    expect(sceneDescription(sceneB())).toBe(long);
+    get().updateSceneDescription("b", long + " — edited");
+    expect(sceneB().note).toBe("");
+    expect(sceneDescription(sceneB())).toBe(long + " — edited");
   });
 });

@@ -69,11 +69,30 @@ export function sceneName(scene: { note?: string | null } | null | undefined): s
   return note.length <= SCENE_NAME_MAX && !note.includes("\n") ? note : "";
 }
 
+/** Longest scene notes (the explanation under the court). */
+export const SCENE_DESCRIPTION_MAX = 2000;
+
+/**
+ * The scene's notes: its `description`, else a note too long to be its name
+ * (how notes were stored before they had their own field), else "".
+ */
+export function sceneDescription(
+  scene: { note?: string | null; description?: string | null } | null | undefined,
+): string {
+  const description = (scene?.description ?? "").trim();
+  if (description) return description;
+  const note = (scene?.note ?? "").trim();
+  return note && !sceneName(scene) ? note : "";
+}
+
 export interface Scene {
   id: string;
   order: number;
   duration: number;
+  /** The scene's name when short (see sceneName). */
   note: string;
+  /** Notes explaining the scene — options, reads, coaching points (see sceneDescription). */
+  description?: string;
   players: {
     offense: PlayerState[];
     defense: PlayerState[];

@@ -65,6 +65,39 @@ export function fitText(text: string, max: number, width: (t: string) => number,
   return cut();
 }
 
+/**
+ * `text` broken into lines no wider than `max`: its own line breaks are kept
+ * (blank lines too), words wrap at spaces, and a word wider than a line is
+ * split between characters.
+ */
+export function wrapText(text: string, max: number, width: (t: string) => number): string[] {
+  const lines: string[] = [];
+  for (const paragraph of text.replace(/\r\n?/g, "\n").split("\n")) {
+    let line = "";
+    for (const word of paragraph.split(/[ \t]+/).filter(Boolean)) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (width(candidate) <= max) {
+        line = candidate;
+        continue;
+      }
+      if (line) lines.push(line);
+      line = "";
+      // A word longer than a line goes over several.
+      let rest = graphemes(word);
+      while (rest.length > 0) {
+        let n = rest.length;
+        while (n > 1 && width(rest.slice(0, n).join("")) > max) n--;
+        const piece = rest.slice(0, n).join("");
+        rest = rest.slice(n);
+        if (rest.length > 0) lines.push(piece);
+        else line = piece;
+      }
+    }
+    lines.push(line);
+  }
+  return lines;
+}
+
 export interface TextImage {
   /** PNG data URL, transparent background. */
   dataUrl: string;
