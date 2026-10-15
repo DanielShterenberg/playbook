@@ -18,7 +18,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeam } from "@/contexts/TeamContext";
-import { loadUserTeamInfo, requestToJoin } from "@/lib/team";
+import { requestToJoin } from "@/lib/team";
 import Logo from "@/components/brand/Logo";
 import ThemeToggle from "@/components/brand/ThemeToggle";
 import Spinner from "@/components/brand/Spinner";
@@ -97,7 +97,7 @@ const CLOCK_ICON = (
 export default function JoinTeamPage({ params }: JoinTeamPageProps) {
   const { inviteCode } = params;
   const { user, loading: authLoading } = useAuth();
-  const { refresh, teamId } = useTeam();
+  const { refresh, teamId, loading: teamLoading } = useTeam();
   const router = useRouter();
 
   const [status, setStatus] = useState<"idle" | "joining" | "pending" | "other-team" | "error">("idle");
@@ -111,14 +111,13 @@ export default function JoinTeamPage({ params }: JoinTeamPageProps) {
     }
   }, [user, authLoading, router, inviteCode]);
 
-  // File the request once auth is ready. The user's current team is read
-  // from their own document, so a member does not ask to join again.
+  // File the request once auth and the user's team are known: TeamContext
+  // checked that team against its members map, so it is current.
   useEffect(() => {
-    if (authLoading || !user || status !== "idle") return;
+    if (authLoading || !user || teamLoading || status !== "idle") return;
     setStatus("joining");
 
-    loadUserTeamInfo(user.uid)
-      .then((info) => requestToJoin(inviteCode, user, info.teamId))
+    requestToJoin(inviteCode, user, teamId)
       .then((result) => {
         if (result.status === "member") {
           router.replace("/playbook");
@@ -136,7 +135,7 @@ export default function JoinTeamPage({ params }: JoinTeamPageProps) {
         setStatus("error");
         setErrorMsg(err.message || "Could not send the request. Try the link again.");
       });
-  }, [user, authLoading, inviteCode, status, refresh, router]);
+  }, [user, authLoading, teamLoading, teamId, inviteCode, status, refresh, router]);
 
   // Approved while this page is open: TeamContext loaded the team.
   useEffect(() => {

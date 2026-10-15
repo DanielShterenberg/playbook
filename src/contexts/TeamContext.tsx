@@ -94,7 +94,9 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
     };
   }, [uid, tick]);
 
-  // The team, live. Not readable (or not in its members) = not in the team.
+  // The team, live. Refused by the server, or confirmed without the user in
+  // its members = not in the team, and the stale pointer is forgotten. An
+  // answer from the offline cache never drops the team (it may be incomplete).
   const teamId = info?.teamId ?? null;
   useEffect(() => {
     if (!uid || !teamId) return;
@@ -106,11 +108,11 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
     };
     return subscribeToTeam(
       teamId,
-      (t) => {
+      (t, confirmed) => {
         if (t && t.members[uid]) {
           setTeam(t);
           setSettledTeamId(teamId);
-        } else dropTeam();
+        } else if (confirmed) dropTeam();
       },
       dropTeam,
     );
@@ -134,9 +136,8 @@ export function TeamProvider({ children }: { children: React.ReactNode }) {
     return subscribeToMyRequest(pendingTeamId, uid, (request) => {
       if (request?.status === "approved") {
         setPending(null);
-        void completeJoin(uid, pendingTeamId)
-          .catch(() => {})
-          .finally(refresh);
+        // On failure nothing changes; the next load tries again (no retry loop).
+        void completeJoin(uid, pendingTeamId).then(refresh, () => {});
       } else if (request) {
         setPending({ teamId: pendingTeamId, teamName: pendingTeamName, status: request.status });
       } else {

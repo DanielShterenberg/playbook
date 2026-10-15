@@ -185,9 +185,12 @@ export default function TeamPage() {
 
   // The invite document lets people outside the team find it; older teams
   // may lack it or the team name on it.
+  const teamKey = team ? { id: team.id, code: team.inviteCode, name: team.name } : null;
   useEffect(() => {
-    if (team && isAdmin) void ensureInviteDoc(team.inviteCode, team.id, team.name).catch(() => {});
-  }, [team, isAdmin]);
+    if (teamKey && isAdmin) void ensureInviteDoc(teamKey.code, teamKey.id, teamKey.name).catch(() => {});
+    // Once per team / code / name, not on every snapshot of the team document.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamKey?.id, teamKey?.code, teamKey?.name, isAdmin]);
 
   useEffect(() => {
     if (!copied) return;

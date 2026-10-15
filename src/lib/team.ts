@@ -25,15 +25,17 @@
 
 import {
   collection,
+  deleteDoc,
   deleteField,
   doc,
   getDoc,
+  getDocFromServer,
+  runTransaction,
   onSnapshot,
   query,
   setDoc,
   updateDoc,
   where,
-  writeBatch,
   serverTimestamp,
   Timestamp,
   type DocumentData,
@@ -163,7 +165,7 @@ export async function createTeam(
   await ensureInviteDoc(inviteCode, teamId, name);
 
   // Record the team on the user's own document
-  await setDoc(doc(db, "users", user.uid), { teamId, role: "admin" }, { merge: true });
+  await setDoc(doc(db, "users", user.uid), { teamId }, { merge: true });
 
   return {
     id: teamId,
@@ -185,19 +187,37 @@ export async function loadTeam(teamId: string): Promise<TeamDoc | null> {
 }
 
 /**
- * Follow a team document. `onError` fires when it can no longer be read — the
- * user is not (or no longer) a member.
+ * Follow a team document. `confirmed` says the answer came from the server
+ * (not the offline cache), so "missing" really means missing. `onDenied`
+ * fires when the server refuses it: the user is not (or no longer) a member.
+ * Other failures (offline, network) report nothing — they prove nothing.
  */
 export function subscribeToTeam(
   teamId: string,
-  onTeam: (team: TeamDoc | null) => void,
-  onError: () => void,
+  onTeam: (team: TeamDoc | null, confirmed: boolean) => void,
+  onDenied: () => void,
 ): Unsubscribe {
   return onSnapshot(
     doc(db, "teams", teamId),
-    (snap) => onTeam(snap.exists() ? deserialiseTeam(snap.id, snap.data()) : null),
-    () => onError(),
+    (snap) => onTeam(snap.exists() ? deserialiseTeam(snap.id, snap.data()) : null, !snap.metadata.fromCache),
+    (err) => {
+      if (err.code === "permission-denied") onDenied();
+      else console.warn(`Team ${teamId} unavailable: ${err.code}`);
+    },
   );
+}
+
+/**
+ * Is the user in this team, asked of the server? True / false when it
+ * answered (a non-member is refused), null when it could not be reached.
+ */
+async function isMemberOnServer(teamId: string, uid: string): Promise<boolean | null> {
+  try {
+    const snap = await getDocFromServer(doc(db, "teams", teamId));
+    return snap.exists() && Boolean((snap.data().members ?? {})[uid]);
+  } catch (err) {
+    return (err as { code?: string }).code === "permission-denied" ? false : null;
+  }
 }
 
 /** Keep the signed-in member's own name and email in the members map current. */
@@ -229,7 +249,10 @@ export type RequestToJoinResult =
 
 /**
  * Redeem an invite link: file a join request for the team the code points
- * to (or find that the user is already in it). A user is in one team at a time.
+ * to, or find that the user is already in it (asked of the team document,
+ * the truth). A user is in one team at a time: `currentTeamId` is the team
+ * TeamContext verified, null when none. A request to another team that is
+ * still waiting is withdrawn.
  */
 export async function requestToJoin(
   inviteCode: string,
@@ -245,6 +268,20 @@ export async function requestToJoin(
 
   if (currentTeamId === teamId) return { status: "member", teamId };
   if (currentTeamId) return { status: "other-team" };
+
+  // Approved while the app was closed (or a stale user document): already in.
+  const member = await isMemberOnServer(teamId, user.uid);
+  if (member === null) throw new Error("Could not reach the server. Check the connection and open the link again.");
+  if (member) {
+    await completeJoin(user.uid, teamId);
+    return { status: "member", teamId };
+  }
+
+  // One request at a time: withdraw a waiting request to another team.
+  const info = await loadUserTeamInfo(user.uid);
+  if (info.pendingTeamId && info.pendingTeamId !== teamId) {
+    await deleteDoc(doc(db, "teams", info.pendingTeamId, "requests", user.uid)).catch(() => {});
+  }
 
   await setDoc(doc(db, "teams", teamId, "requests", user.uid), {
     uid: user.uid,
@@ -288,14 +325,20 @@ export function subscribeToPendingRequests(
   );
 }
 
-/** Approve a request: the requester becomes a viewer (admins only). */
+/**
+ * Approve a request: the requester becomes a viewer (admins only). Someone
+ * already in the team keeps their role.
+ */
 export async function approveRequest(teamId: string, request: JoinRequest): Promise<void> {
-  const batch = writeBatch(db);
-  batch.update(doc(db, "teams", teamId), {
-    [`members.${request.uid}`]: { role: "viewer", name: request.name, email: request.email },
+  const teamRef = doc(db, "teams", teamId);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(teamRef);
+    const existing = ((snap.data()?.members ?? {}) as Record<string, TeamMemberEntry>)[request.uid];
+    if (!existing) {
+      tx.update(teamRef, { [`members.${request.uid}`]: { role: "viewer", name: request.name, email: request.email } });
+    }
+    tx.update(doc(db, "teams", teamId, "requests", request.uid), { status: "approved" });
   });
-  batch.update(doc(db, "teams", teamId, "requests", request.uid), { status: "approved" });
-  await batch.commit();
 }
 
 /** Decline a request (admins only). The requester can ask again from the link. */
@@ -318,12 +361,12 @@ export async function loadUserTeamInfo(userId: string): Promise<UserTeamInfo> {
 export async function completeJoin(userId: string, teamId: string): Promise<void> {
   await setDoc(
     doc(db, "users", userId),
-    { teamId, role: "viewer", pendingTeamId: deleteField(), pendingTeamName: deleteField() },
+    { teamId, pendingTeamId: deleteField(), pendingTeamName: deleteField() },
     { merge: true },
   );
 }
 
-/** Forget a team the user is no longer in (removed by an admin). */
+/** Forget a team the user is no longer in (removed by an admin); `role` is a leftover of older versions. */
 export async function forgetTeam(userId: string): Promise<void> {
   await setDoc(doc(db, "users", userId), { teamId: deleteField(), role: deleteField() }, { merge: true });
 }

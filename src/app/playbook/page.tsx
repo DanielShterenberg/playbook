@@ -64,7 +64,7 @@ export default function PlaybookPage() {
 
   // Auth guard — redirect to sign-in if not authenticated
   const { user, loading } = useAuth();
-  const { teamId, role, team, pending, refresh: refreshTeam } = useTeam();
+  const { teamId, role, team, pending, loading: teamLoading, refresh: refreshTeam } = useTeam();
   const requests = usePendingRequests(teamId, role === "admin");
   const router = useRouter();
   useEffect(() => {
@@ -75,7 +75,10 @@ export default function PlaybookPage() {
   // When the user is in a team, load both team plays and their personal plays
   // (plays with no teamId created by this user), then merge and deduplicate by id.
   useEffect(() => {
-    if (!user) return;
+    // Wait until it is known whether the user is in a team: loading the solo
+    // list first could land after the team list and replace it.
+    if (!user || teamLoading) return;
+    let cancelled = false;
     setLoadingPlays(true);
     const fetchPlays = async () => {
       try {
@@ -90,10 +93,10 @@ export default function PlaybookPage() {
           const uniquePersonal = personalPlays.filter(
             (p) => !teamPlayIds.has(p.id) && !p.teamId,
           );
-          setPlays([...teamPlays, ...uniquePersonal]);
+          if (!cancelled) setPlays([...teamPlays, ...uniquePersonal]);
         } else {
           const fetched = await loadPlaysForUser(user.uid);
-          setPlays(fetched);
+          if (!cancelled) setPlays(fetched);
         }
       } catch {
         // Silently fall back to whatever is in the local store
@@ -102,7 +105,10 @@ export default function PlaybookPage() {
       }
     };
     void fetchPlays();
-  }, [user, teamId, setPlays]);
+    return () => {
+      cancelled = true;
+    };
+  }, [user, teamId, teamLoading, setPlays]);
 
   // User avatar dropdown
   const [showUserMenu, setShowUserMenu] = useState(false);

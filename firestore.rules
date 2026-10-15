@@ -75,12 +75,12 @@ service cloud.firestore {
       // themselves: joining goes through a request an admin approves.
       allow update: if isAdmin(teamId) || isOwnProfileUpdate(teamId);
 
-      // Join requests: the requester files their own, pending; an admin
-      // approves / declines (status) or deletes it.
+      // Join requests: the requester files their own, pending, and may
+      // withdraw it; an admin approves / declines (status) or deletes it.
       match /requests/{userId} {
         allow read: if isOwner(userId) || isAdmin(teamId);
         allow create, update: if (isOwner(userId) && isValidRequest(userId)) || isAdmin(teamId);
-        allow delete: if isAdmin(teamId);
+        allow delete: if isOwner(userId) || isAdmin(teamId);
       }
     }
 

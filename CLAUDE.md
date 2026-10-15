@@ -91,5 +91,5 @@
 - #173 Flipped full court inverts the formation relative to the basket (needs a product decision; fixing moves stored plays)
 - #179 Playback/store cleanup after #177 — left: one stored scene selection instead of two, MP4 holds vs on-screen timing
 - #180 Rendering cleanup after #178 — left: one annotation colour map (three copies today, tied by a test)
-- `firestore.rules` changed in #188 (bounds `teamName` on share links): deploy with `firebase deploy --only firestore:rules`
+- `firestore.rules` must be deployed by hand (`firebase deploy --only firestore:rules`); Vercel ships only the client. The comments rules were never deployed (posting comments fails with permission-denied until they are), and #201 (join requests) needs its rules live BEFORE its client is merged
 - Phones: no redo, and no way to reach the scene menu (duplicate / delete scene) on iOS, which sends no `contextmenu` on long press
