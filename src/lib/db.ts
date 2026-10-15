@@ -44,10 +44,16 @@ export function serialisePlayForShare(play: Play): Record<string, unknown> {
   };
 }
 
-/** Strip client-side Date objects before writing to Firestore. */
+/**
+ * Strip client-side Date objects before writing to Firestore. `archived` is
+ * left out: it is written on its own (setPlayArchived) and a save from an
+ * editor holding an older copy must not undo an archive or a restore.
+ */
 function serialisePlay(play: Play): DocumentData {
+  const fields: Partial<Play> = { ...play };
+  delete fields.archived;
   return {
-    ...play,
+    ...fields,
     // Dates → let Firestore manage them as server timestamps on first write;
     // subsequent saves keep the original createdAt and bump updatedAt.
     createdAt: play.createdAt instanceof Date ? Timestamp.fromDate(play.createdAt) : play.createdAt,
@@ -70,12 +76,14 @@ function deserialisePlay(id: string, data: DocumentData): Play {
 // ---------------------------------------------------------------------------
 
 /**
- * Save (create or overwrite) a play document in Firestore.
- * Uses setDoc with merge:false so the full document is always up to date.
+ * Save (create or overwrite) a play document in Firestore: every field of
+ * the play is written whole, except `archived` (see serialisePlay).
  */
 export async function savePlay(play: Play): Promise<void> {
   const ref = doc(db, "plays", play.id);
-  await setDoc(ref, serialisePlay(play));
+  const data = serialisePlay(play);
+  // Every written field is replaced whole; fields not written (`archived`) are kept.
+  await setDoc(ref, data, { mergeFields: Object.keys(data) });
 }
 
 /**

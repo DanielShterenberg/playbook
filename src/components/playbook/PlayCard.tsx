@@ -19,6 +19,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
+import { useAuth } from "@/contexts/AuthContext";
 import type { Play, Role } from "@/lib/types";
 import { CATEGORY_BADGE, CATEGORY_SHORT_LABELS } from "@/lib/categories";
 import CourtThumbnail from "@/components/court/CourtThumbnail";
@@ -64,13 +65,15 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [addingToTeam, setAddingToTeam] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [archiveFailed, setArchiveFailed] = useState(false);
+  const { user } = useAuth();
 
   // A play is "personal" when: user is in a team, the play has no teamId, and
   // the user has permission to edit (admin or editor).
   const isPersonal = isPersonalPlay(play, teamId);
   const canAddToTeam = isPersonal && !play.archived && (role === "admin" || role === "editor");
-  // Team viewers cannot change team plays (the Firestore rules refuse it).
-  const canArchive = !(role === "viewer" && play.teamId);
+  // Team viewers cannot change team plays they did not create (the Firestore rules refuse it).
+  const canArchive = !(role === "viewer" && play.teamId && play.createdBy !== user?.uid);
 
   const firstScene = play.scenes[0] ?? null;
   const sceneCount = play.scenes.length;
@@ -122,11 +125,13 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
     if (archiving) return;
     const archived = !play.archived;
     setArchiving(true);
+    setArchiveFailed(false);
     try {
       await setPlayArchived(play.id, archived);
       updatePlayArchived(play.id, archived);
     } catch {
-      // Nothing changed; the button stays as it was and the user can retry.
+      // Nothing changed: the button says so and offers a retry.
+      setArchiveFailed(true);
     } finally {
       setArchiving(false);
     }
@@ -221,11 +226,19 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
             type="button"
             onClick={() => { void handleArchive(); }}
             aria-label={play.archived ? "Restore play" : "Archive play"}
-            title={play.archived ? "Bring back into the playbook" : "Move out of the playbook; find it under Archived"}
+            title={
+              archiveFailed
+                ? "That didn't work. Click to try again"
+                : play.archived
+                  ? "Bring back into the playbook"
+                  : "Move out of the playbook; find it under Archived"
+            }
             disabled={archiving}
-            className={`${ACTION_BTN} border-transparent text-muted hover:bg-app hover:text-ink disabled:cursor-default disabled:opacity-60`}
+            className={`${ACTION_BTN} border-transparent hover:bg-app disabled:cursor-default disabled:opacity-60 ${
+              archiveFailed ? "text-danger" : "text-muted hover:text-ink"
+            }`}
           >
-            {play.archived ? "Restore" : "Archive"}
+            {archiveFailed ? "Retry" : play.archived ? "Restore" : "Archive"}
           </button>
         )}
         {!play.archived && (

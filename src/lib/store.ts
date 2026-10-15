@@ -395,6 +395,8 @@ export const useStore = create<AppStore>()(
           ...cloned,
           id: crypto.randomUUID(),
           title: `${original.title} (Copy)`,
+          // A copy starts in rotation whatever the original's state.
+          archived: false,
           createdAt: now,
           updatedAt: now,
           scenes: cloned.scenes.map((sc) => ({

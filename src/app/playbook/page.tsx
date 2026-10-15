@@ -115,6 +115,13 @@ export default function PlaybookPage() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [showUserMenu]);
 
+  // Once the archive is empty the Archived chip goes away; drop a selection of
+  // it so archiving a play later does not jump the grid into the archive.
+  const anyArchived = plays.some((p) => p.archived);
+  useEffect(() => {
+    if (!anyArchived) setPlayFilter((f) => (f === "archived" ? "all" : f));
+  }, [anyArchived]);
+
   async function handleSignOut() {
     await signOut();
     router.replace("/sign-in");
@@ -136,6 +143,7 @@ export default function PlaybookPage() {
   ];
   // The count the stats bar compares against: the archive, or everything in rotation.
   const totalPlays = playFilter === "archived" ? archivedCount : plays.length - archivedCount;
+  const playsWord = `${playFilter === "archived" ? "archived " : ""}${totalPlays === 1 ? "play" : "plays"}`;
 
   const hasFilters = Boolean(search) || playFilter !== "all";
   const filteredPlays = filterPlays(plays, { search, filter: playFilter, teamId: inTeam ? teamId : null });
@@ -322,8 +330,8 @@ export default function PlaybookPage() {
             <div className="-my-2 flex min-h-11 items-center justify-between gap-3">
               <p className="m-0 text-[13px] text-muted">
                 {filteredPlays.length === totalPlays
-                  ? `${totalPlays} ${playFilter === "archived" ? "archived " : ""}${totalPlays === 1 ? "play" : "plays"}`
-                  : `${filteredPlays.length} of ${totalPlays} plays`}
+                  ? `${totalPlays} ${playsWord}`
+                  : `${filteredPlays.length} of ${totalPlays} ${playsWord}`}
               </p>
               {hasFilters && (
                 <button type="button" onClick={clearFilters} className={LINK_BTN}>
