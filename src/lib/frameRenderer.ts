@@ -367,14 +367,16 @@ function drawAnnotation(
   }
 
   if (type === "screen") {
-    // Straight line with a perpendicular bar at the end; no arrowhead.
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
+    // Line (straight or curved) with a bar across the end, square to the
+    // end tangent (control point → to); no arrowhead.
+    const tail = cp ?? from;
+    const dx = to.x - tail.x;
+    const dy = to.y - tail.y;
     const len = Math.sqrt(dx * dx + dy * dy);
-    const ux = len > 0 ? dx / len : 1;
-    const uy = len > 0 ? dy / len : 0;
+    const ux = len > 0.001 ? dx / len : 1;
+    const uy = len > 0.001 ? dy / len : 0;
     const perp = { x: -uy * 10 * s, y: ux * 10 * s };
-    strokeSegment(ctx, from, to);
+    strokeBezier(ctx, from, to, cp);
     ctx.lineWidth = 3 * s;
     strokeSegment(ctx, { x: to.x + perp.x, y: to.y + perp.y }, { x: to.x - perp.x, y: to.y - perp.y });
     return;

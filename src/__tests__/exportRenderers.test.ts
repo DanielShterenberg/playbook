@@ -773,6 +773,7 @@ describe("annotations match the editor (AnnotationLayer.tsx)", () => {
     ["pass", {}, "straight"],
     ["pass", { controlPoints: [{ x: 0.5, y: 0.2 }] }, "curved"],
     ["screen", {}, "straight"],
+    ["screen", { controlPoints: [{ x: 0.5, y: 0.2 }] }, "curved"],
     ["cut", {}, "straight"],
     ["cut", { waypoints: [{ x: 0.4, y: 0.6 }] }, "multi-leg"],
     ["guard", {}, "straight"],
@@ -842,19 +843,20 @@ describe("annotations match the editor (AnnotationLayer.tsx)", () => {
     }
   });
 
-  it("screen: straight line plus a ±10 px bar, 3 px wide, no arrowhead", () => {
-    const a = ann("s", "screen", { controlPoints: [{ x: 0.5, y: 0.2 }] }); // the editor ignores the control point
-    const f = px(a.from), t = px(a.to);
-    const ops = frameOps(a);
-    expect(ops.some((e) => e[0] === "quadraticCurveTo")).toBe(false);
-    expect(ops.some((e) => e[0] === "closePath")).toBe(false);
-    const d = Math.hypot(t.x - f.x, t.y - f.y);
-    const ux = (t.x - f.x) / d, uy = (t.y - f.y) / d;
-    const moves = ops.filter((e) => e[0] === "moveTo" || e[0] === "lineTo");
-    expect(moves[0]).toEqual(["moveTo", f.x, f.y]);
-    expect(moves[1]).toEqual(["lineTo", t.x, t.y]);
-    expect(near(moves[2][1] as number, t.x - uy * 10) && near(moves[2][2] as number, t.y + ux * 10)).toBe(true);
-    expect(near(moves[3][1] as number, t.x + uy * 10) && near(moves[3][2] as number, t.y - ux * 10)).toBe(true);
+  it("screen: line plus a ±10 px bar square to the end tangent, 3 px wide, no arrowhead — straight or curved", () => {
+    for (const cp of [undefined, { x: 0.5, y: 0.2 }]) {
+      const a = ann("s", "screen", cp ? { controlPoints: [cp] } : {});
+      const f = px(a.from), t = px(a.to), tail = cp ? px(cp) : f;
+      const ops = frameOps(a);
+      expect(ops.some((e) => e[0] === "quadraticCurveTo")).toBe(!!cp);
+      expect(ops.some((e) => e[0] === "closePath")).toBe(false);
+      const d = Math.hypot(t.x - tail.x, t.y - tail.y);
+      const ux = (t.x - tail.x) / d, uy = (t.y - tail.y) / d;
+      const bar = ops.filter((e) => e[0] === "moveTo" || e[0] === "lineTo").slice(-2);
+      expect(ops.find((e) => e[0] === "moveTo")).toEqual(["moveTo", f.x, f.y]);
+      expect(near(bar[0][1] as number, t.x - uy * 10) && near(bar[0][2] as number, t.y + ux * 10)).toBe(true);
+      expect(near(bar[1][1] as number, t.x + uy * 10) && near(bar[1][2] as number, t.y - ux * 10)).toBe(true);
+    }
   });
 
   it("hand-off ticks are the editor's: at t = 0.85 and 0.72, 9 px each side, perpendicular to the path", () => {

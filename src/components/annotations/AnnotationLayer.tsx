@@ -398,21 +398,16 @@ function RenderedAnnotation({ ann, selected, onSelect, step, showStepBadge, widt
   }
 
   if (type === "screen") {
-    // A line with a perpendicular bar at the end (like a comb)
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const len = Math.sqrt(dx * dx + dy * dy);
-    const ux = len > 0 ? dx / len : 1;
-    const uy = len > 0 ? dy / len : 0;
+    // The screener's path (straight or curved) with a bar across its end,
+    // square to the direction the screener arrives from.
+    const { ux, uy } = bezierEndTangent(from, to, cp);
     const perp = { x: -uy * 10, y: ux * 10 };
+    const d = bezierPath(from, to, cp);
     return (
       <g onClick={handleClick} style={hitStyle} data-annotation-id={ann.id}>
         {selectRing}
-        <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="transparent" strokeWidth={ui(14)} />
-        <line
-          x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-          stroke="#7C3AED" strokeWidth={2.5} strokeLinecap="round"
-        />
+        <path d={d} stroke="transparent" strokeWidth={ui(14)} fill="none" />
+        <path d={d} stroke="#7C3AED" strokeWidth={2.5} strokeLinecap="round" fill="none" />
         {/* Perpendicular bar */}
         <line
           x1={to.x + perp.x} y1={to.y + perp.y}
