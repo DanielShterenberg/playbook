@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/store";
 import { CATEGORY_FILTERS } from "@/lib/categories";
@@ -22,7 +23,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTeam } from "@/contexts/TeamContext";
 import { signOut } from "@/lib/auth";
 import { loadPlaysForUser, loadPlaysForTeam } from "@/lib/db";
-import { ensureInviteDoc } from "@/lib/team";
+import { forgetPendingTeam } from "@/lib/team";
+import { usePendingRequests } from "@/hooks/usePendingRequests";
 import CreateTeamModal from "@/components/playbook/CreateTeamModal";
 import { useCourtPalette } from "@/hooks/useTheme";
 import Logo from "@/components/brand/Logo";
@@ -62,7 +64,8 @@ export default function PlaybookPage() {
 
   // Auth guard — redirect to sign-in if not authenticated
   const { user, loading } = useAuth();
-  const { teamId, role, team } = useTeam();
+  const { teamId, role, team, pending, loading: teamLoading, refresh: refreshTeam } = useTeam();
+  const requests = usePendingRequests(teamId, role === "admin");
   const router = useRouter();
   useEffect(() => {
     if (!loading && !user) router.replace("/sign-in");
@@ -72,7 +75,10 @@ export default function PlaybookPage() {
   // When the user is in a team, load both team plays and their personal plays
   // (plays with no teamId created by this user), then merge and deduplicate by id.
   useEffect(() => {
-    if (!user) return;
+    // Wait until it is known whether the user is in a team: loading the solo
+    // list first could land after the team list and replace it.
+    if (!user || teamLoading) return;
+    let cancelled = false;
     setLoadingPlays(true);
     const fetchPlays = async () => {
       try {
@@ -87,10 +93,10 @@ export default function PlaybookPage() {
           const uniquePersonal = personalPlays.filter(
             (p) => !teamPlayIds.has(p.id) && !p.teamId,
           );
-          setPlays([...teamPlays, ...uniquePersonal]);
+          if (!cancelled) setPlays([...teamPlays, ...uniquePersonal]);
         } else {
           const fetched = await loadPlaysForUser(user.uid);
-          setPlays(fetched);
+          if (!cancelled) setPlays(fetched);
         }
       } catch {
         // Silently fall back to whatever is in the local store
@@ -99,7 +105,10 @@ export default function PlaybookPage() {
       }
     };
     void fetchPlays();
-  }, [user, teamId, setPlays]);
+    return () => {
+      cancelled = true;
+    };
+  }, [user, teamId, teamLoading, setPlays]);
 
   // User avatar dropdown
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -161,35 +170,26 @@ export default function PlaybookPage() {
           <Logo size={34} />
         </div>
 
-        {/* Team badge + invite link / Create Team button */}
+        {/* Team: opens the Team page (members, invite link, requests) / Create Team button */}
         {team ? (
           <div className="order-last flex min-w-0 basis-full items-center gap-2 sm:order-none sm:basis-auto">
-            <span
-              className="flex h-11 min-w-0 max-w-[220px] items-center rounded-lg border border-line px-3.5 text-sm font-medium text-ink"
+            <Link
+              href="/team"
+              className={`${OUTLINE_BTN} min-w-0 max-w-[260px] flex-shrink`}
               title={`Team: ${team.name} · Your role: ${role ?? "viewer"}`}
+              aria-label={`Team ${team.name}${requests.length > 0 ? `, ${requests.length} waiting for approval` : ""}`}
             >
               <span dir="auto" className="truncate">
                 {team.name}
               </span>
-            </span>
-            {role === "admin" && (
-              <button
-                type="button"
-                onClick={() => {
-                  // Ensure invite doc exists for existing teams (backward compat)
-                  void ensureInviteDoc(team.inviteCode, team.id);
-                  navigator.clipboard.writeText(
-                    `${window.location.origin}/join/${team.inviteCode}`,
-                  ).catch(() => {});
-                }}
-                title="Copy invite link"
-                className={OUTLINE_BTN}
-              >
-                Copy invite
-              </button>
-            )}
+              {requests.length > 0 && (
+                <span className="flex h-[18px] min-w-[18px] flex-none items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold leading-none text-accent-ink">
+                  {requests.length}
+                </span>
+              )}
+            </Link>
           </div>
-        ) : (
+        ) : pending ? null : (
           <button type="button" onClick={() => setShowCreateTeam(true)} className={`${OUTLINE_BTN} order-last sm:order-none`}>
             + Create Team
           </button>
@@ -241,6 +241,29 @@ export default function PlaybookPage() {
 
       {/* Content */}
       <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col gap-5 px-4 py-7 sm:px-6">
+        {/* A join request from an invite link, waiting for (or declined by) the team admin */}
+        {!team && pending && (
+          <div role="status" className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-line bg-surface px-4 py-3">
+            <p className="m-0 min-w-0 flex-1 text-sm text-ink">
+              {pending.status === "pending" ? "Your request to join " : "The admin of "}
+              <span dir="auto" className="font-semibold">{pending.teamName || "the team"}</span>
+              {pending.status === "pending"
+                ? " is waiting for the admin's approval. The team's plays appear here once it is approved."
+                : " declined your request. Ask them for a new invite if that was a mistake."}
+            </p>
+            {pending.status === "declined" && user && (
+              <button
+                type="button"
+                onClick={() => {
+                  void forgetPendingTeam(user.uid).finally(refreshTeam);
+                }}
+                className={OUTLINE_BTN}
+              >
+                Dismiss
+              </button>
+            )}
+          </div>
+        )}
         {/* Title + search + New play */}
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="m-0 flex-[1_1_240px] font-display text-[34px] font-bold uppercase leading-[1.2] tracking-[0.03em]">

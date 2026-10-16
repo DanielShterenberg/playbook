@@ -3,9 +3,11 @@ rules_version = '2';
 // Firestore security rules — implements issues #85 and #76.
 //
 // Data model:
-//   users/{userId}           — user profile (teamId, role cached here)
-//   teams/{teamId}           — team document
-//                              members map: { [userId]: { role: "admin"|"editor"|"viewer" } }
+//   users/{userId}           — user profile (teamId, pendingTeamId: where the app looks first)
+//   teams/{teamId}           — team document; the members map is the truth:
+//                              { [userId]: { role: "admin"|"editor"|"viewer", name?, email? } }
+//   teams/{teamId}/requests/{userId} — join request { uid, name, email, status, createdAt }
+//   invites/{inviteCode}     — { teamId, teamName } for people outside the team
 //   plays/{playId}           — flat play collection (teamId="" for solo users)
 //   sharedPlays/{shareToken} — lightweight public share token { playId, createdBy, snapshot, teamName? }
 
@@ -62,15 +64,46 @@ service cloud.firestore {
       // Any team member may read the team document
       allow read: if isMember(teamId);
 
-      // Only the creator can create a new team document
-      allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
+      // A new team has exactly one member: its creator, as admin
+      allow create: if isSignedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.members.keys().hasOnly([request.auth.uid])
+        && request.resource.data.members[request.auth.uid].role == "admin";
 
-      // Admins can update team settings; any signed-in user can join via invite code
-      allow update: if isSignedIn() && (
-        isAdmin(teamId) ||
-        // Allow a user to add themselves to the members map (join via invite code)
-        request.resource.data.members.keys().hasOnly(resource.data.members.keys().concat([request.auth.uid]))
-      );
+      // Admins change the team (approve, remove). A member may only refresh
+      // their own name / email entry, keeping their role. Nobody adds
+      // themselves: joining goes through a request an admin approves.
+      allow update: if isAdmin(teamId) || isOwnProfileUpdate(teamId);
+
+      // Join requests: the requester files their own, pending, and may
+      // withdraw it; an admin approves / declines (status) or deletes it.
+      match /requests/{userId} {
+        allow read: if isOwner(userId) || isAdmin(teamId);
+        allow create, update: if (isOwner(userId) && isValidRequest(userId)) || isAdmin(teamId);
+        allow delete: if isOwner(userId) || isAdmin(teamId);
+      }
+    }
+
+    function isOwnProfileUpdate(teamId) {
+      let before = resource.data.members;
+      let after = request.resource.data.members;
+      return isMember(teamId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["members"])
+        && after.diff(before).affectedKeys().hasOnly([request.auth.uid])
+        && request.auth.uid in after
+        && after[request.auth.uid].role == before[request.auth.uid].role
+        && after[request.auth.uid].keys().hasOnly(["role", "name", "email"])
+        && (!("name" in after[request.auth.uid]) || (after[request.auth.uid].name is string && after[request.auth.uid].name.size() <= 100))
+        && (!("email" in after[request.auth.uid]) || (after[request.auth.uid].email is string && after[request.auth.uid].email.size() <= 100));
+    }
+
+    function isValidRequest(userId) {
+      let r = request.resource.data;
+      return r.keys().hasOnly(["uid", "name", "email", "status", "createdAt"])
+        && r.uid == userId
+        && r.status == "pending"
+        && r.name is string && r.name.size() <= 100
+        && r.email is string && r.email.size() <= 100;
     }
 
     // -----------------------------------------------------------------------
@@ -102,14 +135,19 @@ service cloud.firestore {
 
     // -----------------------------------------------------------------------
     // Invite documents (readable by any signed-in user, #75)
-    // Each document: invites/{inviteCode} → { teamId }
-    // Allows joinTeamByInviteCode to look up the teamId without querying
-    // the protected teams collection.
+    // Each document: invites/{inviteCode} → { teamId, teamName }
+    // Lets someone outside the team find it from the link (requestToJoin)
+    // without reading the protected team document.
     // -----------------------------------------------------------------------
 
     match /invites/{inviteCode} {
-      allow read:  if isSignedIn();
-      allow write: if isSignedIn();
+      allow read: if isSignedIn();
+      // Only an admin of the team, for the team's own code; an existing code
+      // cannot be pointed at another team.
+      allow create: if isAdmin(request.resource.data.teamId)
+        && teamData(request.resource.data.teamId).inviteCode == inviteCode;
+      allow update: if isAdmin(resource.data.teamId)
+        && request.resource.data.teamId == resource.data.teamId;
     }
 
     // -----------------------------------------------------------------------

@@ -56,6 +56,11 @@
 - Phones (<768px) edit too: `MobileToolBar` is the bottom tool bar (five rail tools + Undo). Team viewers get no tools on any screen
 - A scene's name is its `note` (`sceneName()` in `types.ts`, max `SCENE_NAME_MAX`); renamed from the scene strip (double-click, F2 or the menu), shown in the share viewer and the PDF
 
+### Teams
+- The team document's `members` map is the truth for membership and role (the rules read it); `users/{uid}.teamId` only says where to look, and TeamContext forgets it when the user is not in the members map
+- Joining: invite link → `teams/{id}/requests/{uid}` (pending) → an admin approves on `/team` (adds the member as viewer) → the requester's app records the team. Nobody can add themselves to `members`
+- Members write their own `name` / `email` into their entry (role unchanged); admins only can remove members and point invite codes
+
 ### Coordinates
 - Court positions are normalized `[0, 1]` (x=0 left, x=1 right, y=0 half-court line, y=1 baseline)
 - Convert to pixels with `px = norm * courtWidth`, `py = norm * courtHeight`
@@ -78,6 +83,7 @@
 - Email: test@playbook.com
 - Password: Test1234!
 - Team: מכבי קדימה (admin role)
+- Second account for join / approve / remove drills: test2@playbook.com / Test1234! (owner-approved; not in a team between drills)
 - Drills against localhost only — never sign in to the production site with a script
 
 ## Open Issues (as of 2026-10-11)
@@ -85,5 +91,6 @@
 - #173 Flipped full court inverts the formation relative to the basket (needs a product decision; fixing moves stored plays)
 - #179 Playback/store cleanup after #177 — left: one stored scene selection instead of two, MP4 holds vs on-screen timing
 - #180 Rendering cleanup after #178 — left: one annotation colour map (three copies today, tied by a test)
-- `firestore.rules` changed in #188 (bounds `teamName` on share links): deploy with `firebase deploy --only firestore:rules`
+- `firestore.rules` and `firestore.indexes.json` are deployed by hand (`firebase deploy --only firestore:rules,firestore:indexes --project playbook-d01f2`); Vercel ships only the client. Deploy rules BEFORE merging a client that depends on them. Last deployed 2026-10-16 (#201)
+- Comments are readable by any signed-in user (the rule does not check access to the play)
 - Phones: no redo, and no way to reach the scene menu (duplicate / delete scene) on iOS, which sends no `contextmenu` on long press
