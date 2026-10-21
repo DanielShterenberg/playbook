@@ -62,7 +62,7 @@ function serialisePlay(play: Play): DocumentData {
 }
 
 /** Convert Firestore document data back to a typed Play. */
-function deserialisePlay(id: string, data: DocumentData): Play {
+export function deserialisePlay(id: string, data: DocumentData): Play {
   return {
     ...(data as Omit<Play, "id" | "createdAt" | "updatedAt">),
     id,

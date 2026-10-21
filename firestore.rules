@@ -22,6 +22,15 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // The person who runs the app: sees and can delete everything (the
+    // /admin page). Matched on a verified sign-in email; Google sign-in
+    // always verifies it.
+    function isAppOwner() {
+      return isSignedIn()
+        && request.auth.token.email == "15daniel10@gmail.com"
+        && request.auth.token.email_verified == true;
+    }
+
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
@@ -51,7 +60,7 @@ service cloud.firestore {
     // -----------------------------------------------------------------------
 
     match /users/{userId} {
-      allow read:   if isOwner(userId);
+      allow read:   if isAppOwner() || isOwner(userId);
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
     }
@@ -62,7 +71,7 @@ service cloud.firestore {
 
     match /teams/{teamId} {
       // Any team member may read the team document
-      allow read: if isMember(teamId);
+      allow read: if isAppOwner() || isMember(teamId);
 
       // A new team has exactly one member: its creator, as admin
       allow create: if isSignedIn()
@@ -73,14 +82,18 @@ service cloud.firestore {
       // Admins change the team (approve, remove). A member may only refresh
       // their own name / email entry, keeping their role. Nobody adds
       // themselves: joining goes through a request an admin approves.
-      allow update: if isAdmin(teamId) || isOwnProfileUpdate(teamId);
+      // A member who is not an admin may leave.
+      allow update: if isAppOwner() || isAdmin(teamId) || isOwnProfileUpdate(teamId) || isLeaving(teamId);
+
+      // Only the app owner deletes a team.
+      allow delete: if isAppOwner();
 
       // Join requests: the requester files their own, pending, and may
       // withdraw it; an admin approves / declines (status) or deletes it.
       match /requests/{userId} {
-        allow read: if isOwner(userId) || isAdmin(teamId);
+        allow read: if isAppOwner() || isOwner(userId) || isAdmin(teamId);
         allow create, update: if (isOwner(userId) && isValidRequest(userId)) || isAdmin(teamId);
-        allow delete: if isOwner(userId) || isAdmin(teamId);
+        allow delete: if isAppOwner() || isOwner(userId) || isAdmin(teamId);
       }
     }
 
@@ -95,6 +108,21 @@ service cloud.firestore {
         && after[request.auth.uid].keys().hasOnly(["role", "name", "email"])
         && (!("name" in after[request.auth.uid]) || (after[request.auth.uid].name is string && after[request.auth.uid].name.size() <= 100))
         && (!("email" in after[request.auth.uid]) || (after[request.auth.uid].email is string && after[request.auth.uid].email.size() <= 100));
+    }
+
+    function isLeaving(teamId) {
+      let before = resource.data.members;
+      let after = request.resource.data.members;
+      return isMember(teamId)
+        && memberRole(teamId) != "admin"
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["members"])
+        && after.diff(before).affectedKeys().hasOnly([request.auth.uid])
+        && !(request.auth.uid in after);
+    }
+
+    function isCreatorWithAccess() {
+      return resource.data.createdBy == request.auth.uid
+        && (resource.data.teamId == "" || isMember(resource.data.teamId));
     }
 
     function isValidRequest(userId) {
@@ -112,7 +140,7 @@ service cloud.firestore {
 
     match /plays/{playId} {
       // Signed-in owner or team member can read
-      allow read: if isSignedIn() && (
+      allow read: if isAppOwner() || isSignedIn() && (
         resource.data.createdBy == request.auth.uid ||
         isMember(resource.data.teamId)
       );
@@ -120,15 +148,16 @@ service cloud.firestore {
       // Authenticated users can create their own plays
       allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
 
-      // Creator or team editor can update
+      // Creator or team editor can update. A team play's creator only while
+      // still in the team: after leaving (or being removed) it stays the team's.
       allow update: if isSignedIn() && (
-        resource.data.createdBy == request.auth.uid ||
+        isCreatorWithAccess() ||
         isEditor(resource.data.teamId)
       );
 
-      // Creator or team admin can delete
-      allow delete: if isSignedIn() && (
-        resource.data.createdBy == request.auth.uid ||
+      // Creator (same condition) or team admin can delete
+      allow delete: if isAppOwner() || isSignedIn() && (
+        isCreatorWithAccess() ||
         isAdmin(resource.data.teamId)
       );
     }
@@ -148,6 +177,7 @@ service cloud.firestore {
         && teamData(request.resource.data.teamId).inviteCode == inviteCode;
       allow update: if isAdmin(resource.data.teamId)
         && request.resource.data.teamId == resource.data.teamId;
+      allow delete: if isAppOwner();
     }
 
     // -----------------------------------------------------------------------
@@ -161,7 +191,7 @@ service cloud.firestore {
       allow read:   if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.authorId == request.auth.uid;
       allow update: if isSignedIn();
-      allow delete: if isSignedIn() && resource.data.authorId == request.auth.uid;
+      allow delete: if isAppOwner() || isSignedIn() && resource.data.authorId == request.auth.uid;
     }
 
     // -----------------------------------------------------------------------
@@ -169,16 +199,18 @@ service cloud.firestore {
     // -----------------------------------------------------------------------
 
     match /sharedPlays/{shareToken} {
-      // Anyone (even unauthenticated) can read a share token
-      allow read: if true;
-      // Only authenticated users can create share tokens. teamName is shown
-      // publicly under the play title: optional, short text only.
-      allow create: if isSignedIn() && (
+      // Anyone (even unauthenticated) can open a share link; only the app
+      // owner can list them all.
+      allow get: if true;
+      allow list: if isAppOwner();
+      // Only authenticated users can create share tokens, in their own name.
+      // teamName is shown publicly under the play title: optional, short text only.
+      allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid && (
         !('teamName' in request.resource.data) ||
         (request.resource.data.teamName is string && request.resource.data.teamName.size() <= 80)
       );
-      // Only the token creator can delete it
-      allow delete: if isSignedIn() && resource.data.createdBy == request.auth.uid;
+      // The token creator or the app owner can delete it
+      allow delete: if isAppOwner() || isSignedIn() && resource.data.createdBy == request.auth.uid;
     }
   }
 }

@@ -59,7 +59,14 @@
 ### Teams
 - The team document's `members` map is the truth for membership and role (the rules read it); `users/{uid}.teamId` only says where to look, and TeamContext forgets it when the user is not in the members map
 - Joining: invite link → `teams/{id}/requests/{uid}` (pending) → an admin approves on `/team` (adds the member as viewer) → the requester's app records the team. Nobody can add themselves to `members`
-- Members write their own `name` / `email` into their entry (role unchanged); admins only can remove members and point invite codes
+- Members write their own `name` / `email` into their entry (role unchanged); admins only can remove members and point invite codes; a member who is not an admin may leave (`leaveTeam`)
+- One team per person: someone in a team who opens another team's invite gets "Already in a team" until they leave
+
+### App owner (/admin)
+- The app owner (`isAppOwner()` in `firestore.rules`, `APP_OWNER_EMAIL` in `src/lib/admin.ts`, a test ties them) reads every team, user, play, request, share link and comment, and can delete them or remove members. Matched on a verified sign-in email (the owner signs in with Google)
+- `/admin` lists everything; `/admin/play/[id]` shows any play read-only through `PlayViewer` (`src/components/viewer/`, shared with the public share page). Never make a test account the owner
+- Deleting a play deletes its share links (frozen public copies) and comments; deleting a team deletes its plays, requests and invite code
+- Rules changes are tested with the Rules test API (`projects.test`, mock requests, no data touched) before deploying
 
 ### Coordinates
 - Court positions are normalized `[0, 1]` (x=0 left, x=1 right, y=0 half-court line, y=1 baseline)
@@ -84,6 +91,7 @@
 - Password: Test1234!
 - Team: מכבי קדימה (admin role)
 - Second account for join / approve / remove drills: test2@playbook.com / Test1234! (owner-approved; not in a team between drills)
+- test3@playbook.com / Test1234! ("Test Coach") belongs to the owner for trying the app by hand (e.g. creating a team). Don't use it in drills
 - Drills against localhost only — never sign in to the production site with a script
 
 ## Open Issues (as of 2026-10-11)

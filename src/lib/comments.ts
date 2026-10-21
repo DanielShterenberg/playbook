@@ -53,7 +53,7 @@ function deserialiseReply(r: DocumentData): CommentReply {
   };
 }
 
-function deserialiseComment(id: string, data: DocumentData): Comment {
+export function deserialiseComment(id: string, data: DocumentData): Comment {
   return {
     id,
     playId: data.playId as string,
