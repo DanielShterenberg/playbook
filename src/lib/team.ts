@@ -106,7 +106,7 @@ function cleanProfile(value: string | null | undefined): string {
   return (value ?? "").trim().slice(0, PROFILE_MAX);
 }
 
-function deserialiseTeam(id: string, data: DocumentData): TeamDoc {
+export function deserialiseTeam(id: string, data: DocumentData): TeamDoc {
   return {
     id,
     name: data.name as string,
@@ -236,6 +236,12 @@ export async function updateOwnMemberProfile(
 /** Remove a member (admins only). Their own app notices and drops the team. */
 export async function removeMember(teamId: string, uid: string): Promise<void> {
   await updateDoc(doc(db, "teams", teamId), { [`members.${uid}`]: deleteField() });
+}
+
+/** Leave the team (members who are not admins). Frees the user to join another. */
+export async function leaveTeam(teamId: string, uid: string): Promise<void> {
+  await removeMember(teamId, uid);
+  await forgetTeam(uid);
 }
 
 // ---------------------------------------------------------------------------

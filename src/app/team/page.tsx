@@ -18,6 +18,7 @@ import {
   approveRequest,
   declineRequest,
   ensureInviteDoc,
+  leaveTeam,
   removeMember,
   type JoinRequest,
   type TeamMemberEntry,
@@ -161,6 +162,56 @@ function MemberRow({
         )}
       </span>
     </PersonRow>
+  );
+}
+
+/** Leave the team (members who are not admins), after a "Sure?". */
+function LeaveTeam({ teamId, teamName, uid, onError }: { teamId: string; teamName: string; uid: string; onError: (m: string) => void }) {
+  const { refresh } = useTeam();
+  const router = useRouter();
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!confirm) return;
+    const timer = setTimeout(() => setConfirm(false), CONFIRM_MS);
+    return () => clearTimeout(timer);
+  }, [confirm]);
+
+  async function handleLeave() {
+    if (!confirm) {
+      setConfirm(true);
+      return;
+    }
+    setBusy(true);
+    try {
+      await leaveTeam(teamId, uid);
+      refresh();
+      router.replace("/playbook");
+    } catch {
+      onError("Couldn't leave the team. Try again.");
+      setBusy(false);
+      setConfirm(false);
+    }
+  }
+
+  return (
+    <section className={SECTION} aria-labelledby="leave-heading">
+      <h2 id="leave-heading" className={HEADING}>
+        Leave team
+      </h2>
+      <p className="m-0 text-sm text-muted">
+        You stop seeing <span dir="auto">{teamName}</span>&apos;s plays, except the ones you created. To come back, you need a new invite and the admin&apos;s approval.
+      </p>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void handleLeave()}
+        onBlur={() => setConfirm(false)}
+        className={`${BTN} w-fit border ${confirm ? "border-danger font-semibold text-danger" : "border-line text-ink hover:bg-app hover:text-danger"}`}
+      >
+        {confirm ? "Sure? Leave the team" : "Leave team"}
+      </button>
+    </section>
   );
 }
 
@@ -310,6 +361,8 @@ export default function TeamPage() {
           </ul>
           {!isAdmin && <p className="m-0 text-[13px] text-muted">Only the team admin can add or remove people.</p>}
         </section>
+
+        {!isAdmin && <LeaveTeam teamId={team.id} teamName={team.name} uid={user.uid} onError={setError} />}
       </main>
     </div>
   );
