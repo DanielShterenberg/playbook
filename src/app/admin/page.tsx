@@ -80,9 +80,9 @@ function ConfirmButton({ label, confirmLabel = "Sure?", ariaLabel, action, onErr
       await action();
     } catch {
       onError(`${ariaLabel} failed. Try again.`);
-      setBusy(false);
-      setArmed(false);
     }
+    setBusy(false);
+    setArmed(false);
   }
   return (
     <button
@@ -122,11 +122,14 @@ export default function AdminPage() {
     if (owner) reload();
   }, [owner, reload]);
 
-  // Run a change, then show the new state.
+  // Run a change, then show the new state (also after a failure: part of it may be done).
   const act = useCallback((fn: () => Promise<void>) => async () => {
     setError(null);
-    await fn();
-    reload();
+    try {
+      await fn();
+    } finally {
+      reload();
+    }
   }, [reload]);
 
   const counts = useMemo(() => (data ? playCounts(data.plays) : new Map<string, number>()), [data]);
@@ -181,6 +184,8 @@ export default function AdminPage() {
       .sort((a, b) => a.name.localeCompare(b.name));
     body = list.map((team) => {
       const members = Object.entries(team.members);
+      // The last admin stays: without one nobody can approve, invite or remove.
+      const admins = members.filter(([, m]) => m.role === "admin").length;
       const n = counts.get(team.id) ?? 0;
       return (
         <li key={team.id} className={`${ROW} flex-col !items-stretch`}>
@@ -195,7 +200,7 @@ export default function AdminPage() {
               label="Delete team"
               confirmLabel={`Delete with ${n} ${n === 1 ? "play" : "plays"}?`}
               ariaLabel={`Delete team ${team.name}`}
-              action={act(() => deleteTeamEverywhere(team, plays))}
+              action={act(() => deleteTeamEverywhere(team))}
               onError={setError}
             />
           </div>
@@ -207,12 +212,12 @@ export default function AdminPage() {
                   {m.email && m.name ? <span className="text-muted"> · {m.email}</span> : null}
                 </span>
                 <span className={CHIP}>{ROLE_LABEL[m.role] ?? m.role}</span>
-                <ConfirmButton
+                {(m.role !== "admin" || admins > 1) && <ConfirmButton
                   label="Remove"
                   ariaLabel={`Remove ${m.name || m.email || uid} from ${team.name}`}
                   action={act(() => removeMember(team.id, uid))}
                   onError={setError}
-                />
+                />}
               </li>
             ))}
           </ul>
@@ -307,9 +312,9 @@ export default function AdminPage() {
           <p className="m-0 text-sm text-muted">Everything in the app, across all teams. Only you can see this page.</p>
         </div>
 
-        {error && (
+        {(error || loadError) && (
           <p role="alert" className="m-0 text-sm text-danger">
-            {error}
+            {error ?? "Couldn't refresh the lists; they may be out of date. Reload the page."}
           </p>
         )}
 

@@ -96,8 +96,9 @@ export default function PlaybookPage() {
           );
           if (!cancelled) setPlays([...teamPlays, ...uniquePersonal]);
         } else {
+          // Only personal plays: ones made in a team the user has left stay the team's.
           const fetched = await loadPlaysForUser(user.uid);
-          if (!cancelled) setPlays(fetched);
+          if (!cancelled) setPlays(fetched.filter((p) => !p.teamId));
         }
       } catch {
         // Silently fall back to whatever is in the local store

@@ -241,7 +241,8 @@ export async function removeMember(teamId: string, uid: string): Promise<void> {
 /** Leave the team (members who are not admins). Frees the user to join another. */
 export async function leaveTeam(teamId: string, uid: string): Promise<void> {
   await removeMember(teamId, uid);
-  await forgetTeam(uid);
+  // Left already; TeamContext also forgets the team when it is refused.
+  await forgetTeam(uid).catch(() => {});
 }
 
 // ---------------------------------------------------------------------------

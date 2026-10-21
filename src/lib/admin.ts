@@ -123,9 +123,14 @@ export async function deletePlayEverywhere(playId: string): Promise<void> {
   await deleteDoc(doc(db, "plays", playId));
 }
 
-/** Delete a team with its plays (and their links and comments), requests and invite code. */
-export async function deleteTeamEverywhere(team: TeamDoc, plays: Play[]): Promise<void> {
-  for (const play of plays.filter((p) => p.teamId === team.id)) await deletePlayEverywhere(play.id);
+/**
+ * Delete a team with its plays (and their links and comments), requests and
+ * invite code. The plays are looked up now, not taken from the loaded list,
+ * so one added since is not left behind.
+ */
+export async function deleteTeamEverywhere(team: TeamDoc): Promise<void> {
+  const plays = await getDocs(query(collection(db, "plays"), where("teamId", "==", team.id)));
+  for (const play of plays.docs) await deletePlayEverywhere(play.id);
   const requests = await getDocs(collection(db, "teams", team.id, "requests"));
   await Promise.all(requests.docs.map((d) => deleteDoc(d.ref)));
   if (team.inviteCode) await deleteDoc(doc(db, "invites", team.inviteCode));

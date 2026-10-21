@@ -120,6 +120,11 @@ service cloud.firestore {
         && !(request.auth.uid in after);
     }
 
+    function isCreatorWithAccess() {
+      return resource.data.createdBy == request.auth.uid
+        && (resource.data.teamId == "" || isMember(resource.data.teamId));
+    }
+
     function isValidRequest(userId) {
       let r = request.resource.data;
       return r.keys().hasOnly(["uid", "name", "email", "status", "createdAt"])
@@ -143,15 +148,16 @@ service cloud.firestore {
       // Authenticated users can create their own plays
       allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
 
-      // Creator or team editor can update
+      // Creator or team editor can update. A team play's creator only while
+      // still in the team: after leaving (or being removed) it stays the team's.
       allow update: if isSignedIn() && (
-        resource.data.createdBy == request.auth.uid ||
+        isCreatorWithAccess() ||
         isEditor(resource.data.teamId)
       );
 
-      // Creator or team admin can delete
+      // Creator (same condition) or team admin can delete
       allow delete: if isAppOwner() || isSignedIn() && (
-        resource.data.createdBy == request.auth.uid ||
+        isCreatorWithAccess() ||
         isAdmin(resource.data.teamId)
       );
     }
