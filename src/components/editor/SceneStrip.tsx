@@ -31,7 +31,7 @@ import CourtThumbnail from "@/components/court/CourtThumbnail";
 import InfoTooltip from "./InfoTooltip";
 import { POPOVER, SECTION_LABEL } from "./chrome";
 import { useOpenCommentCounts } from "@/hooks/useOpenCommentCounts";
-import { useTeam } from "@/contexts/TeamContext";
+import { useCanEditPlay } from "@/hooks/useCanEditPlay";
 
 // ---------------------------------------------------------------------------
 // Mini court thumbnail (the court itself is the shared CourtThumbnail)
@@ -293,9 +293,8 @@ function SceneCard({ scene, index, totalScenes, isActive, compact, onClick, vari
   // The scene's name (a long note from before is its notes, not its name).
   const name = sceneName(scene);
 
-  // Team viewers cannot edit (#76).
-  const { role } = useTeam();
-  const canEdit = role !== "viewer";
+  // Team viewers cannot edit others' plays (#76).
+  const canEdit = useCanEditPlay();
 
   // Right-click, or a long press on touch screens that send contextmenu.
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -406,8 +405,8 @@ function useIsTablet() {
 }
 
 export default function SceneStrip() {
-  // Team viewers cannot edit (#76): no add-scene tile for them.
-  const { role } = useTeam();
+  // Team viewers cannot edit others' plays (#76): no add-scene tile for them.
+  const canEdit = useCanEditPlay();
   const currentPlay = useStore((s) => s.currentPlay);
   const selectedSceneId = useStore((s) => s.selectedSceneId);
   const setSelectedSceneId = useStore((s) => s.setSelectedSceneId);
@@ -467,14 +466,14 @@ export default function SceneStrip() {
       ))}
 
       {/* Empty-state hint */}
-      {scenes.length === 1 && role !== "viewer" && (
+      {scenes.length === 1 && canEdit && (
         <span className="hidden flex-none self-center text-xs text-muted md:inline">
           Add a scene for the next moment →
         </span>
       )}
 
       {/* Add scene button — a "+" tile on phones, a labelled one from md up */}
-      {role !== "viewer" && (
+      {canEdit && (
       <button
         type="button"
         onClick={addScene}

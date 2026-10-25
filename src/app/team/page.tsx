@@ -3,8 +3,8 @@
 /**
  * TeamPage — who is in the team, who asked to join, and the invite link.
  *
- * Admins copy the invite link, approve or decline join requests and remove
- * members. Everyone else in the team sees the member list. Someone without a
+ * Admins copy the invite link, approve or decline join requests, make members
+ * viewers or editors and remove them. Everyone else in the team sees the member list. Someone without a
  * team is sent back to the playbook.
  */
 
@@ -20,6 +20,7 @@ import {
   ensureInviteDoc,
   leaveTeam,
   removeMember,
+  setMemberRole,
   type JoinRequest,
   type TeamMemberEntry,
 } from "@/lib/team";
@@ -28,6 +29,7 @@ import Logo from "@/components/brand/Logo";
 import ThemeToggle from "@/components/brand/ThemeToggle";
 import { RingSpinner } from "@/components/brand/Spinner";
 import type { Role } from "@/lib/types";
+import { ASSIGNABLE_ROLES } from "@/lib/permissions";
 
 const BTN = `flex h-11 flex-none items-center justify-center whitespace-nowrap rounded-lg px-3.5 text-sm font-medium transition-colors disabled:cursor-default disabled:opacity-60 ${FOCUS_RING}`;
 const OUTLINE = `${BTN} border border-line bg-transparent text-ink hover:bg-app`;
@@ -111,6 +113,7 @@ function MemberRow({
   member,
   isSelf,
   canRemove,
+  canChangeRole,
   onError,
 }: {
   teamId: string;
@@ -118,6 +121,7 @@ function MemberRow({
   member: TeamMemberEntry;
   isSelf: boolean;
   canRemove: boolean;
+  canChangeRole: boolean;
   onError: (m: string) => void;
 }) {
   const [confirm, setConfirm] = useState(false);
@@ -143,18 +147,48 @@ function MemberRow({
     }
   }
 
+  async function handleRole(role: Role) {
+    if (role === member.role) return;
+    setBusy(true);
+    try {
+      await setMemberRole(teamId, uid, role);
+    } catch {
+      onError("Couldn't change the role. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const who = member.name || member.email || "this member";
   return (
     <PersonRow name={member.name ?? ""} email={member.email ?? ""}>
       <span className="flex items-center gap-2">
         {isSelf && <span className="text-[13px] text-muted">You</span>}
-        <span className="rounded-full bg-chip px-2.5 py-1 text-xs font-semibold text-ink">{ROLE_LABEL[member.role] ?? member.role}</span>
+        {canChangeRole ? (
+          <select
+            value={member.role}
+            disabled={busy}
+            onChange={(e) => void handleRole(e.target.value as Role)}
+            aria-label={`Role of ${who}`}
+            title="Viewers watch the team's plays; editors also create and change them"
+            className={`h-11 rounded-lg border border-line bg-surface px-2.5 text-sm font-medium text-ink disabled:opacity-60 ${FOCUS_RING}`}
+          >
+            {ASSIGNABLE_ROLES.map((r) => (
+              <option key={r} value={r}>
+                {ROLE_LABEL[r]}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="rounded-full bg-chip px-2.5 py-1 text-xs font-semibold text-ink">{ROLE_LABEL[member.role] ?? member.role}</span>
+        )}
         {canRemove && (
           <button
             type="button"
             disabled={busy}
             onClick={() => void handleRemove()}
             onBlur={() => setConfirm(false)}
-            aria-label={confirm ? `Confirm removing ${member.name || member.email || "this member"}` : `Remove ${member.name || member.email || "this member"}`}
+            aria-label={confirm ? `Confirm removing ${who}` : `Remove ${who}`}
             className={`${BTN} border ${confirm ? "border-danger font-semibold text-danger" : "border-transparent text-muted hover:bg-app hover:text-danger"}`}
           >
             {confirm ? "Sure?" : "Remove"}
@@ -355,11 +389,12 @@ export default function TeamPage() {
                 member={member}
                 isSelf={uid === user.uid}
                 canRemove={isAdmin && uid !== user.uid}
+                canChangeRole={isAdmin && uid !== user.uid && member.role !== "admin"}
                 onError={setError}
               />
             ))}
           </ul>
-          {!isAdmin && <p className="m-0 text-[13px] text-muted">Only the team admin can add or remove people.</p>}
+          {!isAdmin && <p className="m-0 text-[13px] text-muted">Only the team admin can add or remove people and change roles.</p>}
         </section>
 
         {!isAdmin && <LeaveTeam teamId={team.id} teamName={team.name} uid={user.uid} onError={setError} />}

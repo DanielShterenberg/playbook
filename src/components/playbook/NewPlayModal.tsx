@@ -23,6 +23,7 @@ import type { Category, CourtType } from "@/lib/types";
 import { CATEGORY_OPTIONS } from "@/lib/categories";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeam } from "@/contexts/TeamContext";
+import { canAddToTeam } from "@/lib/permissions";
 import { savePlay } from "@/lib/db";
 import {
   BTN_PRIMARY,
@@ -47,7 +48,9 @@ interface NewPlayModalProps {
 export default function NewPlayModal({ onClose }: NewPlayModalProps) {
   const router = useRouter();
   const { user } = useAuth();
-  const { teamId, team } = useTeam();
+  const { teamId, team, role } = useTeam();
+  // Viewers keep their new plays personal; they can still edit them.
+  const teamChoice = Boolean(teamId) && canAddToTeam(role);
   const addPlay = useStore((s) => s.addPlay);
   const setCurrentPlay = useStore((s) => s.setCurrentPlay);
 
@@ -95,7 +98,7 @@ export default function NewPlayModal({ onClose }: NewPlayModalProps) {
     play.courtType = courtType;
     play.category = category;
     if (user) play.createdBy = user.uid;
-    if (teamId && saveToTeam) play.teamId = teamId;
+    if (teamId && teamChoice && saveToTeam) play.teamId = teamId;
 
     addPlay(play);
     setCurrentPlay(play);
@@ -204,8 +207,8 @@ export default function NewPlayModal({ onClose }: NewPlayModalProps) {
             </div>
           </div>
 
-          {/* Save to — only shown when the user is in a team */}
-          {teamId && (
+          {/* Save to — only shown to team admins and editors */}
+          {teamChoice && (
             <div className="mb-6" role="group" aria-labelledby="play-save-to">
               <span id="play-save-to" className={FIELD_LABEL}>
                 Save to

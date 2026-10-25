@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { selectEditorScene, useStore } from "@/lib/store";
 import { savePlay } from "@/lib/db";
-import { useTeam } from "@/contexts/TeamContext";
+import { useCanEditPlay } from "@/hooks/useCanEditPlay";
 import { SCENE_DESCRIPTION_MAX, sceneDescription } from "@/lib/types";
 import { FOCUS_RING } from "@/lib/uiClasses";
 
@@ -28,8 +28,7 @@ export default function SceneNotes() {
   const scene = useStore(selectEditorScene);
   const updateSceneDescription = useStore((s) => s.updateSceneDescription);
   const pausePlayback = useStore((s) => s.pausePlayback);
-  const { role } = useTeam();
-  const canEdit = role !== "viewer";
+  const canEdit = useCanEditPlay();
 
   const stored = sceneDescription(scene);
   const sceneId = scene?.id ?? null;
