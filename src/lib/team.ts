@@ -238,9 +238,18 @@ export async function removeMember(teamId: string, uid: string): Promise<void> {
   await updateDoc(doc(db, "teams", teamId), { [`members.${uid}`]: deleteField() });
 }
 
-/** Admins only: make a member a viewer or an editor; name and email stay. */
+/**
+ * Admins only: make a member a viewer or an editor; name and email stay.
+ * A member who left or was removed meanwhile is not put back: the dotted
+ * write would recreate their entry.
+ */
 export async function setMemberRole(teamId: string, uid: string, role: Role): Promise<void> {
-  await updateDoc(doc(db, "teams", teamId), { [`members.${uid}.role`]: role });
+  const teamRef = doc(db, "teams", teamId);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(teamRef);
+    if (!snap.exists() || !(uid in (snap.data().members ?? {}))) throw new Error("Not a member");
+    tx.update(teamRef, { [`members.${uid}.role`]: role });
+  });
 }
 
 /** Leave the team (members who are not admins). Frees the user to join another. */

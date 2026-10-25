@@ -1,9 +1,12 @@
 /**
- * Who may edit a play — the client half of the plays rule in firestore.rules.
+ * Who may edit a play — mirrors the plays update rule in firestore.rules.
  *
  * Admins and editors edit the team's plays; everyone edits the plays they
  * created themselves, so a viewer's own play is not read-only. Solo users
  * (no team, no role) edit everything they can open.
+ *
+ * canAddToTeam is the app's choice only: the rules still let any creator
+ * give a play a teamId.
  */
 
 import type { Play, Role } from "./types";
