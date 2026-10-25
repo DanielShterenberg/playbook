@@ -25,6 +25,7 @@ import { CATEGORY_BADGE, CATEGORY_SHORT_LABELS } from "@/lib/categories";
 import CourtThumbnail from "@/components/court/CourtThumbnail";
 import { addPlayToTeam, deletePlay, savePlay, setPlayArchived } from "@/lib/db";
 import { isPersonalPlay } from "@/lib/playFilter";
+import { canAddToTeam as roleCanAddToTeam } from "@/lib/permissions";
 
 // ---------------------------------------------------------------------------
 // Thumbnail (the court itself is the shared CourtThumbnail)
@@ -71,7 +72,7 @@ export default function PlayCard({ play, teamId, role }: PlayCardProps) {
   // A play is "personal" when: user is in a team, the play has no teamId, and
   // the user has permission to edit (admin or editor).
   const isPersonal = isPersonalPlay(play, teamId);
-  const canAddToTeam = isPersonal && !play.archived && (role === "admin" || role === "editor");
+  const canAddToTeam = isPersonal && !play.archived && roleCanAddToTeam(role);
   // Team viewers cannot change team plays they did not create (the Firestore rules refuse it).
   const canArchive = !(role === "viewer" && play.teamId && play.createdBy !== user?.uid);
 

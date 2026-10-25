@@ -16,7 +16,7 @@
 import { useStore } from "@/lib/store";
 import type { DrawingTool } from "@/lib/store";
 import { useHistoryStore } from "@/lib/history";
-import { useTeam } from "@/contexts/TeamContext";
+import { useCanEditPlay } from "@/hooks/useCanEditPlay";
 import { TOOLS } from "./DrawingToolsPanel";
 import { UndoIcon } from "./UndoRedoButtons";
 
@@ -35,10 +35,10 @@ export default function MobileToolBar() {
   const selectedAnnotationId = useStore((s) => s.selectedAnnotationId);
   const removeAnnotation = useStore((s) => s.removeAnnotation);
   const isPlaying = useStore((s) => s.isPlaying);
-  const { role } = useTeam();
+  const canEdit = useCanEditPlay();
 
-  // Viewers cannot edit (#76): no tools, on any screen size.
-  if (role === "viewer") return null;
+  // Viewers cannot edit others' plays (#76): no tools, on any screen size.
+  if (!canEdit) return null;
 
   const tools = PHONE_TOOLS.map((id) => TOOLS.find((t) => t.id === id)).filter((t) => t !== undefined);
 

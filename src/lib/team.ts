@@ -238,6 +238,11 @@ export async function removeMember(teamId: string, uid: string): Promise<void> {
   await updateDoc(doc(db, "teams", teamId), { [`members.${uid}`]: deleteField() });
 }
 
+/** Admins only: make a member a viewer or an editor; name and email stay. */
+export async function setMemberRole(teamId: string, uid: string, role: Role): Promise<void> {
+  await updateDoc(doc(db, "teams", teamId), { [`members.${uid}.role`]: role });
+}
+
 /** Leave the team (members who are not admins). Frees the user to join another. */
 export async function leaveTeam(teamId: string, uid: string): Promise<void> {
   await removeMember(teamId, uid);

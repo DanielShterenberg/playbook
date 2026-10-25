@@ -25,7 +25,7 @@ import type { CourtVariant } from "@/components/court/Court";
 import { COURT_ASPECT_RATIO } from "@/components/court/courtDimensions";
 import { OOB_SIDE_FRAC, OOB_BOTTOM_FRAC } from "@/components/court/Court";
 import { loadPlay } from "@/lib/db";
-import { useTeam } from "@/contexts/TeamContext";
+import { useCanEditPlay } from "@/hooks/useCanEditPlay";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface EditorCourtAreaProps {
@@ -41,8 +41,7 @@ export default function EditorCourtArea({ playId }: EditorCourtAreaProps) {
   const sceneFlip = scene?.flipped;
   const playFlipped = currentPlay?.flipped ?? false;
   const effectiveFlipped = sceneFlip != null ? sceneFlip : playFlipped;
-  const { role } = useTeam();
-  const isReadOnly = role === "viewer";
+  const isReadOnly = !useCanEditPlay();
   // Wait for Firebase Auth to restore the previous session before hitting
   // Firestore. Without this, the getDoc call runs before the auth token is
   // available and is rejected by Firestore security rules.

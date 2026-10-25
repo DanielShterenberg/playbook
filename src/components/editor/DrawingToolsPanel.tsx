@@ -24,7 +24,7 @@
 import { useState } from "react";
 import { useStore } from "@/lib/store";
 import type { DrawingTool } from "@/lib/store";
-import { useTeam } from "@/contexts/TeamContext";
+import { useCanEditPlay } from "@/hooks/useCanEditPlay";
 
 // ---------------------------------------------------------------------------
 // Tool definitions
@@ -196,7 +196,7 @@ const FOCUS =
 export default function DrawingToolsPanel() {
   const selectedTool = useStore((s) => s.selectedTool);
   const setSelectedTool = useStore((s) => s.setSelectedTool);
-  const { role } = useTeam();
+  const canEdit = useCanEditPlay();
 
   /**
    * Collapse state — the rail can be folded to a thin strip to give the court
@@ -208,8 +208,9 @@ export default function DrawingToolsPanel() {
   // Keyboard shortcut registration is handled centrally by EditorKeyboardManager
   // (useKeyboardShortcuts hook, issue #82). No listener is registered here.
 
-  // Viewers see a collapsed read-only badge instead of the drawing tools (#76)
-  if (role === "viewer") {
+  // Viewers see a collapsed read-only badge instead of the drawing tools (#76),
+  // except on plays they created themselves.
+  if (!canEdit) {
     return (
       <aside
         className={`${RAIL} w-11 py-4`}
