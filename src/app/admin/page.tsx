@@ -5,7 +5,7 @@
  *
  * Every team (members, plays, invite code), every person, every play, every
  * public share link and the newest comments, with search across them. The
- * owner can remove a member, open any play read-only, and delete a team, a
+ * owner can make a member a viewer or an editor, remove a member, open any play read-only, and delete a team, a
  * play, a share link or a comment. Everyone else is sent to the playbook; the
  * Firestore rules refuse them the data anyway.
  */
@@ -27,7 +27,8 @@ import {
   type AdminData,
 } from "@/lib/admin";
 import { deleteComment } from "@/lib/comments";
-import { removeMember } from "@/lib/team";
+import { removeMember, setMemberRole } from "@/lib/team";
+import { ASSIGNABLE_ROLES } from "@/lib/permissions";
 import { CATEGORY_LABELS } from "@/lib/categories";
 import { FOCUS_RING } from "@/lib/uiClasses";
 import Logo from "@/components/brand/Logo";
@@ -211,7 +212,26 @@ export default function AdminPage() {
                   {m.name || who(uid)}
                   {m.email && m.name ? <span className="text-muted"> · {m.email}</span> : null}
                 </span>
-                <span className={CHIP}>{ROLE_LABEL[m.role] ?? m.role}</span>
+                {m.role === "admin" ? (
+                  <span className={CHIP}>{ROLE_LABEL[m.role]}</span>
+                ) : (
+                  <select
+                    value={m.role}
+                    onChange={(e) =>
+                      void act(() => setMemberRole(team.id, uid, e.target.value as Role))().catch(() =>
+                        setError("Couldn't change the role. Try again."),
+                      )
+                    }
+                    aria-label={`Role of ${m.name || m.email || uid} in ${team.name}`}
+                    className={`h-11 rounded-lg border border-line bg-surface px-2.5 text-sm font-medium text-ink ${FOCUS_RING}`}
+                  >
+                    {ASSIGNABLE_ROLES.map((r) => (
+                      <option key={r} value={r}>
+                        {ROLE_LABEL[r]}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 {(m.role !== "admin" || admins > 1) && <ConfirmButton
                   label="Remove"
                   ariaLabel={`Remove ${m.name || m.email || uid} from ${team.name}`}
